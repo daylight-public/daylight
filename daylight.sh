@@ -1169,8 +1169,7 @@ pull-app ()
 #
 pull-daylight ()
 {
-    local bucket; bucket=$(aws sts get-caller-identity --query 'Account' --output text) || return
-    sudo aws s3 cp "s3://$bucket/conf/daylight.sh" /usr/bin && source /usr/bin/daylight.sh
+    curl -s https://raw.githubusercontent.com/daylight-public/daylight/master/daylight.sh >/usr/bin/daylight.sh
     sudo chmod 777 /usr/bin/daylight.sh
 }
 
