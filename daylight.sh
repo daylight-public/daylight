@@ -53,7 +53,7 @@ activate-vm ()
     lxc launch "$name" "$instanceName" || return
     # Run the finsihing-touches script
     if [[ -f "$srcFolder/finishing-touches.sh" ]]; then
-        source "$folder/finishing-touches.sh"
+        source "$srcFolder/finishing-touches.sh"
     fi
 }
 
