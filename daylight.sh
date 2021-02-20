@@ -46,14 +46,15 @@ activate-vm ()
     # shellcheck disable=SC2016
     { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: activate-vm $name $folder [$instanceName] []\n' >&2; return 1; }
     local name=$1
-    local folder=$2
+    local srcFolder=$2
     local instanceName=${3:-$name}
 
     # Create the image, using the instance name
     lxc launch "$name" "$instanceName" || return
     # Run the finsihing-touches script
-    [[ -f "$folder/finishing-touches.sh" ]] || { echo "Non-existent path: $folder/finishing-touches.sh" >&2; return 1; }
-    source "$folder/finishing-touches.sh"
+    if [[ -f "$srcFolder/finishing-touches.sh" ]]; then
+        source "$folder/finishing-touches.sh"
+    fi
 }
 
 
@@ -1154,7 +1155,8 @@ pull-app ()
 pull-daylight ()
 {
     curl -s https://raw.githubusercontent.com/daylight-public/daylight/master/daylight.sh >/usr/bin/daylight.sh
-    sudo chmod 777 /usr/bin/daylight.sh
+    chmod 777 /usr/bin/daylight.sh
+    source /usr/bin/daylight.sh
 }
 
 
