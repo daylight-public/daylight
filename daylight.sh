@@ -1036,30 +1036,15 @@ install-venv ()
 install-vm ()
 {
     # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: install-vm $image $srcFolder [$base]\n' >&2; return 1; }
+    (( $# >= 2 )) || { printf 'Usage: install-vm $image $srcFolder\n' >&2; return 1; }
     local image=$1
     local srcFolder=$2
     
-    if (( $# >= 3 )); then
-        base=$3
-    else
-        local defaultBase="ubuntu:20.04"
-        local s; read -r -p "Please choose a base image [default - $defaultBase] " s || return
-        base=${s:-$defaultBase}
-    fi
-
-    # Both the base and the image can be of the form repo:name or just name.
+    [[ -d "$srcFolder" ]] || { echo "Non-existent folder: $srcFolder" >&2; return 1; }
+    local baseImageRepo; baseImageRepo=$(get-image-repo "$srcFolder") || return
+    local baseImageName; baseImageName=$(get-image-name "$srcFolder") || return
+    # The base and the image can be of the form repo:name or just name.
     # Dealing with that is simple but it takes a few lines of bash.
-    local baseRepo
-    local baseName
-    if [[ "$base" == *:* ]]; then
-        baseRepo="${base%%:*}"
-        baseName="${base##*:}"
-    else
-        baseRepo='local'
-        baseName="$base"
-    fi
-
     local imageRepo
     local imageName
     if [[ "$image" == *:* ]]; then
