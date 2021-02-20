@@ -1041,26 +1041,27 @@ install-vm ()
     local srcFolder=$2
     
     [[ -d "$srcFolder" ]] || { echo "Non-existent folder: $srcFolder" >&2; return 1; }
-    local baseImageRepo; baseImageRepo=$(get-image-repo "$srcFolder") || return
-    local baseImageName; baseImageName=$(get-image-name "$srcFolder") || return
-    # The base and the image can be of the form repo:name or just name.
-    # Dealing with that is simple but it takes a few lines of bash.
-    local imageRepo
-    local imageName
-    if [[ "$image" == *:* ]]; then
-        imageRepo="${image%%:*}"
-        imageName="${image##*:}"
-    else
-        imageRepo='local'
-        imageName="$image"
-    fi
+    local imageBase; imageBase=$(get-image-base "$srcFolder") || return
+    # local baseImageRepo; baseImageRepo=$(get-image-repo "$srcFolder") || return
+    # local baseImageName; baseImageName=$(get-image-name "$srcFolder") || return
+    # # The base and the image can be of the form repo:name or just name.
+    # # Dealing with that is simple but it takes a few lines of bash.
+    # local imageRepo
+    # local imageName
+    # if [[ "$image" == *:* ]]; then
+    #     imageRepo="${image%%:*}"
+    #     imageName="${image##*:}"
+    # else
+    #     imageRepo='local'
+    #     imageName="$image"
+    # fi
 
     local userDataPath; userDataPath=$(mktemp) >/dev/null || return
     create-lxd-user-data "$srcFolder" >"$userDataPath" || return
     local instanceName; instanceName=$(mktemp --dry-run "$imageName-XXXXXXXX") || return
     local instance="$imageRepo:$instanceName"
     # Launch an instance with the new user data
-    lxc init "$base" "$instance" || return
+    lxc init "$imageBase" "$instance" || return
     lxc config set "$instance" user.user-data - <"$userDataPath" || return
     lxc start "$instance" || return
     lxc exec "$instance" -- cloud-init status --wait || return
