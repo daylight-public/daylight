@@ -816,6 +816,19 @@ install-app ()
 }
 
 
+install-awscli ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: install-awscli $defaultRegion\n' >&2; return 1; }
+    local defaultRegion=$1
+
+    # Install AWS CLI
+    apt-get install -y awscli || return
+    # Setup AWS, download bootstrap.sh, and source it
+    aws configure set default.region "$defaultRegion" || return
+    su ubuntu --login --command 'aws configure set default.region "$defaultRegion"' || return
+}
+
 
 install-flask-app ()
 {
@@ -1358,12 +1371,14 @@ push-app ()
 push-daylight ()
 {
 	# shellcheck disable=SC2016
-	{ (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: push-daylight [$daylightPath]\n' >&2; return 1; }
-	local daylightPath=${1:-$(command -v daylight.sh)} || return
-	
-	bucket=$(aws sts get-caller-identity --query Account --output text)
-	bash -n "$daylightPath" || exit
-	aws s3 cp "$daylightPath" "s3://$bucket/conf/daylight.sh"
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: push-daylight $message\n' >&2; return 1; }
+    local message=$1
+
+    local daylightPath="$HOME/src/github.com/daylight-public/daylight/daylight.sh"
+    [[ -f "$daylightPath" ]] || { echo "Non-existent path: $daylightPath" >&2; return 1; }
+    git commit -m "$message" "$daylightPath" || return
+    git push || return
 }
 
 
