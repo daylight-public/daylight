@@ -748,7 +748,7 @@ get-service-working-directory ()
 init-lxd ()
 {
     # Remove the packaged lxc/d since it causes problems
-    sudo apt-get remove -y lxd lxd-client liblxc-common liblxc-dev liblxc1 lxc-dev lxcfs nova-compute-lxc
+    apt-get remove -y lxd lxd-client liblxc-common liblxc-dev liblxc1 lxc-dev lxcfs nova-compute-lxc
     # Setup subuid+subgid to allow for mapping ubuntu
     add-user-to-shadow-ids ubuntu
     # Setup /dev/xvdf as a btrfs volume, then bind mount it onto the lxd images folder
@@ -886,9 +886,8 @@ install-public-key ()
 install-python ()
 {
     apt-get update -y
-    apt-get install -y python3 python3-dev python3-pip python3-venv
-    pip3 install --upgrade pip
-    pip3 install wheel
+    apt-get install -y python3 python3-dev python3-pip python3-testresources python3-venv
+    pip3 install --upgrade pip setuptools wheel
 }
 
 
