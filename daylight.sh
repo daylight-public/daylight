@@ -326,7 +326,7 @@ create-lxd-user-data ()
 
 #
 # Take a vm name, and a base image, and generate a service for publishing that image.
-#
+# TODO complete this function
 create-publish-image-service ()
 {
     # shellcheck disable=SC2016
@@ -337,6 +337,7 @@ create-publish-image-service ()
 
     local service="publish-$vm"
     local cmd="/usr/bin/daylight.sh install-vm \"$vm\" \"$base\" \"$imageRepo\""
+    install-service-from-command "$service" "$cmd"
 }
 
 
@@ -351,7 +352,7 @@ create-service-from-dist-script ()
     local script=$1
     shift
 
-    bucket=$(aws sts get-caller-identity --query 'Account' --output text)    
+    local bucket; bucket=$(get-bucket) || return
     # Download & untar dist/conf.tgz from S3
     local s3Url="s3://$bucket/dist/conf.tgz"
     local srcFolder="$(download-to-temp-dir "$s3Url")"
@@ -449,6 +450,9 @@ download-flask-app ()
 }
 
 
+#
+# Download a flask service from S3
+# TODO Either finish this function, or delete it because it doesn't do anything different from download-svc
 download-flask-service ()
 {
     # shellcheck disable=SC2016
@@ -696,15 +700,16 @@ get-image-repo ()
 }
 
 
+# Parse `systemctl cat` for the given service and return the value for the given key
 get-service-file-value ()
 {
     # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: get-service-working-directory $serviceName $value\n' >&2; return 1; }
+    (( $# == 2 )) || { printf 'Usage: get-service-working-directory $serviceName $key\n' >&2; return 1; }
     local name=$1
-    local value=$2
+    local key=$2
     
     systemctl cat "$name" >/dev/null || { printf 'Service not found: %s\n' "$name"; return 1; }
-    local rx="^$value=(.*)"
+    local rx="^$key=(.*)"
     while read -r line; do
         if [[ "$line" =~ $rx ]]; then
             printf "${BASH_REMATCH[1]}"
@@ -715,6 +720,8 @@ get-service-file-value ()
 }
 
 
+# Extract the environment file path from the service definition
+# aka the 'EnvironmentFile' value
 get-service-environment-file ()
 {
     # shellcheck disable=SC2016
@@ -725,6 +732,8 @@ get-service-environment-file ()
 }
 
 
+# Extract the executable command line definition from the service definition
+# aka the 'ExecStart' value
 get-service-exec-start ()
 {
     # shellcheck disable=SC2016
@@ -735,6 +744,8 @@ get-service-exec-start ()
 }
 
 
+# Extract the working directory from the service definition
+# aka the 'WorkingDirectory' value
 get-service-working-directory ()
 {
     # shellcheck disable=SC2016
@@ -900,15 +911,15 @@ install-python ()
 install-service ()
 {
     # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: configure-service $service $serviceTar\n' >&2; return 1; }
+    (( $# == 2 )) || { printf 'Usage: configure-service $service $serviceTarball\n' >&2; return 1; }
     local service=$1
-    local serviceTar=$2
+    local serviceTarball=$2
 
-    [[ -f "$serviceTar" ]] || { printf 'Non-existent service tar: %s\n' "$serviceTar" >&2; return 1; }
+    [[ -f "$serviceTarball" ]] || { printf 'Non-existent service tar: %s\n' "$serviceTarball" >&2; return 1; }
     # Create a service folder & untar the service tar into the new folder
     local dst="/app/svc/$service"
     mkdir -p "$dst"
-    tar -C "$dst" -xf "$serviceTar"
+    tar -C "$dst" -xf "$serviceTarball"
     # Create symlinks in /etc/sysd/sys to the files in the tar folder - .service and optionally .timer
     sudo ln --force --symbolic "$dst/$service.service" /etc/systemd/system
     if [[ -f "$dst/$service.timer" ]]; then
@@ -962,15 +973,15 @@ install-service-from-script ()
 install-service-from-command ()
 {
     # shellcheck disable=SC2016
-    (( $# >= 1 )) || { printf 'Usage: install-service-from-script $serviceScriptPath [$args]\n' >&2; return 1; }
+    (( $# >= 2 )) || { printf 'Usage: install-service-from-script $service $cmd [$cmdArg1 ... $cmdArgN]\n' >&2; return 1; }
     local service=$1
     # Set $@ = $args
     shift 
 
     # 'Install' the service - Create a service folder, copy the script to $serviceFolder/run.sh, and gen a .service file
     local serviceFolder="/app/svc/$service"
-    mkdir -p "$serviceFolder" "$serviceFolder/bin" || return
-    chmod 777 "$serviceFolder/bin/$unitFile" || return
+    mkdir -p "$serviceFolder" "$serviceFolder" || return
+    chmod 777 "$serviceFolder" || return
     # Generate the unit file
     local cmd="$@"
     local description="One-off service for command"
@@ -1005,19 +1016,22 @@ install-svc ()
     local srcFolder=$2
     local dstFolder=${3:-"/app/svc/$name"}
 
+    # Create the local service folder; copy the .service and the .env if present
     mkdir -p "$dstFolder"
     cp "$srcFolder/$name.service" "$dstFolder" || return
     if [[ -f "$srcFolder/.env" ]]; then
         cp "$srcFolder/.env" "$dstFolder"
     fi
+    # Copy the local service bin folder if present
+    if [[ -d "$srcFolder/bin" ]]; then
+        mkdir -p "$dstFolder/bin"
+        cp "$srcFolder"/bin/* "$dstFolder/bin"
+    fi
+    # Create symlinks in /etc/systemd/system for the .service and .timer if present
     ln --force --symbolic "$dstFolder/$name.service" "/etc/systemd/system/$name.service"
     if [[ -f "$srcFolder/$name.timer" ]]; then
         cp "$srcFolder/$name.timer" "$dstFolder" || return
         ln --force --symbolic "$dstFolder/$name.timer" "/etc/systemd/system/$name.timer"
-    fi
-    if [[ -d "$srcFolder/bin" ]]; then
-        mkdir -p "$dstFolder/bin"
-        cp "$srcFolder"/bin/* "$dstFolder/bin"
     fi
 
     printf '%s' "$dstFolder"
@@ -1481,7 +1495,7 @@ source-service-environment-file ()
 start-indexed-service ()
 {
     # shellcheck disable=SC2016
-    (( $# >= 1 )) || { printf 'Usage: start-indexed-service [args]\n' >&2; return 1; }
+    (( $# >= 1 )) || { printf 'Usage: start-indexed-service $arg1 [$arg2 ... $argn]\n' >&2; return 1; }
     local service=$1
     if [[ ! ${service: -1} == '@' ]]; then
         service="$service@"
@@ -1497,12 +1511,15 @@ start-indexed-service ()
 #
 # Start and enable a systemd service.
 # If a .timer file is present, the .timer gets enabled and started instead of the .service unit file.
+# This function supports both regular and indexed services
 start-service ()
 {
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: start-service $service\n' >&2; return 1; }
+    (( $# == 1 )) || { printf 'Usage: start-service $service[@$index]\n' >&2; return 1; }
     local service=$1
 
+    # If $service is indexed (contains a '@'), $serviceRoot = $service minus @ and everything after
+    # Otherwise $serviceRoot = Sservice
     local serviceRoot
     if [[ $service == *"@"* ]]; then
         serviceRoot="${service%%@*}@"
