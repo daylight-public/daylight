@@ -896,6 +896,7 @@ install-public-key ()
 
 install-python ()
 {
+    add-apt-repository -y ppa:deadsnakes/ppa
     apt-get update -y
     apt-get install -y python3 python3-dev python3-pip python3-testresources python3-venv
     pip3 install --upgrade pip setuptools wheel
