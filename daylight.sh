@@ -1424,7 +1424,7 @@ push-svc ()
     local name=$1
     local srcFolder=${2:-"/app/svc/$name"}
 
-	local tgzPath==$(mktemp).tgz >/dev/null || return
+	local tgzPath; tgzPath=$(mktemp).tgz >/dev/null || return
 	echo $tgzPath
 	tar -C "$srcFolder" -czf "$tgzPath" . >/dev/null || return
 	local bucket; bucket=$(get-bucket) || return
