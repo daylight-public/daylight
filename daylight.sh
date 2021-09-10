@@ -16,7 +16,12 @@ activate-svc ()
     { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: active-svc $name [$index] []\n' >&2; return 1; }
     local name=$1
     local index=${2:-''}
-
+    # Confirm the service unit file exists
+    if [[ -f "/etc/systemd/system/$name.service" ]]; then
+        printf 'Service "%s" not found\n' "$serviceName"
+        return 1
+    fi
+    # Get the serviceName - it's either the name param or it's the name param plus index
     local serviceName
     if [[ -z "$index" ]]; then
         serviceName=$name
@@ -27,15 +32,13 @@ activate-svc ()
         fi
         serviceName="$name$index"
     fi
-
+    # Enable and start the service
+    sudo systemctl enable "$serviceName"
+    sudo systemctl start "$serviceName"
+    # If there's a timer, enable and start the timer
     if [[ -f "/etc/systemd/system/$name.timer" ]]; then
         sudo systemctl enable "$serviceName.timer"
         sudo systemctl start "$serviceName.timer"
-    elif [[ -f "/etc/systemd/system/$name.service" ]]; then
-        sudo systemctl enable "$serviceName"
-        sudo systemctl start "$serviceName"
-    else
-        printf 'Service "%s" not found\n' "$serviceName"
     fi
 }
 
