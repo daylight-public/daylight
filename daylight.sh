@@ -237,6 +237,19 @@ create-flask-app ()
 }
 
 
+create-github-user-access-token ()
+{
+    client_id=Iv1.f69b43d6e5f4ea24
+    s="$(http --body POST https://github.com/login/device/code?client_id=$client_id | tail -n 1)"
+    source <(python3 -m parse_query_string --names device_code user_code verification_uri --output env <<<"$s")
+    printf 'Please visit %s and enter the user code %s ...' "$verification_uri" "$user_code"
+    read -r
+    grant_type=urn:ietf:params:oauth:grant-type:device_code
+    s="$(http --body post "https://github.com/login/oauth/access_token?client_id=$client_id&device_code=$device_code&grant_type=$grant_type")"
+    source <(python3 -m parse_query_string --names access_token refresh_token --output env <<<"$s")
+}
+
+
 create-home-filesystem ()
 {
     # shellcheck disable=SC2016
@@ -1582,53 +1595,54 @@ if (( $# >= 1 )); then
     esac
 fi
 
-nvme0n1     259:1    0   20G  0 disk
-└─nvme0n1p1 259:2    0   20G  0 part /
-nvme1n1     259:0    0   15G  0 disk /var/snap/lxd/common/lxd/images
-nvme2n1     259:3    0   15G  0 disk
-
-nvme0n1     259:0    0   20G  0 disk
-└─nvme0n1p1 259:1    0   20G  0 part /
-nvme1n1     259:2    0   15G  0 disk
-nvme2n1     259:3    0   15G  0 disk /var/snap/lxd/common/lxd/images
-
-/dev/nvme1n1 on /var/snap/lxd/common/lxd/images type btrfs (rw,relatime,ssd,space_cache,subvolid=5,subvol=/)
-/var/lib/snapd/snaps/lxd_21835.snap on /snap/lxd/21835 type squashfs (ro,nodev,relatime,x-gdu.hide)
-/var/lib/snapd/snaps/lxd_21803.snap on /snap/lxd/21803 type squashfs (ro,nodev,relatime,x-gdu.hide)
-nsfs on /run/snapd/ns/lxd.mnt type nsfs (rw)
-tmpfs on /var/snap/lxd/common/ns type tmpfs (rw,relatime,size=1024k,mode=700,inode64)
-nsfs on /var/snap/lxd/common/ns/shmounts type nsfs (rw)
-nsfs on /var/snap/lxd/common/ns/mntns type nsfs (rw)
-
-/dev/nvme2n1 on /var/snap/lxd/common/lxd/images type btrfs (rw,relatime,ssd,space_cache,subvolid=5,subvol=/)
-/var/lib/snapd/snaps/lxd_21803.snap on /snap/lxd/21803 type squashfs (ro,nodev,relatime,x-gdu.hide)
-/var/lib/snapd/snaps/lxd_21835.snap on /snap/lxd/21835 type squashfs (ro,nodev,relatime,x-gdu.hide)
-nsfs on /run/snapd/ns/lxd.mnt type nsfs (rw)
-tmpfs on /var/snap/lxd/common/ns type tmpfs (rw,relatime,size=1024k,mode=700,inode64)
-nsfs on /var/snap/lxd/common/ns/shmounts type nsfs (rw)
-nsfs on /var/snap/lxd/common/ns/mntns type nsfs (rw)
-
-LABEL=cloudimg-rootfs   /        ext4   defaults,discard        0 1
-/dev/disk/by-uuid/c7177de9-bcf2-43f9-9fa7-c9886ce0e027 /var/snap/lxd/common/lxd/images btrfs  rw,relatime,ssd,space_cache,subvolid=5,subvol=/ 0 0
-LABEL=cloudimg-rootfs   /        ext4   defaults,discard        0 1
-/dev/disk/by-uuid/c7177de9-bcf2-43f9-9fa7-c9886ce0e027 /var/snap/lxd/common/lxd/images btrfs  rw,relatime,ssd,space_cache,subvolid=5,subvol=/ 0 0
-
-nvme0n1
-└─nvme0n1p1 ext4     cloudimg-rootfs 7969d789-20ae-4f61-84ff-c0ac50e0dd19   14.3G    26% /
-nvme1n1     btrfs                    c7177de9-bcf2-43f9-9fa7-c9886ce0e027     12G    20% /var/snap/lxd/common/lxd/images
-nvme2n1     btrfs    default         4a7c98a9-ab20-4d3c-81f5-0cc87581b16a
-
-nvme0n1
-└─nvme0n1p1 ext4     cloudimg-rootfs 7969d789-20ae-4f61-84ff-c0ac50e0dd19   14.3G    26% /
-nvme1n1     btrfs    default         4a7c98a9-ab20-4d3c-81f5-0cc87581b16a
-nvme2n1     btrfs                    c7177de9-bcf2-43f9-9fa7-c9886ce0e027     12G    20% /var/snap/lxd/common/lxd/images
-
-ubuntu@ip-10-12-1-150:~$ blkid /dev/nvme1n1
-/dev/nvme1n1: UUID="c7177de9-bcf2-43f9-9fa7-c9886ce0e027" UUID_SUB="f3f734b8-afa1-437e-a176-bd2fb8eb6f9d" TYPE="btrfs"
-ubuntu@ip-10-12-1-150:~$ blkid /dev/nvme2n1
-/dev/nvme2n1: LABEL="default" UUID="4a7c98a9-ab20-4d3c-81f5-0cc87581b16a" UUID_SUB="eef44e83-03db-47ec-bbc4-758e08f78b15" TYPE="btrfs"
-
-ubuntu@ip-10-13-4-170:~$ blkid /dev/nvme1n1
-/dev/nvme1n1: LABEL="default" UUID="4a7c98a9-ab20-4d3c-81f5-0cc87581b16a" UUID_SUB="eef44e83-03db-47ec-bbc4-758e08f78b15" TYPE="btrfs"
-ubuntu@ip-10-13-4-170:~$ blkid /dev/nvme2n1
-/dev/nvme2n1: UUID="c7177de9-bcf2-43f9-9fa7-c9886ce0e027" UUID_SUB="f3f734b8-afa1-437e-a176-bd2fb8eb6f9d" TYPE="btrfs"
+# nvme0n1     259:1    0   20G  0 disk
+# └─nvme0n1p1 259:2    0   20G  0 part /
+# nvme1n1     259:0    0   15G  0 disk /var/snap/lxd/common/lxd/images
+# nvme2n1     259:3    0   15G  0 disk
+# 
+# nvme0n1     259:0    0   20G  0 disk
+# └─nvme0n1p1 259:1    0   20G  0 part /
+# nvme1n1     259:2    0   15G  0 disk
+# nvme2n1     259:3    0   15G  0 disk /var/snap/lxd/common/lxd/images
+# 
+# /dev/nvme1n1 on /var/snap/lxd/common/lxd/images type btrfs (rw,relatime,ssd,space_cache,subvolid=5,subvol=/)
+# /var/lib/snapd/snaps/lxd_21835.snap on /snap/lxd/21835 type squashfs (ro,nodev,relatime,x-gdu.hide)
+# /var/lib/snapd/snaps/lxd_21803.snap on /snap/lxd/21803 type squashfs (ro,nodev,relatime,x-gdu.hide)
+# nsfs on /run/snapd/ns/lxd.mnt type nsfs (rw)
+# tmpfs on /var/snap/lxd/common/ns type tmpfs (rw,relatime,size=1024k,mode=700,inode64)
+# nsfs on /var/snap/lxd/common/ns/shmounts type nsfs (rw)
+# nsfs on /var/snap/lxd/common/ns/mntns type nsfs (rw)
+# 
+# /dev/nvme2n1 on /var/snap/lxd/common/lxd/images type btrfs (rw,relatime,ssd,space_cache,subvolid=5,subvol=/)
+# /var/lib/snapd/snaps/lxd_21803.snap on /snap/lxd/21803 type squashfs (ro,nodev,relatime,x-gdu.hide)
+# /var/lib/snapd/snaps/lxd_21835.snap on /snap/lxd/21835 type squashfs (ro,nodev,relatime,x-gdu.hide)
+# nsfs on /run/snapd/ns/lxd.mnt type nsfs (rw)
+# tmpfs on /var/snap/lxd/common/ns type tmpfs (rw,relatime,size=1024k,mode=700,inode64)
+# nsfs on /var/snap/lxd/common/ns/shmounts type nsfs (rw)
+# nsfs on /var/snap/lxd/common/ns/mntns type nsfs (rw)
+# 
+# LABEL=cloudimg-rootfs   /        ext4   defaults,discard        0 1
+# /dev/disk/by-uuid/c7177de9-bcf2-43f9-9fa7-c9886ce0e027 /var/snap/lxd/common/lxd/images btrfs  rw,relatime,ssd,space_cache,subvolid=5,subvol=/ 0 0
+# LABEL=cloudimg-rootfs   /        ext4   defaults,discard        0 1
+# /dev/disk/by-uuid/c7177de9-bcf2-43f9-9fa7-c9886ce0e027 /var/snap/lxd/common/lxd/images btrfs  rw,relatime,ssd,space_cache,subvolid=5,subvol=/ 0 0
+# 
+# nvme0n1
+# └─nvme0n1p1 ext4     cloudimg-rootfs 7969d789-20ae-4f61-84ff-c0ac50e0dd19   14.3G    26% /
+# nvme1n1     btrfs                    c7177de9-bcf2-43f9-9fa7-c9886ce0e027     12G    20% /var/snap/lxd/common/lxd/images
+# nvme2n1     btrfs    default         4a7c98a9-ab20-4d3c-81f5-0cc87581b16a
+# 
+# nvme0n1
+# └─nvme0n1p1 ext4     cloudimg-rootfs 7969d789-20ae-4f61-84ff-c0ac50e0dd19   14.3G    26% /
+# nvme1n1     btrfs    default         4a7c98a9-ab20-4d3c-81f5-0cc87581b16a
+# nvme2n1     btrfs                    c7177de9-bcf2-43f9-9fa7-c9886ce0e027     12G    20% /var/snap/lxd/common/lxd/images
+# 
+# ubuntu@ip-10-12-1-150:~$ blkid /dev/nvme1n1
+# /dev/nvme1n1: UUID="c7177de9-bcf2-43f9-9fa7-c9886ce0e027" UUID_SUB="f3f734b8-afa1-437e-a176-bd2fb8eb6f9d" TYPE="btrfs"
+# ubuntu@ip-10-12-1-150:~$ blkid /dev/nvme2n1
+# /dev/nvme2n1: LABEL="default" UUID="4a7c98a9-ab20-4d3c-81f5-0cc87581b16a" UUID_SUB="eef44e83-03db-47ec-bbc4-758e08f78b15" TYPE="btrfs"
+# 
+# ubuntu@ip-10-13-4-170:~$ blkid /dev/nvme1n1
+# /dev/nvme1n1: LABEL="default" UUID="4a7c98a9-ab20-4d3c-81f5-0cc87581b16a" UUID_SUB="eef44e83-03db-47ec-bbc4-758e08f78b15" TYPE="btrfs"
+# ubuntu@ip-10-13-4-170:~$ blkid /dev/nvme2n1
+# /dev/nvme2n1: UUID="c7177de9-bcf2-43f9-9fa7-c9886ce0e027" UUID_SUB="f3f734b8-afa1-437e-a176-bd2fb8eb6f9d" TYPE="btrfs"
+# 

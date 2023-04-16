@@ -35,7 +35,7 @@ def dump_query_string(d_names):
 
 
 if __name__ == '__main__':
-    qs = sys.stdin.readline()
+    qs = sys.stdin.readline().strip()
     d = parse_qs(qs)
     ap = create_arg_parser()
     args = ap.parse_args()
