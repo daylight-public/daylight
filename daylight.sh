@@ -890,9 +890,9 @@ install-gnome-keyring ()
 install-latest-httpie ()
 {
     curl -SsL -o /etc/apt/sources.list.d/httpie.list https://packages.httpie.io/deb/httpie.list
-    curl -SsL https://packages.httpie.io/deb/KEY.gpg | gpg --dearmor | tee /etc/apt/trusted.gpg.d/httpie.gpg
+    curl -SsL https://packages.httpie.io/deb/KEY.gpg | gpg --dearmor | tee /etc/apt/trusted.gpg.d/httpie.gpg >/dev/null
     apt update -y
-    apt install httpie
+    apt install -y httpie
 }
 
 
