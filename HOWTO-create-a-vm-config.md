@@ -21,8 +21,8 @@ There are three conventions to follow regarding script names ...
 - `init-boot.sh` for a script that runs on every startup
 - `finishing-touches.sh` for a script that runs after everything is done
 
-In a separate config folder there is another file ...
-- `config.json` for a file that contains lxd-specific information like the name of a base image 
+In a config folder there is another file ...
+- `config.json` for a file that contains `lxd`-specific information like the name of a base image 
 
 And there are a few config folders with files like this ...
 - `lt.json` or `lt-xxxx.json` for launch template files, used by AWS to configure cloud-init
@@ -34,7 +34,6 @@ But in any case, defining a VM specification seems pretty straightforward: creat
 Next, let's look at what to do with these files once you've created them.
 
 _note - it looks like `finishing-touches.sh` actually performs actions on the container from outside of the container. Stuff like adding users and making sure they have the same uid, which would be hard to do from inside the VM. It's possible to make these changes from within a VM, but it's more convenient to do it outside of the container._
-
 ## What to do with a VM config once you've created it
 
 Every daylight-capable host has a `daylight.sh` script installed on its `$PATH`. `daylight.sh` has a function called `pull-vm()`. For `lxd` VM creation, `pull-vm` is all you need. Below is a description of `pull-vm` as well as several other helper functions from `daylight.sh` ...    
@@ -43,24 +42,24 @@ Every daylight-capable host has a `daylight.sh` script installed on its `$PATH`.
 | --- | --- | --- |
 | `pull-vm` | `$name` | Download a VM config file (`download-vm`)
 | | | install the VM into `lxd` (`install-vm`) |
-| | | start the VM and perform any last stops (`activate-vm`) ||
-| 
+| | | start the VM and perform any last steps (`activate-vm`) ||
+|  |  | |
 | `download-vm` | `$name` | Download the VM config tarball from AWS S3 |
 | | | Untar it to a temp folder | 
 | | | Print the path of the new temp folder |
-|
+|  |  | |
 | `install-vm` | `$image $srcFolder` | Parse the `$image` arg into name or repo:name |
 | | | Create the `lxd` user data (`get-lxd-user-data`) 
 | | | Create an instance using the base image name and the user data, giving the instance a temp name so it does not overwrite anything |
 | | | Start the new instance
 | | | Wait for it to finish startup
 | | | Stop the new instance
-| | | Publish the new instance, giving it the image name as an alias. This creates the new image in lxd, which can be used to launch instances
+| | | Publish the new instance, giving it the image name as an alias. This creates the new image in `lxd`, which can be used to launch instances
 | | | Delete the instance
-|
+|  |  | |
 | `activate-vm` | `$name $srcFolder [$instanceName]` | launch the instance, aliasing it if an `$instanceName` is provided
 | | | source `finishishing-touches.sh` to configure the running instance
-|
-| `create-lxd-user-data` | `$vmConfigData` | Call ``cloud-init` devel make-mime` to create the user-data package
-| | | Add the custom shellscript handlers (this will not be necessary once they are part of the `cloud-init` release)
+|  |  | |
+| `create-lxd-user-data` | `$vmConfigData` | Call `cloud-init devel make-mime` to create the user-data package
+| | | Add the custom shellscript handlers (this will not be necessary once they are part of the cloud-init release)
 | | | Build the user-data package using `init-instance.sh`, or `init-boot.sh`, or both, depending on what's available
