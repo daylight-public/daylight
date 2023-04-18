@@ -1,3 +1,4 @@
+
 #! /usr/bin/env bash
 
 activate-flask-app ()
@@ -498,12 +499,29 @@ download-public-key ()
 }
 
 
+download-shr-tarball ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: download-shr-tarball $targetFolder\n' >&2; return 1; }
+    local downloadFolder=$1
+    local urlLatestRelease="https://api.github.com/repos/actions/runner/releases/latest"
+    local tarballFileName tarballUrl
+    args=($(curl --silent "$urlLatestRelease" | jq -r '.assets[]? | select(.name | test("^actions-runner-linux-x64.*\\d\\.tar.gz$")) | [.name, .browser_download_url] | @tsv')) || return
+    tarballFileName=${args[0]}
+    tarballUrl=${args[1]}
+    local tarballPath="$(mktemp -t XXX.$tarballFileName)"
+    curl --location --silent --output "$tarballPath" "$tarballUrl"
+    tar --list --gunzip --file "$tarballPath" >/dev/null
+    tar --directory "$downloadFolder" --extract --gunzip --file "$tarballPath" || return
+    printf '%s' "$downloadFolder" 
+}
+
+
 download-svc ()
 {
     # shellcheck disable=SC2016
     (( $# == 1 )) || { printf 'Usage: download-svc $name\n' >&2; return 1; }
     local name=$1
-
     local bucket; bucket=$(get-bucket) || return
     local s3Url="s3://$bucket/dist/svc/$name.tgz"
     local tempDir; tempDir=$(download-to-temp-dir "$s3Url") || return
