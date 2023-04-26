@@ -1628,7 +1628,7 @@ old-main ()
 
 install-fresh-daylight-svc ()
 {
-    repo=https://raw.githubusercontent.com/daylight-public/daylight/sentience
+    repo=https://raw.githubusercontent.com/daylight-public/daylight/main
     mkdir -p /opt/svc/fresh-daylight/bin 
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.service"
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.timer"
