@@ -1625,11 +1625,11 @@ old-main ()
     fi
 }
 
-printf '%s\n' Hello
+printf '%s\n' "Hello"
 printf '%s\n'  
 printf '%s\n' "It's nice to see you."
 printf '%s\n'  
-printf '%s\n' Installing daylight ...
+printf '%s\n' "Installing daylight ..."
 printf '%s\n' 
 url=https://raw.githubusercontent.com/daylight-public/daylight/sentience/daylight.sh
 curl --silent --remote-name --output-dir /opt/bin "$url"
