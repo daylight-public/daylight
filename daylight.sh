@@ -1649,33 +1649,38 @@ install-shr-token ()
     shr_access_token=$3
     labels=$4
     # Create SHR folder + download GH SHR tarball
-    sudo mkdir -p /opt/actions-runner
-    sudo chown -R ubuntu:ubuntu /opt/actions-runner/
+    mkdir -p /opt/actions-runner
     download-shr-tarball /opt/actions-runner
-    cd /opt/actions-runner
+    chown -R ubuntu:ubuntu /opt/actions-runner/
     # Redeem SHR Access Token for SHR Registration Token and install the SHR
     url="https://api.github.com/repos/$org/$repo/actions/runners/registration-token"
     shr_token=$(http post $url "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
-    ./config.sh --unattended \
-                --url https://github.com/chrislalos/mktg-sharpspring \
-                --token "$shr_token" \
-                --replace \
-                --name ubuntu-dev \
-                --labels "$labels"
+    cd /opt/actions-runner
+    su -c "./config.sh --unattended \
+           --url https://github.com/chrislalos/mktg-sharpspring \
+           --token $shr_token \
+           --replace \
+           --name ubuntu-dev \
+           --labels $labels" \
+          ubuntu
     # Install the SHR as a server
-    sudo ./svc.sh install
-    sudo ./svc.sh start
-    sudo ./svc.sh status
+    ./svc.sh install
+    ./svc.sh start
+    ./svc.sh status
 }
 
-if [[ ! -f /opt/bin/daylight.sh ]]; then
+
+# If this script is being sourced in a terminal, and it does not exist on
+# the host in /opt/bin, then download this script to /opt/bin and install the
+# `fresh-daylight` service which will pull the latest script every hour.
+if [[ ! -f /opt/bin/daylight.sh  &&  -t 0 ]]; then
     printf '%s\n' "Hello"
     printf '%s\n'  
     printf '%s\n' "It's nice to see you."
     printf '%s\n'  
     printf '%s\n' "Installing daylight ..."
     printf '%s\n' 
-    url=https://raw.githubusercontent.com/daylight-public/daylight/sentience/daylight.sh
+    url=https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
     curl --silent --remote-name --output-dir /opt/bin "$url"
     source /opt/bin/daylight.sh
     printf '%s\n' "Installing fresh-daylight service ..."
