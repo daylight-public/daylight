@@ -1612,64 +1612,82 @@ untar-to-temp-folder ()
 #
 # If daylight is invoked as a command, well all right then
 #
-if (( $# >= 1 )); then
-    set -ux
-    cmd=$1
-    shift
-    case "$cmd" in
-        install-vm) install-vm "$@";;
-        *) printf 'Unknown command: %s \n' "$cmd";;
-    esac
-fi
+old-main ()
+{
+    if (( $# >= 1 )); then
+        set -ux
+        cmd=$1
+        shift
+        case "$cmd" in
+            install-vm) install-vm "$@";;
+            *) printf 'Unknown command: %s \n' "$cmd";;
+        esac
+    fi
+}
 
-# nvme0n1     259:1    0   20G  0 disk
-# └─nvme0n1p1 259:2    0   20G  0 part /
-# nvme1n1     259:0    0   15G  0 disk /var/snap/lxd/common/lxd/images
-# nvme2n1     259:3    0   15G  0 disk
-# 
-# nvme0n1     259:0    0   20G  0 disk
-# └─nvme0n1p1 259:1    0   20G  0 part /
-# nvme1n1     259:2    0   15G  0 disk
-# nvme2n1     259:3    0   15G  0 disk /var/snap/lxd/common/lxd/images
-# 
-# /dev/nvme1n1 on /var/snap/lxd/common/lxd/images type btrfs (rw,relatime,ssd,space_cache,subvolid=5,subvol=/)
-# /var/lib/snapd/snaps/lxd_21835.snap on /snap/lxd/21835 type squashfs (ro,nodev,relatime,x-gdu.hide)
-# /var/lib/snapd/snaps/lxd_21803.snap on /snap/lxd/21803 type squashfs (ro,nodev,relatime,x-gdu.hide)
-# nsfs on /run/snapd/ns/lxd.mnt type nsfs (rw)
-# tmpfs on /var/snap/lxd/common/ns type tmpfs (rw,relatime,size=1024k,mode=700,inode64)
-# nsfs on /var/snap/lxd/common/ns/shmounts type nsfs (rw)
-# nsfs on /var/snap/lxd/common/ns/mntns type nsfs (rw)
-# 
-# /dev/nvme2n1 on /var/snap/lxd/common/lxd/images type btrfs (rw,relatime,ssd,space_cache,subvolid=5,subvol=/)
-# /var/lib/snapd/snaps/lxd_21803.snap on /snap/lxd/21803 type squashfs (ro,nodev,relatime,x-gdu.hide)
-# /var/lib/snapd/snaps/lxd_21835.snap on /snap/lxd/21835 type squashfs (ro,nodev,relatime,x-gdu.hide)
-# nsfs on /run/snapd/ns/lxd.mnt type nsfs (rw)
-# tmpfs on /var/snap/lxd/common/ns type tmpfs (rw,relatime,size=1024k,mode=700,inode64)
-# nsfs on /var/snap/lxd/common/ns/shmounts type nsfs (rw)
-# nsfs on /var/snap/lxd/common/ns/mntns type nsfs (rw)
-# 
-# LABEL=cloudimg-rootfs   /        ext4   defaults,discard        0 1
-# /dev/disk/by-uuid/c7177de9-bcf2-43f9-9fa7-c9886ce0e027 /var/snap/lxd/common/lxd/images btrfs  rw,relatime,ssd,space_cache,subvolid=5,subvol=/ 0 0
-# LABEL=cloudimg-rootfs   /        ext4   defaults,discard        0 1
-# /dev/disk/by-uuid/c7177de9-bcf2-43f9-9fa7-c9886ce0e027 /var/snap/lxd/common/lxd/images btrfs  rw,relatime,ssd,space_cache,subvolid=5,subvol=/ 0 0
-# 
-# nvme0n1
-# └─nvme0n1p1 ext4     cloudimg-rootfs 7969d789-20ae-4f61-84ff-c0ac50e0dd19   14.3G    26% /
-# nvme1n1     btrfs                    c7177de9-bcf2-43f9-9fa7-c9886ce0e027     12G    20% /var/snap/lxd/common/lxd/images
-# nvme2n1     btrfs    default         4a7c98a9-ab20-4d3c-81f5-0cc87581b16a
-# 
-# nvme0n1
-# └─nvme0n1p1 ext4     cloudimg-rootfs 7969d789-20ae-4f61-84ff-c0ac50e0dd19   14.3G    26% /
-# nvme1n1     btrfs    default         4a7c98a9-ab20-4d3c-81f5-0cc87581b16a
-# nvme2n1     btrfs                    c7177de9-bcf2-43f9-9fa7-c9886ce0e027     12G    20% /var/snap/lxd/common/lxd/images
-# 
-# ubuntu@ip-10-12-1-150:~$ blkid /dev/nvme1n1
-# /dev/nvme1n1: UUID="c7177de9-bcf2-43f9-9fa7-c9886ce0e027" UUID_SUB="f3f734b8-afa1-437e-a176-bd2fb8eb6f9d" TYPE="btrfs"
-# ubuntu@ip-10-12-1-150:~$ blkid /dev/nvme2n1
-# /dev/nvme2n1: LABEL="default" UUID="4a7c98a9-ab20-4d3c-81f5-0cc87581b16a" UUID_SUB="eef44e83-03db-47ec-bbc4-758e08f78b15" TYPE="btrfs"
-# 
-# ubuntu@ip-10-13-4-170:~$ blkid /dev/nvme1n1
-# /dev/nvme1n1: LABEL="default" UUID="4a7c98a9-ab20-4d3c-81f5-0cc87581b16a" UUID_SUB="eef44e83-03db-47ec-bbc4-758e08f78b15" TYPE="btrfs"
-# ubuntu@ip-10-13-4-170:~$ blkid /dev/nvme2n1
-# /dev/nvme2n1: UUID="c7177de9-bcf2-43f9-9fa7-c9886ce0e027" UUID_SUB="f3f734b8-afa1-437e-a176-bd2fb8eb6f9d" TYPE="btrfs"
-# 
+
+install-fresh-daylight-svc ()
+{
+    repo=https://raw.githubusercontent.com/daylight-public/daylight/sentience
+    mkdir -p /opt/svc/fresh-daylight/bin 
+    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.service"
+    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.timer"
+    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight/bin "$repo/svc/fresh-daylight/bin/main.sh"
+    chmod 777 /opt/svc/fresh-daylight/bin/main.sh
+    sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
+    sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
+    sudo systemctl start fresh-daylight.timer
+}
+
+
+install-shr-token ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: install-shr-token $org $repo $shr_access_token $labels\n' >&2; return 1; }
+    org=$1
+    repo=$2
+    shr_access_token=$3
+    labels=$4
+    # Create SHR folder + download GH SHR tarball
+    sudo mkdir -p /opt/actions-runner
+    sudo chown -R ubuntu:ubuntu /opt/actions-runner/
+    download-shr-tarball /opt/actions-runner
+    cd /opt/actions-runner
+    # Redeem SHR Access Token for SHR Registration Token and install the SHR
+    url="https://api.github.com/repos/$org/$repo/actions/runners/registration-token"
+    shr_token=$(http post $url "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
+    ./config.sh --unattended \
+                --url https://github.com/chrislalos/mktg-sharpspring \
+                --token "$shr_token" \
+                --replace \
+                --name ubuntu-dev \
+                --labels "$labels"
+    # Install the SHR as a server
+    sudo ./svc.sh install
+    sudo ./svc.sh start
+    sudo ./svc.sh status
+    journalctl --unit "$(cat .service)" --follow
+
+}
+
+if [[ ! -f /opt/bin/daylight.sh ]]; then
+    printf '%s\n' "Hello"
+    printf '%s\n'  
+    printf '%s\n' "It's nice to see you."
+    printf '%s\n'  
+    printf '%s\n' "Installing daylight ..."
+    printf '%s\n' 
+    url=https://raw.githubusercontent.com/daylight-public/daylight/sentience/daylight.sh
+    curl --silent --remote-name --output-dir /opt/bin "$url"
+    source /opt/bin/daylight.sh
+    printf '%s\n' "Installing fresh-daylight service ..."
+    printf '%s\n' 
+    install-fresh-daylight-svc
+    if [[ -f /home/ubuntu/.bashrc ]]; then
+        printf '%s\n' "" >> /home/ubuntu/.bashrc
+        printf '%s\n' "# hello from daylight" >> /home/ubuntu/.bashrc
+        printf '%s\n' "source /opt/bin/daylight.sh" >> /home/ubuntu/.bashrc
+    fi
+    printf '%s\n' Done.
+    printf '%s\n' 
+fi
