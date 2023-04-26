@@ -1633,6 +1633,7 @@ install-fresh-daylight-svc ()
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.service"
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.timer"
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight/bin "$repo/svc/fresh-daylight/bin/main.sh"
+    chmod 777 /opt/svc/fresh-daylight/bin/main.sh
     sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
     sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
     sudo systemctl start fresh-daylight.timer
