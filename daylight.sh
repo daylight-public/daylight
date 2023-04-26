@@ -1639,6 +1639,36 @@ install-fresh-daylight-svc ()
 }
 
 
+install-shr-token ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: install-shr-token $org $repo $shr_access_token $labels\n' >&2; return 1; }
+    org=$1
+    repo=$2
+    shr_access_token=$3
+    labels=$4
+    # Create SHR folder + download GH SHR tarball
+    sudo mkdir -p /opt/actions-runner
+    sudo chown -R ubuntu:ubuntu /opt/actions-runner/
+    download-shr-tarball /opt/actions-runner
+    cd /opt/actions-runner
+    # Redeem SHR Access Token for SHR Registration Token and install the SHR
+    url="https://api.github.com/repos/$org/$repo/actions/runners/registration-token"
+    shr_token=$(http post $url "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
+    ./config.sh --unattended \
+                --url https://github.com/chrislalos/mktg-sharpspring \
+                --token "$shr_token" \
+                --replace \
+                --name ubuntu-dev \
+                --labels "$labels"
+    # Install the SHR as a server
+    sudo ./svc.sh install
+    sudo ./svc.sh start
+    sudo ./svc.sh status
+    journalctl --unit "$(cat .service)" --follow
+
+}
+
 if [[ ! -f /opt/bin/daylight.sh ]]; then
     printf '%s\n' "Hello"
     printf '%s\n'  

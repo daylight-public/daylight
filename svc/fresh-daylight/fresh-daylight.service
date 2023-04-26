@@ -2,7 +2,6 @@
 Description=Service to download latest daylight.sh and install it in /opt/bin
 
 [Service]
-EnvironmentFile=/opt/svc/fresh-daylight/.env
 ExecStart=/opt/svc/fresh-daylight/bin/main.sh
 Type=oneshot
 User=ubuntu
