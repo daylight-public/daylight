@@ -1666,8 +1666,6 @@ install-shr-token ()
     sudo ./svc.sh install
     sudo ./svc.sh start
     sudo ./svc.sh status
-    journalctl --unit "$(cat .service)" --follow
-
 }
 
 if [[ ! -f /opt/bin/daylight.sh ]]; then
