@@ -1651,7 +1651,7 @@ if [[ ! -f /opt/bin/daylight.sh ]]; then
     source /opt/bin/daylight.sh
     printf '%s\n' "Installing fresh-daylight service ..."
     printf '%s\n' 
-    install-fresh-daylight-service
+    install-fresh-daylight-svc
     if [[ -f /home/ubuntu/.bashrc ]]; then
         printf '%s\n' "" >> /home/ubuntu/.bashrc
         printf '%s\n' "# hello from daylight" >> /home/ubuntu/.bashrc

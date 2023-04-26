@@ -6,5 +6,3 @@ curl --silent --remote-name --output-dir /opt/bin https://raw.githubusercontent.
 To download and run the script like a maniac ...
 ```
 curl --silent /opt/bin/daylight.sh https://raw.githubusercontent.com/daylight-public/daylight/sentience/daylight.sh | bash
-
-
