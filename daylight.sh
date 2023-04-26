@@ -1625,6 +1625,19 @@ old-main ()
     fi
 }
 
+
+install-fresh-daylight-svc ()
+{
+    repo=https://raw.githubusercontent.com/daylight-public/daylight/sentience
+    mkdir -p /opt/svc/fresh-daylight/bin 
+    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.service"
+    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.timer"
+    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight/bin "$repo/svc/fresh-daylight/bin/main.sh"
+    sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
+    sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
+    sudo systemctl start /opt/svc/fresh-daylight/fresh-daylight.timer
+}
+
 printf '%s\n' "Hello"
 printf '%s\n'  
 printf '%s\n' "It's nice to see you."
