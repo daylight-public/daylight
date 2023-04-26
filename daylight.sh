@@ -1612,15 +1612,30 @@ untar-to-temp-folder ()
 #
 # If daylight is invoked as a command, well all right then
 #
-if (( $# >= 1 )); then
-    set -ux
-    cmd=$1
-    shift
-    case "$cmd" in
-        install-vm) install-vm "$@";;
-        *) printf 'Unknown command: %s \n' "$cmd";;
-    esac
-fi
+old-main ()
+{
+    if (( $# >= 1 )); then
+        set -ux
+        cmd=$1
+        shift
+        case "$cmd" in
+            install-vm) install-vm "$@";;
+            *) printf 'Unknown command: %s \n' "$cmd";;
+        esac
+    fi
+}
+
+printf '%s\n' Hello
+printf '%s\n'  
+printf '%s\n' "It's nice to see you."
+printf '%s\n'  
+printf '%s\n' Installing daylight ...
+printf '%s\n' 
+url=https://raw.githubusercontent.com/daylight-public/daylight/sentience/daylight.sh
+curl --silent --remote-name --output-dir /opt/bin "$url"
+printf '%s\n' Done.
+printf '%s\n' 
+
 
 # nvme0n1     259:1    0   20G  0 disk
 # └─nvme0n1p1 259:2    0   20G  0 part /
