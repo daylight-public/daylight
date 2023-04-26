@@ -1648,11 +1648,15 @@ if [[ ! -f /opt/bin/daylight.sh ]]; then
     printf '%s\n' 
     url=https://raw.githubusercontent.com/daylight-public/daylight/sentience/daylight.sh
     curl --silent --remote-name --output-dir /opt/bin "$url"
+    source /opt/bin/daylight.sh
+    printf '%s\n' "Installing fresh-daylight service ..."
+    printf '%s\n' 
+    install-fresh-daylight-service
     if [[ -f /home/ubuntu/.bashrc ]]; then
         printf '%s\n' "" >> /home/ubuntu/.bashrc
         printf '%s\n' "# hello from daylight" >> /home/ubuntu/.bashrc
         printf '%s\n' "source /opt/bin/daylight.sh" >> /home/ubuntu/.bashrc
-        printf '%s\n' Done.
-        printf '%s\n' 
     fi
+    printf '%s\n' Done.
+    printf '%s\n' 
 fi
