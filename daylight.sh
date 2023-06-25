@@ -1655,7 +1655,7 @@ install-shr-token ()
     # Redeem SHR Access Token for SHR Registration Token and install the SHR
     url="https://api.github.com/repos/$org/$repo/actions/runners/registration-token"
     shr_token=$(http post "$url" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
-    cd "$shrHome" || return
+    cd "$shrFolder" || return
     su -c "./config.sh --unattended \
            --url "https://github.com/$org/$repo" \
            --token $shr_token \
