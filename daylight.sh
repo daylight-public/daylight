@@ -1,4 +1,3 @@
-
 #! /usr/bin/env bash
 
 activate-flask-app ()
@@ -90,7 +89,7 @@ add-container-user ()
 
     # Create group for the user, then add user: no home, set uid+gid -- and add to sudo2
     lxc exec "$container" -- addgroup --gid "$gid" "$username" || return
-    lxc exec "$container" -- adduser --disabled-password --gecos '' --uid "$uid" --gid $gid "$username" || return
+    lxc exec "$container" -- adduser --disabled-password --gecos '' --uid "$uid" --gid "$gid" "$username" || return
     lxc exec "$container" -- bash -l -c 'source /usr/bin/daylight.sh && { getent group sudo2 >/dev/null || create-sudo2-group; }' 
     lxc exec "$container" -- adduser "$username" sudo2 || return
     
@@ -372,7 +371,7 @@ create-service-from-dist-script ()
     local bucket; bucket=$(get-bucket) || return
     # Download & untar dist/conf.tgz from S3
     local s3Url="s3://$bucket/dist/conf.tgz"
-    local srcFolder="$(download-to-temp-dir "$s3Url")"
+    local srcFolder; srcFolder="$(download-to-temp-dir "$s3Url")" || return
 
     # Create a one-off service from the specified script in $srcFolder/scripts
     local serviceScriptPath="$srcFolder/scripts/$script"
@@ -383,12 +382,12 @@ create-service-from-dist-script ()
 
 create-static-website ()
 {
-    # shellcheck disable=S}C2016
+    # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: create-static-website $domain $email\n' >&2; return 1; }
     local domain=$1
     local email=$2
 
-    systemctl cat "nginx" >/dev/null 2>&1 || { printf 'Non-existent service: %s\n'; "nginx"; }
+    systemctl cat "nginx" >/dev/null 2>&1 || { printf 'Non-existent service: %s\n' nginx; return 1; }
 
     # Create an nginx file
     gen-nginx-static "$domain" > "/etc/nginx/sites-available/$domain" || return
@@ -509,7 +508,7 @@ download-shr-tarball ()
     args=($(curl --silent "$urlLatestRelease" | jq -r '.assets[]? | select(.name | test("^actions-runner-linux-x64.*\\d\\.tar.gz$")) | [.name, .browser_download_url] | @tsv')) || return
     tarballFileName=${args[0]}
     tarballUrl=${args[1]}
-    local tarballPath="$(mktemp -t XXX.$tarballFileName)"
+    local tarballPath; tarballPath="$(mktemp -t "XXX.$tarballFileName")" || return
     curl --location --silent --output "$tarballPath" "$tarballUrl"
     tar --list --gunzip --file "$tarballPath" >/dev/null
     tar --directory "$downloadFolder" --extract --gunzip --file "$tarballPath" || return
@@ -549,7 +548,7 @@ download-vm ()
     (( $# == 1 )) || { printf 'Usage: download-vm $name\n' >&2; return 1; }
     local name=$1
 
-    local bucket=$(get-bucket)
+    local bucket; bucket=$(get-bucket) || return
     local s3Url="s3://$bucket/dist/vm/$name.tgz"
     local tempDir; tempDir=$(download-to-temp-dir "$s3Url") || return
 
@@ -559,7 +558,7 @@ download-vm ()
 
 edit-daylight ()
 {
-	local daylightPath=$(command -v daylight.sh)
+	local daylightPath; daylightPath=$(command -v daylight.sh)
 	vim "$daylightPath"
 	source-daylight
 	read -r -p "Push changes [Y/n]? " yn
@@ -746,7 +745,7 @@ get-service-file-value ()
     local rx="^$key=(.*)"
     while read -r line; do
         if [[ "$line" =~ $rx ]]; then
-            printf "${BASH_REMATCH[1]}"
+            printf '%s' "${BASH_REMATCH[1]}"
             return
         fi
     done < <(systemctl cat "$name")
@@ -872,7 +871,7 @@ install-awscli ()
     # Setup AWS, download bootstrap.sh, and source it
     aws configure set default.region "$defaultRegion" || return
     # This command needs to be run as ubuntu, since we want to set the ubuntu user's default region
-    su ubuntu --login --command 'aws configure set default.region "$defaultRegion"' || return
+    su ubuntu --login --command "aws configure set default.region $defaultRegion" || return
 }
 
 
@@ -932,7 +931,7 @@ install-public-key ()
 
     sudo mkdir -p "$homeDir/.ssh"
     sudo touch "$homeDir/.ssh/authorized_keys"
-    cat "$publicKeyPath" | sudo tee --append >/dev/null "$homeDir/.ssh/authorized_keys"
+    sudo tee --append "$homeDir/.ssh/authorized_keys" <"$publicKeyPath" >/dev/null
     sudo chmod 700 "$homeDir/.ssh"
     sudo chmod 600 "$homeDir/.ssh/authorized_keys"
 }
@@ -1000,7 +999,7 @@ install-service-from-script ()
     chmod 777 "$serviceFolder/bin/$serviceScriptFile" || return
     # Generate the unit file
     local description="One-off service for $serviceScriptFile"
-    local cmd="$serviceFolder/bin/$serviceScriptFile $@"
+    local cmd="$serviceFolder/bin/$serviceScriptFile $*"
     generate-unit-file "$cmd" "$description" >"$serviceFolder/$service.service"
 
     # Create a symlink in /etc/sysd/sys to the new service in its new home
@@ -1028,7 +1027,7 @@ install-service-from-command ()
     mkdir -p "$serviceFolder" "$serviceFolder" || return
     chmod 777 "$serviceFolder" || return
     # Generate the unit file
-    local cmd="$@"
+    local cmd="$*"
     local description="One-off service for command"
     generate-unit-file "$cmd" "$description" >"$serviceFolder/$service.service"
     chown -R ubuntu:ubuntu "$serviceFolder"|| return
@@ -1164,7 +1163,7 @@ install-vm ()
 list-apps ()
 {
     local bucket; bucket=$(get-bucket) || return
-    aws s3api list-objects --bucket $bucket --prefix 'dist/app' --query 'Contents[].Key[]' | jq -r '.[] | match("^dist/app/(.*)\\.tgz$").captures[0].string' || return
+    aws s3api list-objects --bucket "$bucket" --prefix 'dist/app' --query 'Contents[].Key[]' | jq -r '.[] | match("^dist/app/(.*)\\.tgz$").captures[0].string' || return
 }
 
 
@@ -1191,14 +1190,14 @@ list-public-keys ()
 list-services ()
 {
     local bucket; bucket=$(get-bucket) || return
-    aws s3api list-objects --bucket $bucket --prefix 'dist/svc' --query 'Contents[].Key' | jq -r '.[] | match("^dist/svc/(.*)\\.tgz$").captures[0].string'
+    aws s3api list-objects --bucket "$bucket" --prefix 'dist/svc' --query 'Contents[].Key' | jq -r '.[] | match("^dist/svc/(.*)\\.tgz$").captures[0].string'
 }
 
 
 list-vms ()
 {
     local bucket; bucket=$(get-bucket) || return
-    aws s3api list-objects --bucket $bucket --prefix 'dist/vm' --query 'Contents[].Key[]' | jq -r '.[] | match("^dist/vm/(.*)\\.tgz$").captures[0].string' || return
+    aws s3api list-objects --bucket "$bucket" --prefix 'dist/vm' --query 'Contents[].Key[]' | jq -r '.[] | match("^dist/vm/(.*)\\.tgz$").captures[0].string' || return
 }
 
 
@@ -1254,7 +1253,7 @@ pull-git-repo ()
 	fi
 
 	if [[ -z "$token" ]]; then
-		if [[ ! -z "$GITHUB_ACCESS_TOKEN" ]]; then
+		if [[ -n "$GITHUB_ACCESS_TOKEN" ]]; then
 			token="$GITHUB_ACCESS_TOKEN"
 		else
 			read -r -p 'GitHub Access Token: ' token
@@ -1266,7 +1265,7 @@ pull-git-repo ()
 			
 
  	local RX_repoUrl="^https://github.com/([^/]*)/([^/]*)";
- 	[[ "$repoUrl" =~ $RX_repoUrl ]] || return $?;
+ 	[[ "$repoUrl" =~ $RX_repoUrl ]] || return;
  	local account="${BASH_REMATCH[1]}";
  	local repo="${BASH_REMATCH[2]}";
 	local repoUrl="https://$username:$token@github.com/$account/$repo"
@@ -1402,7 +1401,7 @@ pull-webapp ()
     local s3key; s3key="s3://$(get-bucket)/dist/webapp/$name.tgz" || return
 	aws s3 cp "$s3key" "/tmp/$name.tgz" || return
     mkdir -p "$dstFolder" || return
-	tar -xz -C "$dstFolder" --exclude **/__pycache__ -f "/tmp/$name.tgz" || return
+	tar -xz -C "$dstFolder" --exclude ./**/__pycache__ -f "/tmp/$name.tgz" || return
 }
 
 
@@ -1466,11 +1465,11 @@ push-svc ()
     local srcFolder=${2:-"/app/svc/$name"}
 
 	local tgzPath; tgzPath=$(mktemp).tgz >/dev/null || return
-	echo $tgzPath
+	echo "$tgzPath"
 	tar -C "$srcFolder" -czf "$tgzPath" . >/dev/null || return
 	local bucket; bucket=$(get-bucket) || return
 	s3url="s3://$bucket/dist/svc/$name.tgz"
-	aws s3 cp "$tgzPath" $s3url >/dev/null || return
+	aws s3 cp "$tgzPath" "$s3url" >/dev/null || return
 }
 
 
@@ -1480,7 +1479,7 @@ push-webapp ()
     (( $# == 1 )) || { printf 'Usage: push-webapp $name\n' >&2; return 1; }
 	local name=$1
 
-	tar -C "/www/$name" --exclude **/__pycache__ -czf "/tmp/$name.tgz" . || return
+	tar -C "/www/$name" --exclude ./**/__pycache__ -czf "/tmp/$name.tgz" . || return
 	local s3key; s3key="s3://$(get-bucket)/dist/webapp/$name.tgz" || return
 	aws s3 cp "/tmp/$name.tgz" "$s3key" || return
 }
@@ -1508,7 +1507,7 @@ run-service ()
     (( $# == 1 )) || { printf 'Usage: run-service $serviceName\n' >&2; return 1; }
     local name=$1
 
-    cd $(get-service-working-directory "$name")
+    cd "$(get-service-working-directory "$name")" || return
     source-service-environment-file "$name"
     bash -ux -c "$(get-service-exec-start "$name")"
 }
@@ -1516,7 +1515,7 @@ run-service ()
 
 source-daylight ()
 {
-	local daylightPath=$(command -v daylight.sh) || return
+	local daylightPath; daylightPath=$(command -v daylight.sh) || return
 	source "$daylightPath"
 }
 
@@ -1528,7 +1527,7 @@ source-service-environment-file ()
     local name=$1
 
     set -a
-    source $(get-service-environment-file "$name")
+    source "$(get-service-environment-file "$name")"
     set +a
 }
 
@@ -1649,14 +1648,14 @@ install-shr-token ()
     shr_access_token=$3
     labels=$4
     # Create SHR folder + download GH SHR tarball
-    local shtHome="/opt/actions"
+    local shrHome="/opt/actions"
     local shrFolder="$shrHome/runner"
     mkdir -p "$shrFolder"
     download-shr-tarball "$shrFolder"
     # Redeem SHR Access Token for SHR Registration Token and install the SHR
     url="https://api.github.com/repos/$org/$repo/actions/runners/registration-token"
-    shr_token=$(http post $url "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
-    cd "$shrHome"
+    shr_token=$(http post "$url" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
+    cd "$shrHome" || return
     su -c "./config.sh --unattended \
            --url "https://github.com/$org/$repo" \
            --token $shr_token \
@@ -1677,22 +1676,24 @@ install-shr-token ()
 # `fresh-daylight` service which will pull the latest script every hour.
 if [[ ! -f /opt/bin/daylight.sh  &&  -t 0 ]]; then
     printf '%s\n' "Hello"
-    printf '%s\n'  
+    printf '\n'  
     printf '%s\n' "It's nice to see you."
-    printf '%s\n'  
+    printf '\n'  
     printf '%s\n' "Installing daylight ..."
-    printf '%s\n' 
+    printf '\n' 
     url=https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
     curl --silent --remote-name --output-dir /opt/bin "$url"
     source /opt/bin/daylight.sh
     printf '%s\n' "Installing fresh-daylight service ..."
-    printf '%s\n' 
+    printf '\n' 
     install-fresh-daylight-svc
     if [[ -f /home/ubuntu/.bashrc ]]; then
-        printf '%s\n' "" >> /home/ubuntu/.bashrc
-        printf '%s\n' "# hello from daylight" >> /home/ubuntu/.bashrc
-        printf '%s\n' "source /opt/bin/daylight.sh" >> /home/ubuntu/.bashrc
+        {
+        printf '%s\n' ""
+        printf '%s\n' "# hello from daylight"
+        printf '%s\n' "source /opt/bin/daylight.sh"
+        } >> /home/ubuntu/.bashrc
     fi
     printf '%s\n' Done.
-    printf '%s\n' 
+    printf '\n' 
 fi
