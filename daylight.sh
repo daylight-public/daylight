@@ -1656,6 +1656,7 @@ install-shr-token ()
     url="https://api.github.com/repos/$org/$repo/actions/runners/registration-token"
     shr_token=$(http post "$url" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
     cd "$shrFolder" || return
+    chown -R ubuntu:ubuntu "$shrHome"
     su -c "./config.sh --unattended \
            --url "https://github.com/$org/$repo" \
            --token $shr_token \
@@ -1667,7 +1668,6 @@ install-shr-token ()
     ./svc.sh install
     ./svc.sh start
     ./svc.sh status
-    chown -R ubuntu:ubuntu "$shrHome"
 }
 
 
