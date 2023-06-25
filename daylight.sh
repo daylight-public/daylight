@@ -1649,13 +1649,14 @@ install-shr-token ()
     shr_access_token=$3
     labels=$4
     # Create SHR folder + download GH SHR tarball
-    mkdir -p /opt/actions-runner
-    download-shr-tarball /opt/actions-runner
-    chown -R ubuntu:ubuntu /opt/actions-runner/
+    local shtHome="/opt/actions"
+    local shrFolder="$shrHome/runner"
+    mkdir -p "$shrFolder"
+    download-shr-tarball "$shrFolder"
     # Redeem SHR Access Token for SHR Registration Token and install the SHR
     url="https://api.github.com/repos/$org/$repo/actions/runners/registration-token"
     shr_token=$(http post $url "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
-    cd /opt/actions-runner
+    cd "$shrHome"
     su -c "./config.sh --unattended \
            --url "https://github.com/$org/$repo" \
            --token $shr_token \
@@ -1667,6 +1668,7 @@ install-shr-token ()
     ./svc.sh install
     ./svc.sh start
     ./svc.sh status
+    chown -R ubuntu:ubuntu "$shrHome"
 }
 
 
