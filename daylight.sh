@@ -1648,8 +1648,8 @@ install-shr-token ()
     shr_access_token=$3
     labels=$4
     # Create SHR folder + download GH SHR tarball
-    local shrHome="/opt/actions"
-    local shrFolder="$shrHome/runner"
+    local shrHome="/opt/actions-runner"
+    local shrFolder="$shrHome/$repo"
     mkdir -p "$shrFolder"
     download-shr-tarball "$shrFolder"
     # Redeem SHR Access Token for SHR Registration Token and install the SHR
