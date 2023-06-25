@@ -1657,6 +1657,7 @@ install-shr-token ()
     shr_token=$(http post "$url" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
     cd "$shrFolder" || return
     chown -R ubuntu:ubuntu "$shrHome"
+    
     su -c "./config.sh --unattended \
            --url "https://github.com/$org/$repo" \
            --token $shr_token \
