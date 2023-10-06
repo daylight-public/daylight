@@ -1642,24 +1642,24 @@ install-fresh-daylight-svc ()
 install-shr-token ()
 {
     # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: install-shr-token $org $repo $shr_access_token $labels\n' >&2; return 1; }
-    org=$1
-    repo=$2
+    (( $# == 4 )) || { printf 'Usage: install-shr-token $repoUrl $svcName $shr_access_token $labels\n' >&2; return 1; }
+    repoUrl=$1
+    svcName=$2
     shr_access_token=$3
     labels=$4
     # Create SHR folder + download GH SHR tarball
     local shrHome="/opt/actions-runner"
-    local shrFolder="$shrHome/$repo"
+    local shrFolder="$shrHome/$svcName"
     mkdir -p "$shrFolder"
     download-shr-tarball "$shrFolder"
     # Redeem SHR Access Token for SHR Registration Token and install the SHR
-    url="https://api.github.com/repos/$org/$repo/actions/runners/registration-token"
-    shr_token=$(http post "$url" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
+    apiUrl="$repoUrl/actions/runners/registration-token"
+    shr_token=$(http post "$apiUrl" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
     cd "$shrFolder" || return
     chown -R ubuntu:ubuntu "$shrHome"
     
     su -c "./config.sh --unattended \
-           --url "https://github.com/$org/$repo" \
+           --url "$repoUrl" \
            --token $shr_token \
            --replace \
            --name ubuntu-dev \
