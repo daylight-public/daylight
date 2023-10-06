@@ -1659,7 +1659,7 @@ install-shr-token ()
     shrToken=$(http post "$apiUrl" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
     cd "$shrFolder" || return
     chown -R ubuntu:ubuntu "$shrHome"
-    if ./svc.sh status >/dev/null; then
+    if [[ -f ./svc.sh ]] && ./svc.sh status >/dev/null; then
         ./svc.sh uninstall
         su -c "./config.sh remove --token $shrToken" ubuntu
     fi
