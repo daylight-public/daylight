@@ -1642,18 +1642,20 @@ install-fresh-daylight-svc ()
 install-shr-token ()
 {
     # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: install-shr-token $repoUrl $svcName $shr_access_token $labels\n' >&2; return 1; }
-    repoUrl=$1
-    svcName=$2
-    shr_access_token=$3
-    labels=$4
+    (( $# == 5 )) || { printf 'Usage: install-shr-token $org $repoName $svcName $shr_access_token $labels\n' >&2; return 1; }
+    org=$1
+    repoName=$2
+    svcName=$3
+    shr_access_token=$4
+    labels=$5
     # Create SHR folder + download GH SHR tarball
     local shrHome="/opt/actions-runner"
     local shrFolder="$shrHome/$svcName"
     mkdir -p "$shrFolder"
     download-shr-tarball "$shrFolder"
     # Redeem SHR Access Token for SHR Registration Token and install the SHR
-    apiUrl="$repoUrl/actions/runners/registration-token"
+    repoUrl="https://github.com/$org/$repoName"
+    apiUrl="https://api.github.com/$org/$repoName/actions/runners/registration-token"
     shr_token=$(http post "$apiUrl" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
     cd "$shrFolder" || return
     chown -R ubuntu:ubuntu "$shrHome"
