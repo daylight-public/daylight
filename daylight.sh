@@ -1668,7 +1668,6 @@ install-shr-token ()
     # Install the SHR as a server
     ./svc.sh install
     ./svc.sh start
-    ./svc.sh status
 }
 
 
