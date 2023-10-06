@@ -1656,16 +1656,16 @@ install-shr-token ()
     # Redeem SHR Access Token for SHR Registration Token and install the SHR
     repoUrl="https://github.com/$org/$repoName"
     apiUrl="https://api.github.com/repos/$org/$repoName/actions/runners/registration-token"
-    shr_token=$(http post "$apiUrl" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
+    shrToken=$(http post "$apiUrl" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
     cd "$shrFolder" || return
     chown -R ubuntu:ubuntu "$shrHome"
-    if /svc.sh status >/dev/null; then
+    if ./svc.sh status >/dev/null; then
         ./svc.sh uninstall
-        su -c './config.sh remove' ubuntu
+        su -c "./config.sh remove --token $shrToken" ubuntu
     fi
     su -c "./config.sh --unattended \
            --url "$repoUrl" \
-           --token $shr_token \
+           --token $shrToken \
            --replace \
            --name ubuntu-dev \
            --labels $labels" \
