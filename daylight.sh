@@ -1659,7 +1659,10 @@ install-shr-token ()
     shr_token=$(http post "$apiUrl" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
     cd "$shrFolder" || return
     chown -R ubuntu:ubuntu "$shrHome"
-    
+    if /svc.sh status >/dev/null; then
+        ./svc.sh uninstall
+        su -c './config.sh remove' ubuntu
+    fi
     su -c "./config.sh --unattended \
            --url "$repoUrl" \
            --token $shr_token \
@@ -1667,7 +1670,7 @@ install-shr-token ()
            --name ubuntu-dev \
            --labels $labels" \
           ubuntu
-    # Install the SHR as a server
+    # Install the SHR as a service
     ./svc.sh install
     ./svc.sh start
 }
