@@ -1655,7 +1655,7 @@ install-shr-token ()
     download-shr-tarball "$shrFolder"
     # Redeem SHR Access Token for SHR Registration Token and install the SHR
     repoUrl="https://github.com/$org/$repoName"
-    apiUrl="https://api.github.com/$org/$repoName/actions/runners/registration-token"
+    apiUrl="https://api.github.com/repos/$org/$repoName/actions/runners/registration-token"
     shr_token=$(http post "$apiUrl" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
     cd "$shrFolder" || return
     chown -R ubuntu:ubuntu "$shrHome"
