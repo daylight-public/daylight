@@ -1,7 +1,13 @@
 #! /usr/bin/env bash
 
-mkdir ./tmp
-cat >./tmp/nginx.service.tmpl <<- EOT_nginx
+main ()
+{
+        # shellcheck disable=SC2016
+        (( $# == 2 )) || { printf 'Usage: nginxer $domain $port\n' >&2; return 1; }
+        local domain=$1
+        local port=$2
+        mkdir ./tmp
+        cat >./tmp/nginx.service.tmpl <<- EOT_nginx
 server {
         listen 80;
         listen [::]:80;
@@ -18,12 +24,12 @@ server {
 }
 EOT_nginx
 
-cat >./tmp/do-nginx.sh <<- EOT_nginx
+        cat >./tmp/do-nginx.sh <<- EOT_nginx
 gomplate --file /nginx.service.tmpl 
 EOT_nginx
 chmod 777 ./tmp/do-nginx.sh
 
-cat >./tmp/Dockerfile.gomplator <<- EOT_Dockerfile
+        cat >./tmp/Dockerfile.gomplator <<- EOT_Dockerfile
 FROM docker.io/alpine:latest as gomplating
 COPY --from=docker.io/hairyhenderson/gomplate:stable /gomplate /bin/gomplate
 COPY /tmp/do-nginx.sh /do-nginx.sh
@@ -31,17 +37,24 @@ COPY /tmp/nginx.service.tmpl /nginx.service.tmpl
 ENTRYPOINT /do-nginx.sh
 EOT_Dockerfile
 
-podman build \
-	--tag nginxer \
-	--file - \
-	. \
-	< /tmp/Dockerfile.gomplator \
-	1>&2
+        cat >./tmp/.env <<- EOT_dotenv
+domain=$domain
+port=$port
+EOT_dotenv
 
-podman run \
-	--name gomplator \
-	--env-file <( env| cut -f1 -d= ) \
-	--rm -it \
-	nginxer
-	
+        podman build \
+                --tag nginxer \
+                --file - \
+                . \
+                < /tmp/Dockerfile.gomplator \
+                >/dev/null || return
 
+        podman run \
+                --name gomplator \
+                --env-file ./tmp/.env \
+                --rm -it \
+                nginxer
+}	
+
+
+main $@
