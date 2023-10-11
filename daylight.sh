@@ -56,6 +56,7 @@ activate-vm ()
     lxc launch "$name" "$instanceName" || return
     # Run the finsihing-touches script
     if [[ -f "$srcFolder/finishing-touches.sh" ]]; then
+        # shellcheck disable=SC1091
         source "$srcFolder/finishing-touches.sh"
     fi
 }
@@ -223,7 +224,7 @@ create-flask-app ()
     local name=$1
     local domain=$2
 
-    systemctl cat "nginx" >/dev/null 2>&1 || { printf 'Non-existent service: %s\n'; "nginx"; }
+    systemctl cat "nginx" >/dev/null 2>&1 || { printf 'Non-existent service: %s\n' "nginx"; return;  }
 
     # Create an nginx file
     gen-nginx-flask "$name" "$domain" > "/etc/nginx/sites-available/$domain" || return
@@ -242,9 +243,11 @@ create-github-user-access-token ()
     client_id=Iv1.f69b43d6e5f4ea24
     s="$(http --body POST https://github.com/login/device/code?client_id=$client_id | tail -n 1)"
     source <(python3 -m parse_query_string --names device_code user_code verification_uri --output env <<<"$s")
+    # shellcheck disable=SC2154
     printf 'Please visit %s and enter the user code %s ...' "$verification_uri" "$user_code"
     read -r
     grant_type=urn:ietf:params:oauth:grant-type:device_code
+    # shellcheck disable=SC2154
     s="$(http --body post "https://github.com/login/oauth/access_token?client_id=$client_id&device_code=$device_code&grant_type=$grant_type")"
     source <(python3 -m parse_query_string --names access_token refresh_token --output env <<<"$s")
 }
@@ -505,7 +508,8 @@ download-shr-tarball ()
     local downloadFolder=$1
     local urlLatestRelease="https://api.github.com/repos/actions/runner/releases/latest"
     local tarballFileName tarballUrl
-    args=($(curl --silent "$urlLatestRelease" | jq -r '.assets[]? | select(.name | test("^actions-runner-linux-x64.*\\d\\.tar.gz$")) | [.name, .browser_download_url] | @tsv')) || return
+    local args
+    read -r -a args < <(curl --silent "$urlLatestRelease" | jq -r '.assets[]? | select(.name | test("^actions-runner-linux-x64.*\\d\\.tar.gz$")) | [.name, .browser_download_url] | @tsv') || return
     tarballFileName=${args[0]}
     tarballUrl=${args[1]}
     local tarballPath; tarballPath="$(mktemp -t "XXX.$tarballFileName")" || return
@@ -576,6 +580,7 @@ gen-nginx-flask ()
     local name=$1
     local domain=$2
 
+    # shellcheck disable=SC2154
     cat <<EOD
 server {
 	listen 80;
@@ -896,6 +901,20 @@ install-flask-app ()
 }
 
 
+install-fresh-daylight-svc ()
+{
+    repo=https://raw.githubusercontent.com/daylight-public/daylight/main
+    mkdir -p /opt/svc/fresh-daylight/bin 
+    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.service"
+    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.timer"
+    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight/bin "$repo/svc/fresh-daylight/bin/main.sh"
+    chmod 777 /opt/svc/fresh-daylight/bin/main.sh
+    sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
+    sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
+    sudo systemctl start fresh-daylight.timer
+}
+
+
 install-gnome-keyring ()
 {
 	sudo apt-get install libsecret-1-0 libsecret-1-dev
@@ -931,6 +950,7 @@ install-public-key ()
 
     sudo mkdir -p "$homeDir/.ssh"
     sudo touch "$homeDir/.ssh/authorized_keys"
+    # shellcheck disable=SC2024
     sudo tee --append "$homeDir/.ssh/authorized_keys" <"$publicKeyPath" >/dev/null
     sudo chmod 700 "$homeDir/.ssh"
     sudo chmod 600 "$homeDir/.ssh/authorized_keys"
@@ -1049,6 +1069,43 @@ install-shellscript-part-handlers ()
     srcFolder=$(untar-to-temp-folder /tmp/dist/conf.tgz)
     cp "$srcFolder"/scripts/shell_script_per_*.py /usr/bin
     # chown ubuntu:ubuntu /usr/bin/shell_script_per_*.py
+}
+
+
+install-shr-token ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 5 )) || { printf 'Usage: install-shr-token $org $repoName $svcName $shr_access_token $labels\n' >&2; return 1; }
+    org=$1
+    repoName=$2
+    svcName=$3
+    shr_access_token=$4
+    labels=$5
+    # Create SHR folder + download GH SHR tarball
+    local shrHome="/opt/actions-runner"
+    local shrFolder="$shrHome/$svcName"
+    mkdir -p "$shrFolder"
+    download-shr-tarball "$shrFolder"
+    # Redeem SHR Access Token for SHR Registration Token and install the SHR
+    repoUrl="https://github.com/$org/$repoName"
+    apiUrl="https://api.github.com/repos/$org/$repoName/actions/runners/registration-token"
+    shrToken=$(http post "$apiUrl" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
+    cd "$shrFolder" || return
+    chown -R ubuntu:ubuntu "$shrHome"
+    if ./svc.sh status >/dev/null; then
+        ./svc.sh uninstall
+        su -c "./config.sh remove --token $shrToken" ubuntu
+    fi
+    su -c ./config.sh --unattended \
+          --url "$repoUrl" \
+          --token $shr_token \
+          --replace \
+          --name ubuntu-dev \
+          --labels $labels \
+          ubuntu
+    # Install the SHR as a service
+    ./svc.sh install
+    ./svc.sh start
 }
 
 
@@ -1625,57 +1682,6 @@ old-main ()
 }
 
 
-install-fresh-daylight-svc ()
-{
-    repo=https://raw.githubusercontent.com/daylight-public/daylight/main
-    mkdir -p /opt/svc/fresh-daylight/bin 
-    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.service"
-    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.timer"
-    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight/bin "$repo/svc/fresh-daylight/bin/main.sh"
-    chmod 777 /opt/svc/fresh-daylight/bin/main.sh
-    sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
-    sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
-    sudo systemctl start fresh-daylight.timer
-}
-
-
-install-shr-token ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 5 )) || { printf 'Usage: install-shr-token $org $repoName $svcName $shr_access_token $labels\n' >&2; return 1; }
-    org=$1
-    repoName=$2
-    svcName=$3
-    shr_access_token=$4
-    labels=$5
-    # Create SHR folder + download GH SHR tarball
-    local shrHome="/opt/actions-runner"
-    local shrFolder="$shrHome/$svcName"
-    mkdir -p "$shrFolder"
-    download-shr-tarball "$shrFolder"
-    # Redeem SHR Access Token for SHR Registration Token and install the SHR
-    repoUrl="https://github.com/$org/$repoName"
-    apiUrl="https://api.github.com/repos/$org/$repoName/actions/runners/registration-token"
-    shrToken=$(http post "$apiUrl" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
-    cd "$shrFolder" || return
-    chown -R ubuntu:ubuntu "$shrHome"
-    if [[ -f ./svc.sh ]] && ./svc.sh status >/dev/null; then
-        ./svc.sh uninstall
-        su -c "./config.sh remove --token $shrToken" ubuntu
-    fi
-    su -c "./config.sh --unattended \
-           --url "$repoUrl" \
-           --token $shrToken \
-           --replace \
-           --name ubuntu-dev \
-           --labels $labels" \
-          ubuntu
-    # Install the SHR as a service
-    ./svc.sh install
-    ./svc.sh start
-}
-
-
 # If this script is being sourced in a terminal, and it does not exist on
 # the host in /opt/bin, then download this script to /opt/bin and install the
 # `fresh-daylight` service which will pull the latest script every hour.
@@ -1702,3 +1708,108 @@ if [[ ! -f /opt/bin/daylight.sh  &&  -t 0 ]]; then
     printf '%s\n' Done.
     printf '\n' 
 fi
+
+
+#
+# If daylight is invoked as a command, well all right then
+#
+main ()
+{
+    if (( $# >= 1 )); then
+        set -ux
+        cmd=$1
+        shift
+        case "$cmd" in
+			activate-flask-app)	activate-flask-app "$@";;
+			activate-svc)	activate-svc "$@";;
+			activate-vm)	activate-vm "$@";;
+			add-container-user)	add-container-user "$@";;
+			add-ssh-to-container)	add-ssh-to-container "$@";;
+			add-superuser)	add-superuser "$@";;
+			add-user)	add-user "$@";;
+			add-user-to-idmap)	add-user-to-idmap "$@";;
+			add-user-to-shadow-ids)	add-user-to-shadow-ids "$@";;
+			cat-conf-script)	cat-conf-script "$@";;
+			create-flask-app)	create-flask-app "$@";;
+			create-github-user-access-token)	create-github-user-access-token "$@";;
+			create-home-filesystem)	create-home-filesystem "$@";;
+			create-loopback)	create-loopback "$@";;
+			create-lxd-user-data)	create-lxd-user-data "$@";;
+			create-publish-image-service)	create-publish-image-service "$@";;
+			create-service-from-dist-script)	create-service-from-dist-script "$@";;
+			create-static-website)	create-static-website "$@";;
+			delete-lxd-instance)	delete-lxd-instance "$@";;
+			download-app)	download-app "$@";;
+			download-dist)	download-dist "$@";;
+			download-flask-app)	download-flask-app "$@";;
+			download-flask-service)	download-flask-service "$@";;
+			download-public-key)	download-public-key "$@";;
+			download-shr-tarball)	download-shr-tarball "$@";;
+			download-svc)	download-svc "$@";;
+			download-to-temp-dir)	download-to-temp-dir "$@";;
+			download-vm)	download-vm "$@";;
+			edit-daylight)	edit-daylight "$@";;
+			gen-nginx-flask)	gen-nginx-flask "$@";;
+			gen-nginx-static)	gen-nginx-static "$@";;
+			generate-unit-file)	generate-unit-file "$@";;
+			get-bucket)	get-bucket "$@";;
+			get-container-ip)	get-container-ip "$@";;
+			get-image-base)	get-image-base "$@";;
+			get-image-name)	get-image-name "$@";;
+			get-image-repo)	get-image-repo "$@";;
+			get-service-file-value)	get-service-file-value "$@";;
+			get-service-environment-file)	get-service-environment-file "$@";;
+			get-service-exec-start)	get-service-exec-start "$@";;
+			get-service-working-directory)	get-service-working-directory "$@";;
+			init-lxd)	init-lxd "$@";;
+			init-nginx)	init-nginx "$@";;
+			install-app)	install-app "$@";;
+			install-awscli)	install-awscli "$@";;
+			install-flask-app)	install-flask-app "$@";;
+			install-fresh-daylight-svc)	install-fresh-daylight-svc "$@";;
+			install-gnome-keyring)	install-gnome-keyring "$@";;
+			install-latest-httpie)	install-latest-httpie "$@";;
+			install-mssql-tools)	install-mssql-tools "$@";;
+			install-public-key)	install-public-key "$@";;
+			install-python)	install-python "$@";;
+			install-service)	install-service "$@";;
+			install-service-from-script)	install-service-from-script "$@";;
+			install-service-from-command)	install-service-from-command "$@";;
+			install-shellscript-part-handlers)	install-shellscript-part-handlers "$@";;
+			install-shr-token)	install-shr-token "$@";;
+			install-svc)	install-svc "$@";;
+			install-venv)	install-venv "$@";;
+			install-vm)	install-vm "$@";;
+			list-apps)	list-apps "$@";;
+			list-conf-scripts)	list-conf-scripts "$@";;
+			list-public-keys)	list-public-keys "$@";;
+			list-services)	list-services "$@";;
+			list-vms)	list-vms "$@";;
+			pull-app)	pull-app "$@";;
+			pull-daylight)	pull-daylight "$@";;
+			pull-flask-app)	pull-flask-app "$@";;
+			pull-git-repo)	pull-git-repo "$@";;
+			pull-image)	pull-image "$@";;
+			pull-ssh-tarball)	pull-ssh-tarball "$@";;
+			pull-svc)	pull-svc "$@";;
+			pull-vm)	pull-vm "$@";;
+			pull-webapp)	pull-webapp "$@";;
+			push-app)	push-app "$@";;
+			push-daylight)	push-daylight "$@";;
+			push-flask-app)	push-flask-app "$@";;
+			push-svc)	push-svc "$@";;
+			push-webapp)	push-webapp "$@";;
+			run-conf-script)	run-conf-script "$@";;
+			run-service)	run-service "$@";;
+			source-daylight)	source-daylight "$@";;
+			source-service-environment-file)	source-service-environment-file "$@";;
+			start-indexed-service)	start-indexed-service "$@";;
+			start-service)	start-service "$@";;
+			sys-start)	sys-start "$@";;
+			untar-to-temp-folder)	untar-to-temp-folder "$@";;
+            *) printf 'Unknown command: %s \n' "$cmd";;
+        esac
+    fi
+}
+
+main $@

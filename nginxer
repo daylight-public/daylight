@@ -1,0 +1,47 @@
+#! /usr/bin/env bash
+
+mkdir ./tmp
+cat >./tmp/nginx.service.tmpl <<- EOT_nginx
+server {
+        listen 80;
+        listen [::]:80;
+        server_name {{.Env.domain}};
+        root /www/{{.Env.domain}};
+        location /
+        {
+                include proxy_params;
+                proxy_pass http://localhost:{{.Env.port}};
+                proxy_set_header  X-Real-IP $remote_addr;
+                proxy_set_header  X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header  Host $http_host;
+        }
+}
+EOT_nginx
+
+cat >./tmp/do-nginx.sh <<- EOT_nginx
+gomplate --file /nginx.service.tmpl 
+EOT_nginx
+chmod 777 ./tmp/do-nginx.sh
+
+cat >./tmp/Dockerfile.gomplator <<- EOT_Dockerfile
+FROM docker.io/alpine:latest as gomplating
+COPY --from=docker.io/hairyhenderson/gomplate:stable /gomplate /bin/gomplate
+COPY /tmp/do-nginx.sh /do-nginx.sh
+COPY /tmp/nginx.service.tmpl /nginx.service.tmpl
+ENTRYPOINT /do-nginx.sh
+EOT_Dockerfile
+
+podman build \
+	--tag nginxer \
+	--file - \
+	. \
+	< /tmp/Dockerfile.gomplator \
+	1>&2
+
+podman run \
+	--name gomplator \
+	--env-file <( env| cut -f1 -d= ) \
+	--rm -it \
+	nginxer
+	
+
