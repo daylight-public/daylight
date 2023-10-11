@@ -6,7 +6,7 @@ main ()
         (( $# == 2 )) || { printf 'Usage: nginxer $domain $port\n' >&2; return 1; }
         local domain=$1
         local port=$2
-        mkdir ./tmp
+        mkdir -p ./tmp
         cat >./tmp/nginx.service.tmpl <<- EOT_nginx
 server {
         listen 80;
@@ -32,8 +32,8 @@ chmod 777 ./tmp/do-nginx.sh
         cat >./tmp/Dockerfile.gomplator <<- EOT_Dockerfile
 FROM docker.io/alpine:latest as gomplating
 COPY --from=docker.io/hairyhenderson/gomplate:stable /gomplate /bin/gomplate
-COPY /tmp/do-nginx.sh /do-nginx.sh
-COPY /tmp/nginx.service.tmpl /nginx.service.tmpl
+COPY ./tmp/do-nginx.sh /do-nginx.sh
+COPY ./tmp/nginx.service.tmpl /nginx.service.tmpl
 ENTRYPOINT /do-nginx.sh
 EOT_Dockerfile
 
@@ -46,7 +46,7 @@ EOT_dotenv
                 --tag nginxer \
                 --file - \
                 . \
-                < /tmp/Dockerfile.gomplator \
+                < ./tmp/Dockerfile.gomplator \
                 >/dev/null || return
 
         podman run \
