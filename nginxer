@@ -1,13 +1,50 @@
 #! /usr/bin/env bash
 
+# This is one of the weirder scripts I've written.
+#
+# It makes use of a useful-but-weird bash idiom: rather than
+# burden a script with dependencies on a number of support files,
+# this script keeps the content of support files locally via 
+# heredocs, and then it cats the heredocs into tmp files. For 
+# lack of a better term this will be called 'catdoccing'
+#
+# It also uses gomplate, a golang template langage-based utility,
+# to transform an nginx unit file template into an nginx unit file
+# for a specific domain and port. This is the actual point of the
+# script.
+#
+# With this idiom in hand, here's how this script works ...
+# - catdoc an nginx unit file template, to represent proxying a domain
+#   to a locally running service, with doman and port in envvars
+# - catdoc a one-liner that runs gomplate against the template file
+# - catdoc a Dockerfile based on gomplate, since most systems will
+# - not have gomplate installed, and we don't want to install it.
+# - docker build an image from the Dockerfile
+# - docker run an instance, using the domain and host as envvars
+#
+# For a final weird twist, bash requires that heredocs start at column 0,
+# or the indentation becomes part of the heredoc. So all the heredoc content
+# needs to be unindented, which is mostly ok ... unless it happens to be in
+# the indented body of a function. Which ... this is. So it looks a little
+# funny, and it's easy to think the function ends much before it actually ends.
+# It's possible the author has made this mistake themselves.
+#
+# The result is a nice, domain+port specific nginx unit file streamed to stdout.
+# 
+# Useful. And ... a little weird.
+
 main ()
 {
         # shellcheck disable=SC2016
         (( $# == 2 )) || { printf 'Usage: nginxer $domain $port\n' >&2; return 1; }
         local domain=$1
         local port=$2
+        
         mkdir -p ./tmp
-        cat >./tmp/nginx.service.tmpl <<- EOT_nginx
+
+        local nginxCfgPath; nginxCfgPath=$(TMPDIR=./tmp mktemp -t "nginx.cfg.tmpl") || return
+        printf '%s' "$nginxCfgPath"
+        cat >"$nginxCfgPath" <<- EOT_nginx_cfg
 server {
         listen 80;
         listen [::]:80;
@@ -22,14 +59,16 @@ server {
                 proxy_set_header  Host $http_host;
         }
 }
-EOT_nginx
+EOT_nginx_cfg
 
-        cat >./tmp/do-nginx.sh <<- EOT_nginx
+        local doNginxPath; doNginxPath=$(TMPDIR=./ mktemp -t "do-nginx.sh") || return
+        cat >"$doNginxPath" <<- EOT_gomplate_script
 gomplate --file /nginx.service.tmpl 
-EOT_nginx
-chmod 777 ./tmp/do-nginx.sh
+EOT_gomplate_script
+        chmod 777 "$doNginxPath"
 
-        cat >./tmp/Dockerfile.gomplator <<- EOT_Dockerfile
+        local dockerfilePath; dockerfilePath=$(TMPDIR=./ mktemp -t "Dockerfile") || return
+        cat >"$dockerfilePath" <<- EOT_Dockerfile
 FROM docker.io/alpine:latest as gomplating
 COPY --from=docker.io/hairyhenderson/gomplate:stable /gomplate /bin/gomplate
 COPY ./tmp/do-nginx.sh /do-nginx.sh
@@ -37,7 +76,8 @@ COPY ./tmp/nginx.service.tmpl /nginx.service.tmpl
 ENTRYPOINT /do-nginx.sh
 EOT_Dockerfile
 
-        cat >./tmp/.env <<- EOT_dotenv
+        local dotenvPath; dotenvPath=$(TMPDIR=./ mktemp -t ".env") || return
+        cat >"$dotenvPath" <<- EOT_dotenv
 domain=$domain
 port=$port
 EOT_dotenv
@@ -46,15 +86,14 @@ EOT_dotenv
                 --tag nginxer \
                 --file - \
                 . \
-                < ./tmp/Dockerfile.gomplator \
+                <"$dockerfilePath" \
                 >/dev/null || return
 
         podman run \
                 --name gomplator \
-                --env-file ./tmp/.env \
+                --env-file "$dotenvPath" \
                 --rm -it \
                 nginxer
 }	
-
 
 main $@
