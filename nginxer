@@ -42,7 +42,7 @@ main ()
         
         mkdir -p ./tmp
 
-        local nginxCfgPath; nginxCfgPath=$(TMPDIR=./tmp mktemp -t "nginx.cfg.tmpl") || return
+        local nginxCfgPath; nginxCfgPath=$(mktemp --tmpdir=./tmp/ nginx.cfg.tmpl.XXXXXX) || return
         printf '%s' "$nginxCfgPath"
         cat >"$nginxCfgPath" <<- EOT_nginx_cfg
 server {
@@ -61,13 +61,13 @@ server {
 }
 EOT_nginx_cfg
 
-        local doNginxPath; doNginxPath=$(TMPDIR=./ mktemp -t "do-nginx.sh") || return
+        local doNginxPath; doNginxPath=$(mktemp --tmpdir=./tmp/ do-nginx.sh.XXXXXX) || return
         cat >"$doNginxPath" <<- EOT_gomplate_script
 gomplate --file /nginx.service.tmpl 
 EOT_gomplate_script
         chmod 777 "$doNginxPath"
 
-        local dockerfilePath; dockerfilePath=$(TMPDIR=./ mktemp -t "Dockerfile") || return
+        local dockerfilePath; dockerfilePath=$(mktemp --tmpdir=./tmp/ Dockerfile.XXXXXX) || return
         cat >"$dockerfilePath" <<- EOT_Dockerfile
 FROM docker.io/alpine:latest as gomplating
 COPY --from=docker.io/hairyhenderson/gomplate:stable /gomplate /bin/gomplate
@@ -76,7 +76,7 @@ COPY ./tmp/nginx.service.tmpl /nginx.service.tmpl
 ENTRYPOINT /do-nginx.sh
 EOT_Dockerfile
 
-        local dotenvPath; dotenvPath=$(TMPDIR=./ mktemp -t ".env") || return
+        local dotenvPath; dotenvPath=$(mktemp --tmpdir=./tmp/ .env.XXXXXX) || return
         cat >"$dotenvPath" <<- EOT_dotenv
 domain=$domain
 port=$port
