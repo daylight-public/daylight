@@ -82,18 +82,23 @@ domain=$domain
 port=$port
 EOT_dotenv
 
-        podman build \
-                --tag nginxer \
-                --file - \
-                . \
-                <"$dockerfilePath" \
-                >/dev/null || return
+#         podman build \
+#                 --tag nginxer \
+#                 --file - \
+#                 . \
+#                 <"$dockerfilePath" \
+#                 >/dev/null || return
 
-        podman run \
-                --name gomplator \
-                --env-file "$dotenvPath" \
-                --rm -it \
-                nginxer
+#          podman run \
+#                  --name gomplator \
+#                  --env-file "$dotenvPath" \
+#                  --rm -it \
+#                  nginxer
+
+        set -a
+        source "$dotenvPath"
+        set +a
+        gomplate --file "$nginxCfgPath"
 }	
 
 main $@
