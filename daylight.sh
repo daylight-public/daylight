@@ -1098,7 +1098,7 @@ install-shr-token ()
     fi
     su -c ./config.sh --unattended \
           --url "$repoUrl" \
-          --token $shr_token \
+          --token $shrToken \
           --replace \
           --name ubuntu-dev \
           --labels $labels \
