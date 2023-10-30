@@ -1096,12 +1096,12 @@ install-shr-token ()
         ./svc.sh uninstall
         su -c "./config.sh remove --token $shrToken" ubuntu
     fi
-    su -c ./config.sh --unattended \
-          --url "$repoUrl" \
+    su -c "./config.sh --unattended \
+          --url $repoUrl \
           --token $shrToken \
           --replace \
           --name ubuntu-dev \
-          --labels $labels \
+          --labels $labels" \
           ubuntu
     # Install the SHR as a service
     ./svc.sh install
