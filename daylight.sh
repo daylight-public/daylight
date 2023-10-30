@@ -1570,6 +1570,33 @@ run-service ()
 }
 
 
+setup-domain ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: setup-domain $domain $port $email\n' >&2; return 1; }
+    [[ -f "/opt/bin/nginxer" ]] || { echo "Non-existent path: /opt/bin/nginxer" >&2; return 1; }
+    [[ -d "/tmp/setup" ]] || { echo "Non-existent folder: /tmp/setup" >&2; return 1; }
+    [[ -d "/etc/nginx/sites-available" ]] || { echo "Non-existent folder: /etc/nginx/sites-available" >&2; return 1; }
+    [[ -d "/etc/nginx/sites-enabled" ]] || { echo "Non-existent folder: /etc/nginx/sites-enabled" >&2; return 1; }
+    command -v "certbot" || { printf '%s is required, but was not found.\n' "certbot"; return 255; }
+
+    # Create the nginx unit file, write it to /etc/nginx/sites-available, and symlink to /etc/nginx/sites-enabled
+    /opt/bin/nginxer "$domain" "$port" 2>/dev/null >/etc/nginx/sites-available/$domain
+    ln -sf /etc/nginx/sites-available/$domain /etc/nginx/sites-enabled/$domain
+    # User certbot to create the cert files and update the nginx unit files
+    certbot --nginx -n --agree-tos --domain "$domain" --email "$email"
+    # Create tar file of cert files
+    tar -C /etc/letsencrypt/ -czf /tmp/setup/$domain-certs.tar.gz \
+        ./archive/$domain \
+        ./live/$domain \
+        ./renewal/$domain
+    # Create tar file of nginx unit files
+    tar -C /etc/nginx/ -czf /tmp/setup/$domain-nginx.tar.gz \
+        ./sites-available/$domain \
+        ./sites-enabled/$domain
+}
+
+
 source-daylight ()
 {
 	local daylightPath; daylightPath=$(command -v daylight.sh) || return
