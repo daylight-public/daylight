@@ -43,7 +43,7 @@ main ()
         mkdir -p ./tmp
 
         local nginxCfgPath; nginxCfgPath=$(mktemp --tmpdir=./tmp/ nginx.cfg.tmpl.XXXXXX) || return
-        printf '%s' "$nginxCfgPath"
+        printf '%s' "$nginxCfgPath" >&2
         cat >"$nginxCfgPath" <<- EOT_nginx_cfg
 server {
         listen 80;
