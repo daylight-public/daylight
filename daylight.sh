@@ -1579,6 +1579,9 @@ setup-domain ()
     [[ -d "/etc/nginx/sites-available" ]] || { echo "Non-existent folder: /etc/nginx/sites-available" >&2; return 1; }
     [[ -d "/etc/nginx/sites-enabled" ]] || { echo "Non-existent folder: /etc/nginx/sites-enabled" >&2; return 1; }
     command -v "certbot" || { printf '%s is required, but was not found.\n' "certbot"; return 255; }
+    local domain=$1
+    local port=$2
+    local email=$3
 
     # Create the nginx unit file, write it to /etc/nginx/sites-available, and symlink to /etc/nginx/sites-enabled
     /opt/bin/nginxer "$domain" "$port" 2>/dev/null >/etc/nginx/sites-available/$domain
@@ -1589,7 +1592,7 @@ setup-domain ()
     tar -C /etc/letsencrypt/ -czf /tmp/setup/$domain-certs.tar.gz \
         ./archive/$domain \
         ./live/$domain \
-        ./renewal/$domain
+        ./renewal/$domain.conf
     # Create tar file of nginx unit files
     tar -C /etc/nginx/ -czf /tmp/setup/$domain-nginx.tar.gz \
         ./sites-available/$domain \
@@ -1828,6 +1831,7 @@ main ()
 			push-webapp)	push-webapp "$@";;
 			run-conf-script)	run-conf-script "$@";;
 			run-service)	run-service "$@";;
+			setup-domain)	setup-domain "$@";;
 			source-daylight)	source-daylight "$@";;
 			source-service-environment-file)	source-service-environment-file "$@";;
 			start-indexed-service)	start-indexed-service "$@";;
