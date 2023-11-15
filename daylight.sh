@@ -944,16 +944,19 @@ install-mssql-tools ()
 install-public-key ()
 {
     # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: install-public-key $homeDir $publicKeyPath\n' >&2; return 1; }
-    local homeDir=$1
+    # shellcheck disable=SC2016
+    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: install-public-key $username $publicKeyPath [$homeFolder]\n' >&2; return 1; }
+    local username=$1
     local publicKeyPath=$2
+    local homeFolder="${3:-/home/$username}"
 
-    sudo mkdir -p "$homeDir/.ssh"
-    sudo touch "$homeDir/.ssh/authorized_keys"
+    sudo mkdir -p "$homeFolder/.ssh"
+    sudo touch "$homeFolder/.ssh/authorized_keys"
     # shellcheck disable=SC2024
-    sudo tee --append "$homeDir/.ssh/authorized_keys" <"$publicKeyPath" >/dev/null
-    sudo chmod 700 "$homeDir/.ssh"
-    sudo chmod 600 "$homeDir/.ssh/authorized_keys"
+    sudo tee --append "$homeFolder/.ssh/authorized_keys" <"$publicKeyPath" >/dev/null
+    sudo chmod 700 "$homeFolder/.ssh"
+    sudo chmod 600 "$homeFolder/.ssh/authorized_keys"
+    sudo chown -R "$username:$username" "$homeFolder"
 }
 
 
