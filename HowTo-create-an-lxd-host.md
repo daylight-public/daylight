@@ -2,41 +2,41 @@
 
 _There are 2 kinds of 'How To LXD' information out there. The first is reference material that tells you everything. The second is quickstart material that gets you up and going as fast as possible. The first is too long to ever read in its entirety. The second is too short to leave you understanding anything at all about the lxd system you've just unleashed. The result is no one ever looks at the first kind of info, and they instead barrel ahead in relative ignorance with quickstarts, ending up with a system they don't understand, and that all-to-familiar dread-and-anxiety of being responsible for a system you can't fix and you have to hope always magically works, and never breaks in soul-crushing ways._
 
-_What's needed is a variety of opinionated 'How To LXD' guides, that skip what you don't need to know, and force you to learn about the things you don't want to learn about but will be very flag that you did._
+_What's needed is a variety of opinionated 'How To LXD' guides, that skip what you don't need to know, and force you to learn about the things you don't want to learn about but will be very glad that you did._
 
 _This is such a guide._
 
 At a high level creating an lxd host VM on Ubuntu is very straightforward
 1. Delete the existing `apt` lxd package, if necessary
 1. Install the lxd snap package
-1. Run lxc init and accept all default options
+1. Run `lxc init` and accept all default options
 
 There are a few snags with this approach
 * It's not scriptable
 * The default options might not be what you want
-* It doesn't allow for the storage pool you might want
+* The default storage pool is the easiest to create, but it possibly is not the storage pool you want, and you won't even know it
 
-### Storage pools
+### Storage pools?
 
-Storage pools are a major lxd concept, and a major source of confusion. When using Docker containers, Docker uses its own filesystem. This is bad, but it means users never have to worry about filesystem details. lxd is a little different. lxd gives you a lot of options for how to do storage, which is good. But unless you're experienced with the nuances of btrfs vs ZFS, etc, everything about storage pools is likely unfamiliar, and storage pools can end up being a bit of a blocker.
+Storage pools are a major `lxd` concept, and a major source of confusion. When using Docker containers, Docker uses its own filesystem. This is bad, but it means users never have to worry about filesystem details. `lxd` is a little different. `lxd` gives you a lot of options for how to do storage, which is good. But unless you're experienced with the nuances of layered filesystems, of btrfs vs ZFS, etc, everything about storage pools is likely unfamiliar, and storage pools can end up being a bit of a blocker.
 
-The good news is that lxd's default settings to an ok job for most uses. lxd will create a ZFS volume, stored in a single file, and lxd will use this ZFS volume to hold all its instances and images. And that might be all you ever need.
+The good news is that lxd's default settings to an ok job for most uses. `lxd` will create a ZFS volume, stored in a single file, and `lxd` will use this ZFS volume to hold all its instances and images. And that might be all you ever need.
 
 (From https://linuxcontainers.org/lxd/docs/master/howto/storage_pools/ ... "Unless specified otherwise, LXD sets up loop-based storage with a sensible default size (20% of the free disk space, but at least 5 GiB and at most 30 GiB)")
 
-But if you want to keep all your lxd stuff in a separate partition or disk, or if you want to separate instances and images, or if you don't want to use ZFS ... you'll have to do a few things on your own.
+But if you want to keep all your `lxd` stuff in a separate partition or disk, or if you want to separate instances and images, or if you don't want to use ZFS ... you'll have to do a few things on your own.
 
 ### DIY Storage pools
 
-In this little example, we're going to use an unpartitioned 50G disk for lxd. This disk will be compeletely separate from the root filesystem. On this disk we will create 3 storage pools: 10G ZFS for images, 20G ZFS for containers, and 20G btrfs for other containers. This is largely for purely instructive purposes, though it might be interesting to experiment with the different container storage pools, eg for performance testing.
+In this little example, we're going to use an unpartitioned 50G disk for lxd. This disk will be compeletely separate from the root filesystem. On this disk we will create 3 storage pools: 10G ZFS for images, 20G ZFS for containers, and 20G btrfs for other containers. This is for purely instructive purposes, though it might be interesting to experiment with the different container storage pools, eg for performance testing.
 
 #### Storage pools vs storage volumes
 
-The LXD docs at https://linuxcontainers.org/lxd/docs/master/explanation/storage/ (as of this writing) suggest that storage pools are like disks, and storage volumes are like the partitions within disks. This isn't bad but it's very misleading in one important way. With disks and partitions, each partition can have its own filesystem and are generally completely independent from one another. With storage pools and storage volumes, the choice of technology (btrfs, ZFS, etc) is made up that the storage pool, so all storage volumes would need to use the same technology. This means it's likely to want multiple storage pools.
+The LXD docs at https://linuxcontainers.org/lxd/docs/master/explanation/storage/ (as of this writing) suggest that storage pools are like disks, and storage volumes are like the partitions within disks. This isn't bad but it's very misleading in one important way. With disks and partitions, each partition can have its own filesystem, and partitions are generally completely independent of one another. With storage pools and storage volumes, the choice of technology (btrfs, ZFS, etc) is made at the storage pool level, so all storage volumes inherit the filesystem from their storage pool. This means you are likely to want multiple storage pools, so you can have volumes with different filesystems.
 
-Storage volumes are used as an implementation detail, and lxc creates volumes for images and instances to create isolation. I'm honestly not sure if manually creating volumes is interesting and helpful.
+Storage volumes are an implementation detail in `lxd`. `lxd` will automatically create storage volumes for you, eg separate volumes for instances and volumes, to keep instances and volumes separate from one another. I'm honestly not sure if manually creating volumes is interesting and helpful.
 
-#### Creating storage pools
+#### Creating storage pools manually
 
 We're going to start with a fresh, un-init'd lxd installation, and an empty, unpartitioned disk. lxd is able to format partitions and install and mount filesystems, but it stops at partitioning.
 

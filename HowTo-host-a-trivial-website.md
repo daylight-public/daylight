@@ -4,28 +4,32 @@ So you're going to need a domain name.
 So start there.
 Go to the admin page of a domain you own -- or buy a domain -- and set up DNS to a point at a host you control -- or buy a host
 
-Do that and come back.
+Do that and come back, and make sure you have the following handy
+
+- Your domain name
+- Any `A` or `CNAME` entries for the domain
+- IP addresses for the above
 
 Ok. With that out of the way, lets look at some broad strokes for hosting a trivial web site
 
 ### some broad strokes
-It's good to conceptualize things starting with the outside, aka an end-user looking at a browser, and going all the way to the end, eg one or more services running on a VM. And then, when it's time to implement it's good to start at that lowest level, and then work back to the user and their browser.
+Let's start at the Edge, with an end-user looking at your site in their browser, and go all the way down to one or more services running on a VM. Then, when it's time to implement, we'll work backwards from services back out to the browser.
 
 The User's Journey looks a little like this ...
 
-- Resolvable DNS name
+- A DNS name
 - That resolves to a VM
 - Which proxies to an lxd container
 - Which is running nginx
-- that proxies a domain to a java web app
-  + uses a certbot cert to supprt https
+- that proxies a domain to a web app
+  + that uses a certbot cert to supprt https
 - that is running as a systemd service
   + that is updated and builds via Github Actions + SHR
 
 Going the other direction for implementation looks like this ...
 - Create an LXD VM
-- Create an http proxy into the container
-- Install nginx, create a simple static web site
+- Create an LXD http proxy on the host into the container
+- Install nginx in the container and create a simple static web site
 - Check that the proxy works by hitting a static route
 - Using an access token, download the target repo
   - Create access tokens using `create-access-tokens.sh`
@@ -34,7 +38,7 @@ Going the other direction for implementation looks like this ...
   - scp local access tokens to the VM
   - use the access token to do a `git clone`
 - Build the web app using maven
-= Run the Web app; visit it locally
+- Run the Web app; visit it locally
 - Connect nginx to the Web app using proxy_pass; visit it locally on port 80
 - Create a cert using certbot
 - Configure nginx to use the new cert
@@ -51,8 +55,8 @@ THEN
 
 That's it!
 
-** `daylight.sh` functions to steal from **
-|script|de-script-ion | 
+### `daylight.sh` functions to steal from 
+|`script`|de`script`ion | 
 |-|-|
 |`init-nginx`|An empty function but some decent comments describe a decent intent.
 |`create-flask-app`|Working example of genning nginx stuff including certbot cert refs. Also includes a `certbot` invocations to generate the certs themselves. Very useful.
