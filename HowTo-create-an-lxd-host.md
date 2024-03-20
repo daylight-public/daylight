@@ -6,7 +6,7 @@ _What's needed is a variety of opinionated 'How To LXD' guides, that skip what y
 
 _This is such a guide._
 
-At a high level creating an lxd host VM on Ubuntu is very straightforward
+At a high level creating an Ubuntu lxd host VM  -- a Ubunut VM capable of hosting lxd containers -- is very straightforward ...
 1. Delete the existing `apt` lxd package, if necessary
 1. Install the lxd snap package
 1. Run `lxc init` and accept all default options
