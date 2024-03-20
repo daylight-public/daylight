@@ -904,7 +904,8 @@ install-flask-app ()
 install-fresh-daylight-svc ()
 {
     repo=https://raw.githubusercontent.com/daylight-public/daylight/main
-    mkdir -p /opt/svc/fresh-daylight/bin 
+    sudo mkdir -p /opt/svc/fresh-daylight/bin 
+    sudo chown -R ubuntu:ubuntu /opt/svc/fresh-daylight
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.service"
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.timer"
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight/bin "$repo/svc/fresh-daylight/bin/main.sh"
