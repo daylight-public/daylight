@@ -5,48 +5,33 @@
 # It makes use of a useful-but-weird bash idiom: rather than
 # burden a script with dependencies on a number of support files,
 # this script keeps the content of support files locally via 
-# heredocs, and then it `cat`s the heredocs into tmp files. For 
+# heredocs, and then it cats the heredocs into tmp files. For 
 # lack of a better term this will be called 'catdoccing'
 #
 # It also uses gomplate, a golang template langage-based utility,
 # to transform an nginx unit file template into an nginx unit file
 # for a specific domain and port. This is the actual point of the
-# script. The golang template language is versatile and widely used.
+# script.
 #
 # With this idiom in hand, here's how this script works ...
 # - catdoc an nginx unit file template, to represent proxying a domain
-#   to a locally running service, with domain and port specified in envvars
+#   to a locally running service, with doman and port in envvars
 # - catdoc a one-liner that runs gomplate against the template file
 # - catdoc a Dockerfile based on gomplate, since most systems will
-#   not have gomplate installed, and we don't want to install it.
+# - not have gomplate installed, and we don't want to install it.
 # - docker build an image from the Dockerfile
 # - docker run an instance, using the domain and host as envvars
 #
-# For a final weird twist, bash requires that heredocs start at column 0,
-# or the indentation becomes part of the heredoc. So all the heredoc content
-# needs to be unindented, which is mostly ok ... unless it happens to be in
-# the indented body of a function. Which ... this is. So our main() function looks 
-# a little funny, with the unindented content. It's easy to think the function ends 
-# much sooner than it actually ends, which can make reading the function gotcha-y.
-# (It's possible the author has made this mistake themselves.)
-#
-# That's a lot. But the end result is a nice, domain+port specific nginx unit file, streamed to stdout.
+# The result is a nice, domain+port specific nginx unit file streamed to stdout.
 # 
 # Useful. And ... a little weird.
 
 main ()
 {
-        # shellcheck disable=SC2016
-        (( $# == 2 )) || { printf 'Usage: nginxer $domain $port\n' >&2; return 1; }
-        local domain=$1
-        local port=$2
-        
         mkdir -p ./tmp
-
-        # catdoc: nginx cfg file
         local nginxCfgPath; nginxCfgPath=$(mktemp --tmpdir=./tmp/ nginx.cfg.tmpl.XXXXXX) || return
         printf '%s' "$nginxCfgPath" >&2
-        cat >"$nginxCfgPath" <<"EOT_nginx_cfg"
+        cat >"$nginxCfgPath" <<- 'EOT_nginx_cfg'
 server {
         listen 80;
         listen [::]:80;
@@ -63,47 +48,34 @@ server {
 }
 EOT_nginx_cfg
 
-        # catdoc: gomplate invocation script, to be run in the container
         local doNginxPath; doNginxPath=$(mktemp --tmpdir=./tmp/ do-nginx.sh.XXXXXX) || return
-        cat >"$doNginxPath" <<- EOT_gomplate_script
+        printf '%s' "$doNginxPath" >&2
+        cat >"$doNginxPath" <<- EOT_do_nginx
 gomplate --file /nginx.service.tmpl 
-EOT_gomplate_script
+EOT_do_nginx
         chmod 777 "$doNginxPath"
 
-        # catdoc: dockerfile to gomplate the output file
         local dockerfilePath; dockerfilePath=$(mktemp --tmpdir=./tmp/ Dockerfile.XXXXXX) || return
+        printf '%s' "$dockerfilePath" >&2
         cat >"$dockerfilePath" <<- EOT_Dockerfile
 FROM docker.io/alpine:latest as gomplating
 COPY --from=docker.io/hairyhenderson/gomplate:stable /gomplate /bin/gomplate
-COPY ./tmp/do-nginx.sh /do-nginx.sh
-COPY ./tmp/nginx.service.tmpl /nginx.service.tmpl
+COPY "$doNginxPath" /do-nginx.sh
+COPY "$nginxCfgPath" /nginx.service.tmpl
 ENTRYPOINT /do-nginx.sh
 EOT_Dockerfile
 
-        # Gomplate: .env file containing the domain and port
-        local dotenvPath; dotenvPath=$(mktemp --tmpdir=./tmp/ .env.XXXXXX) || return
-        cat >"$dotenvPath" <<- EOT_dotenv
-domain=$domain
-port=$port
-EOT_dotenv
+        docker build \
+                --tag nginxer \
+                --file "$dockerfilePath" \
+                . \
+                1>&2
 
-#         podman build \
-#                 --tag nginxer \
-#                 --file - \
-#                 . \
-#                 <"$dockerfilePath" \
-#                 >/dev/null || return
+        docker run \
+                --name gomplator \
+                --env-file <( env| cut -f1 -d= ) \
+                --rm -it \
+                nginxer
+}       
 
-#          podman run \
-#                  --name gomplator \
-#                  --env-file "$dotenvPath" \
-#                  --rm -it \
-#                  nginxer
-
-        set -a
-        source "$dotenvPath"
-        set +a
-        gomplate --file "$nginxCfgPath"
-}	
-
-main $@
+main "$@"
