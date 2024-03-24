@@ -1582,7 +1582,7 @@ setup-domain ()
     [[ -d "/tmp/setup" ]] || { echo "Non-existent folder: /tmp/setup" >&2; return 1; }
     [[ -d "/etc/nginx/sites-available" ]] || { echo "Non-existent folder: /etc/nginx/sites-available" >&2; return 1; }
     [[ -d "/etc/nginx/sites-enabled" ]] || { echo "Non-existent folder: /etc/nginx/sites-enabled" >&2; return 1; }
-    command -v "certbot" || { printf '%s is required, but was not found.\n' "certbot"; return 255; }
+    [[ -f "/opt/venv/main/bin/certbot" ]] || { echo "Non-existent path: /opt/venv/main/bin/certbot" >&2; return 1; }
     local domain=$1
     local port=$2
     local email=$3
@@ -1591,7 +1591,7 @@ setup-domain ()
     /opt/bin/nginxer "$domain" "$port" 2>/dev/null >/etc/nginx/sites-available/$domain
     ln -sf /etc/nginx/sites-available/$domain /etc/nginx/sites-enabled/$domain
     # User certbot to create the cert files and update the nginx unit files
-    certbot --nginx -n --agree-tos --domain "$domain" --email "$email"
+    /opt/venv/main/bin/certbot --nginx -n --agree-tos --domain "$domain" --email "$email"
     # Create tar file of cert files
     tar -C /etc/letsencrypt/ -czf /tmp/setup/$domain-certs.tar.gz \
         ./archive/$domain \
