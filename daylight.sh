@@ -606,6 +606,17 @@ etcd-get-latest-version ()
 }
 
 
+etcd-install-as-service ()
+{
+    # Generate run file from template ... or use an existing run file that got generated in a previous step
+
+    # Generate unit file from a heredoc
+
+    # systemctl enable /opt/svc/etcd/etcd.service
+    # ssytemctl sttart etcd
+}
+
+
 etcd-install-release ()
 {
     # shellcheck disable=SC2016
@@ -1868,6 +1879,7 @@ main ()
 			init-nginx)	init-nginx "$@";;
 			install-app)	install-app "$@";;
 			install-awscli)	install-awscli "$@";;
+			install-etcd)	install-etcd "$@";;
 			install-flask-app)	install-flask-app "$@";;
 			install-fresh-daylight-svc)	install-fresh-daylight-svc "$@";;
 			install-gnome-keyring)	install-gnome-keyring "$@";;
