@@ -1,12 +1,12 @@
 #! /usr/bin/env bash
 
-discoverySrv=hello.dylt.dev
+fqdn=hello.dylt.dev
 ip=51.81.81.98
-name=hello2
+name=etcd2
 
 /opt/etcd/etcd \
     --name "$name" \
-    --discovery-srv "$discoverySrv" \
+    --discovery-srv "$fqdn" \
  	--initial-advertise-peer-urls http://$ip:2380 \
  	--initial-cluster-token hello \
  	--initial-cluster-state new \

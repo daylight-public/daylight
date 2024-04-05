@@ -1,8 +1,8 @@
 #! /usr/bin/env bash
 
-fqdn=#fqdn#
-ip=#ip#
-name=#name#
+fqdn={{ .Env.etcd_fqdn }}
+ip={{ .Env.etcd_ip }}
+name={{ .Env.etcd_name }}
 
 /opt/etcd/etcd \
     --name "$name" \

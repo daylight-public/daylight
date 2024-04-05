@@ -7,5 +7,7 @@ nodes:
     name: etcd1
   - ip: ${ip_ovh_vps2}
     name: etcd2
+  - ip: ${ip_ionos_vps0}
+    name: etcd3
 
 

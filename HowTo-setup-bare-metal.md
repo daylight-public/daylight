@@ -32,3 +32,47 @@ This creates an account that cannot login over SSH via a password. An SSH key is
     sudo chmod 600 "$homeFolder/.ssh/authorized_keys"
     sudo chown -R "$username:$username" "$homeFolder"
 ```
+
+There are 2 other things I appear to have to do
+- Change sshd_config, or add a file to sshd_config.d/
+- Change sudoers, or add a file to sudoers.d/
+
+1. Create the ubuntu user
+# adduser --shell /bin/bash --uid 1000 --disabled-password --gecos -'' ubuntu
+2. Add ubuntu to sudo
+# adduser ubuntu sudo
+3. Add ubuntu fragment to sudoers.d
+4. Create .ssh stuff
+5. scp pub key to ubuntu
+6. create authorized_keys
+7. scp sshd_fragment
+8. Restart sshd
+
+
+adduser --shell /bin/bash --uid 1000 --disabled-password --gecos -'' ubuntu
+adduser ubuntu sudo
+mkdir -p /home/ubuntu/.ssh
+touch /home/ubuntu/.ssh/authorized_keys
+chmod 700 /home/ubuntu/.ssh/
+chmod 600 /home/ubuntu/.ssh/authorized_keys
+cp /tmp/ionos-vms.pem.pub /home/ubuntu/.ssh/
+cat /home/ubuntu/.ssh/ionos-vms.pem.pub >> /home/ubuntu/.ssh/authorized_keys
+chown -R ubuntu:ubuntu /home/ubuntu/
+cp /tmp/sudoers.ubuntu /etc/sudoers.d/ubuntu
+cp /tmp/sshd_config.nopassword /etc/ssh/sshd_config.d/
+systemctl restart ssh
+
+ssh-keygen -R $ip_ionos_vps0
+scp ./sshd_config.nopassword ./sudoers.ubuntu ~/.ssh/ionos-vms.pem.pub root@$ip_ionos_vps0:/tmp/ 
+12  ls /etc/sudoers.d/
+   13  cat  /etc/sudoers.d/sudoers.ubuntu
+   14  vim /etc/sudoers.d/sudoers.ubuntu
+   15  cat /etc/sudoers.d/sudoers.ubuntu
+   16  visudo
+   17  reboot
+   18  cat /etc/sudoers.d/sudoers.ubuntu
+   19  mv /etc/sudoers.d/sudoers.ubuntu /etc/sudoers.d/ubuntu
+   20  cat /etc/sudoers/ubuntu /etc/sudoers.d/sudoers.ubuntu
+   21  mv /etc/sudoers/ubuntu /etc/sudoers.d/sudoers.ubuntu
+   22  mv /etc/sudoers.d/ubuntu /etc/sudoers.d/sudoers.ubuntu
+   23  mv /etc/sudoers.d/sudoers.ubuntu /etc/sudoers.d/ubuntu   

@@ -31,6 +31,7 @@ get-download-url ()
 
 get-latest-version ()
 {
+    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq"; return 255; }
     local VER
     
     VER=$(curl -L -s https://api.github.com/repos/etcd-io/etcd/releases/latest | jq -r .tag_name)
