@@ -586,6 +586,84 @@ etcd-download-release ()
 }
 
 
+etcd-gen-join-script ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: etcd-gen-join-script $etcd_disc_svr $etcd_ip $etcd_name\n' >&2; return 1; }
+    local etcdDiscSvr=$1
+    local etcdIp=$2
+    local etcdName=$3
+    local joinEtcdScriptTmplPath; joinEtcdScriptTmplPath=$(mktemp --tmpdir=/tmp/ join-etcd.sh.tmpl.XXXXXX) || return
+    cat >"$joinEtcdScriptTmplPath" <<- 'EOT'
+	#! /usr/bin/env bash
+	/opt/etcd/etcd \
+	    --name "$etcd_name" \
+	    --discovery-srv "$etcd_disc_svr" \
+	    --initial-advertise-peer-urls http://$etcd_ip:2380 \
+	    --initial-cluster-token hello \
+	    --initial-cluster-state existing \
+	    --advertise-client-urls http://$etcd_ip:2379 \
+	    --listen-client-urls http://$etcd_ip:2379,http://127.0.0.1:2379 \
+	    --listen-peer-urls http://$etcd_ip:2380 \
+	    --data-dir /var/lib/etcd/
+	EOT
+    etcd_disc_svr=$etcdDiscSvr \
+    etcd_ip=$etcdIp \
+    etcd_name=$etcdName \
+    envsubst <"$joinEtcdScriptTmplPath"
+}
+
+
+etcd-gen-run-script ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: etcd-gen-run-script $etcd_disc_svr $etcd_ip $etcd_name\n' >&2; return 1; }
+    local etcdDiscSvr=$1
+    local etcdIp=$2
+    local etcdName=$3
+    local runEtcdScriptTmplPath; runEtcdScriptTmplPath=$(mktemp --tmpdir=/tmp/ run-etcd.sh.tmpl.XXXXXX) || return
+    cat >"$runEtcdScriptTmplPath" <<- 'EOT'
+	#! /usr/bin/env bash
+	/opt/etcd/etcd \
+	    --name "$etcd_name" \
+	    --discovery-srv "$etcd_disc_svr" \
+	    --initial-advertise-peer-urls http://$etcd_ip:2380 \
+	    --initial-cluster-token hello \
+	    --initial-cluster-state new \
+	    --advertise-client-urls http://$etcd_ip:2379 \
+	    --listen-client-urls http://$etcd_ip:2379,http://127.0.0.1:2379 \
+	    --listen-peer-urls http://$etcd_ip:2380 \
+	    --data-dir /var/lib/etcd/
+	EOT
+    etcd_disc_svr=$etcdDiscSvr \
+    etcd_ip=$etcdIp \
+    etcd_name=$etcdName \
+    envsubst <"$runEtcdScriptTmplPath"
+}
+
+
+etcd-gen-unit-file ()
+{
+    local unitFilePath; unitFilePath=$(mktemp --tmpdir=/tmp/ etcd.service.XXXXXX) || return
+    cat <<- 'EOT'
+	[Unit]
+	Description=etcd service
+	Documentation=https://github.com/coreos/etcd
+	
+	[Service]
+	ExecStart=/opt/svc/etcd/run.sh		
+	User=ubuntu
+	Type=simple
+	Restart=on-failure
+	RestartSec=5
+	WorkingDirectory=/opt/etcd/
+	
+	[Install]
+	WantedBy=multi-user.target
+	EOT
+}
+
+
 etcd-get-download-url ()
 {
     # shellcheck disable=SC2016
@@ -608,6 +686,7 @@ etcd-get-latest-version ()
 
 etcd-install-as-service ()
 {
+    :
     # Generate run file from template ... or use an existing run file that got generated in a previous step
 
     # Generate unit file from a heredoc
@@ -948,7 +1027,11 @@ install-awscli ()
 
 install-etcd ()
 {
-{
+	# shellcheck disable=SC2016
+	(( $# == 3 )) || { printf 'Usage: install-etcd $discSvr $ip $name\n' >&2; return 1; }
+	local discSvr=$1
+	local ip=$2
+	local name=$3
     local version; version=$(etcd-get-latest-version) || return
     local downloadUrl; downloadUrl=$(etcd-get-download-url "$version") || return
     local releasePath; releasePath=$(etcd-download-release "$downloadUrl") || return
@@ -957,6 +1040,13 @@ install-etcd ()
     sudo chown -R ubuntu:ubuntu $installFolder
     etcd-install-release "$releasePath" "$installFolder"
     etcd-setup-data-dir /var/lib/etcd
+	mkdir -p /opt/svc/etcd/
+	etcd-gen-unit-file >/opt/svc/etcd/etcd.service
+	etcd-gen-run-script $discSvr $ip $name >/opt/svc/etcd/run.sh
+	chmod 755 /opt/svc/etcd/run.sh
+	chown -R ubuntu:ubuntu /opt/svc/etcd/
+	systemctl enable /opt/svc/etcd/etcd.service
+	systemctl start etcd
 }
 
 
@@ -1766,6 +1856,16 @@ sys-start ()
 }
 
 
+uninstall-etcd ()
+{
+	systemctl stop etcd
+	systemctl disable etcd 
+	rm -r /var/lib/etcd/ 2>/dev/null
+	rm -r /opt/etcd/ 2>/dev/null
+	rm -r /opt/svc/etcd/ 2>/dev/null
+}
+
+
 # untar (and unzip if necessary) a .tar or .tgz to a new temp folder.
 untar-to-temp-folder ()
 {
@@ -1813,11 +1913,11 @@ if [[ ! -f /opt/bin/daylight.sh  &&  -t 0 ]]; then
     printf '\n' 
     install-fresh-daylight-svc
     if [[ -f /home/ubuntu/.bashrc ]]; then
-        {
+	{
         printf '%s\n' ""
         printf '%s\n' "# hello from daylight"
         printf '%s\n' "source /opt/bin/daylight.sh"
-        } >> /home/ubuntu/.bashrc
+	} >> /home/ubuntu/.bashrc;
     fi
     printf '%s\n' Done.
     printf '\n' 
@@ -1863,6 +1963,8 @@ main ()
 			download-to-temp-dir)	download-to-temp-dir "$@";;
 			download-vm)	download-vm "$@";;
 			edit-daylight)	edit-daylight "$@";;
+            etcd-gen-run-script) etcd-gen-run-script "$@";;
+            etcd-gen-unit-file) etcd-gen-unit-file "$@";;
 			gen-nginx-flask)	gen-nginx-flask "$@";;
 			gen-nginx-static)	gen-nginx-static "$@";;
 			generate-unit-file)	generate-unit-file "$@";;
@@ -1922,6 +2024,7 @@ main ()
 			start-indexed-service)	start-indexed-service "$@";;
 			start-service)	start-service "$@";;
 			sys-start)	sys-start "$@";;
+			uninstall-etcd)	uninstall-etcd "$@";;
 			untar-to-temp-folder)	untar-to-temp-folder "$@";;
             *) printf 'Unknown command: %s \n' "$cmd";;
         esac
