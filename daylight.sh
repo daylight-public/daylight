@@ -1879,6 +1879,14 @@ untar-to-temp-folder ()
 }
 
 
+update-and-restart ()
+{
+	apt update -y
+	apt upgrade -y
+	reboot
+}
+
+
 #
 # If daylight is invoked as a command, well all right then
 #
@@ -2026,6 +2034,7 @@ main ()
 			sys-start)	sys-start "$@";;
 			uninstall-etcd)	uninstall-etcd "$@";;
 			untar-to-temp-folder)	untar-to-temp-folder "$@";;
+			update-and-restart)	update-and-restart "$@";;
             *) printf 'Unknown command: %s \n' "$cmd";;
         esac
     fi
