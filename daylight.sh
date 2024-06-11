@@ -363,9 +363,10 @@ create-publish-image-service ()
 create-pubbo-service ()
 {
     # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: create-pubbo-service $svcName $filePath\n' >&2; return 1; }
+    (( $# == 3 )) || { printf 'Usage: create-pubbo-service $svcName $filePath $port\n' >&2; return 1; }
     svcName=$1
     filePath=$2
+    port=$3
     socketFolder=/run/sock/pubbo
     socketPath="$socketFolder/$svcName"
     
@@ -390,7 +391,7 @@ EOT
     # envsubst to create the final unit file 
     filePath=$filePath \
     socketPath=$socketPath \
-    envsubst <"$mainScriptTempPath"
+    envsubst <"$mainScriptTempPath" >"/opt/svc/$svcName/$svcName.service"
 
     # Catdoc the script
     local mainScriptTmplPath; mainScriptTmplPath=$(mktemp --tmpdir=/tmp/ .XXXXXX) || return
@@ -403,7 +404,27 @@ mkdir -p "$socketFolder"
 EOT
     # envsubst to create the final script
     svcName=$svcName \
-    envsubst <"$unitTmplPath"    
+    envsubst <"$unitTmplPath" >"/opt/svc/$svcName/bin/run.sh"
+
+    # catdoc the nginx stream config file
+    local streamCfgTmplPath; streamCfgTmplPath=$(mktemp --tmpdir= .XXXXXX) || return
+    cat >"$treamCfgTmplPath" <<- 'EOT'
+stream {
+	upstream sock {
+		server unix:/var/tmp/sock/$svcName.sock;
+	}
+
+	server {
+		listen $port;
+		proxy_pass sock;
+	}
+}
+EOT
+    # envsubst
+    svcName=$svcName \
+    port=$port \
+    envsubst <"$streamCfgTmplPath" >"/etc/nginx/streams.d/$svcName.conf"
+
 
     # Create the systemd service
     ln --symbolic --force "/opt/svc/$svcName/$svcName.service" "/etc/systemd/system/$svcName.service"
@@ -1520,6 +1541,7 @@ list-vms ()
 
 prep-filesystem ()
 {
+    mkdir -p /etc/nginx/streams.d/
     mkdir -p /opt/actions-runner/
     mkdir -p /opt/bin/
     mkdir -p /opt/svc/
