@@ -1215,7 +1215,7 @@ install-mssql-tools ()
 install-pubbo ()
 {
     [[ -d "/opt/bin/" ]] || { echo "Non-existent folder: /opt/bin/" >&2; return 1; }
-    download-lastest-release dylt-dev pubbo /opt/bin/
+    download-latest-release dylt-dev pubbo linux_amd64 /opt/bin/
 }
 
 
