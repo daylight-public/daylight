@@ -486,6 +486,26 @@ download-flask-service ()
 }
 
 
+download-latest-release ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: download-latest-release $org $repo $platform $dstFolder\n' >&2; return 1; }
+    org=$1
+    repo=$2
+    platform=$3
+    dstFolder=$4
+    url="https://api.github.com/repos/$org/$repo/releases/latest"
+    read -r -a args < <(curl -s "$url" \
+        | jq -r '.assets.[] | select(.name | contains("'"$platform"'")) | [.name, .browser_download_url] | @tsv')
+    name=${args[0]}
+    urlDownload=${args[1]}
+    printf 'name=%s urlDownload=%s\n' "$name" "$urlDownload"
+    tarballPath="/tmp/$name"
+    curl --location --silent --output "$tarballPath" "$urlDownload"
+    tar --directory "$dstFolder" -xzf "$tarballPath"
+}
+
+
 download-public-key ()
 {
     # shellcheck disable=SC2016
@@ -509,7 +529,9 @@ download-shr-tarball ()
     local urlLatestRelease="https://api.github.com/repos/actions/runner/releases/latest"
     local tarballFileName tarballUrl
     local args
-    read -r -a args < <(curl --silent "$urlLatestRelease" | jq -r '.assets[]? | select(.name | test("^actions-runner-linux-x64.*\\d\\.tar.gz$")) | [.name, .browser_download_url] | @tsv') || return
+    read -r -a args < <(curl --silent "$urlLatestRelease" \
+        | jq -r '.assets[]? | select(.name | test("^actions-runner-linux-x64.*\\d\\.tar.gz$")) | [.name, .browser_download_url] | @tsv') \
+        || return
     tarballFileName=${args[0]}
     tarballUrl=${args[1]}
     local tarballPath; tarballPath="$(mktemp -t "XXX.$tarballFileName")" || return
@@ -936,6 +958,12 @@ get-service-working-directory ()
     local name=$1
 
     get-service-file-value "$name" 'WorkingDirectory'
+}
+
+
+hello ()
+{
+    printf "Hello!\n"
 }
 
 
@@ -1938,7 +1966,6 @@ fi
 main ()
 {
     if (( $# >= 1 )); then
-        set -ux
         cmd=$1
         shift
         case "$cmd" in
@@ -1965,6 +1992,7 @@ main ()
 			download-dist)	download-dist "$@";;
 			download-flask-app)	download-flask-app "$@";;
 			download-flask-service)	download-flask-service "$@";;
+			download-latest-release)    download-latest-release "$@";;
 			download-public-key)	download-public-key "$@";;
 			download-shr-tarball)	download-shr-tarball "$@";;
 			download-svc)	download-svc "$@";;
@@ -1985,6 +2013,7 @@ main ()
 			get-service-environment-file)	get-service-environment-file "$@";;
 			get-service-exec-start)	get-service-exec-start "$@";;
 			get-service-working-directory)	get-service-working-directory "$@";;
+            hello) hello "$@";;
 			init-lxd)	init-lxd "$@";;
 			init-nginx)	init-nginx "$@";;
 			install-app)	install-app "$@";;
