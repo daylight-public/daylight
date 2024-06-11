@@ -1,5 +1,5 @@
 #! /usr/bin/env bash
-
+ 
 activate-flask-app ()
 {
     # shellcheck disable=SC2016
@@ -359,6 +359,57 @@ create-publish-image-service ()
     install-service-from-command "$service" "$cmd"
 }
 
+
+create-pubbo-service ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: create-pubbo-service $svcName $filePath\n' >&2; return 1; }
+    svcName=$1
+    filePath=$2
+    socketFolder=/run/sock/pubbo
+    socketPath="$socketFolder/$svcName"
+    
+    # Get ready
+    prep-service "svcName"
+    
+    # Catdoc the unit file
+    local unitTmplPath; unitTmplPath=$(mktemp --tmpdir=/tmp/ .XXXXXX) || return
+    cat >"$unitTmplPath" <<- 'EOT'
+[Unit]
+Description=Service to make $filePath available over a Unix domain socket at "$socketPath"
+
+[Service]
+ExecStart=/opt/svc/$svcName/bin/main.sh
+Type=exec
+User=www-data
+WorkingDirectory=/opt/svc/$svcName
+
+[Install]
+WantedBy=multi-user.target
+EOT
+    # envsubst to create the final unit file 
+    filePath=$filePath \
+    socketPath=$socketPath \
+    envsubst <"$mainScriptTempPath"
+
+    # Catdoc the script
+    local mainScriptTmplPath; mainScriptTmplPath=$(mktemp --tmpdir=/tmp/ .XXXXXX) || return
+    cat >"$mainScriptTmplPath" <<- 'EOT'
+#! /bin/sh
+mkdir -p "$socketFolder"
+/opt/bin/pubbo \
+	--file-path "$filePath" \
+	--socket-path "$socketPath"
+EOT
+    # envsubst to create the final script
+    svcName=$svcName \
+    envsubst <"$unitTmplPath"    
+
+    # Create the systemd service
+    ln --symbolic --force "/opt/svc/$svcName/$svcName.service" "/etc/systemd/system/$svcName.service"
+    systemctl start "$svcName"
+    systemctl enable "$svcName"
+}
 
 #
 # Given the name of the script in $dist/conf/scripts, create a one-off service
@@ -1140,6 +1191,13 @@ install-mssql-tools ()
 }
 
 
+install-pubbo ()
+{
+    [[ -d "/opt/bin/" ]] || { echo "Non-existent folder: /opt/bin/" >&2; return 1; }
+    download-lastest-release dylt-dev pubbo /opt/bin/
+}
+
+
 install-public-key ()
 {
     # shellcheck disable=SC2016
@@ -1457,6 +1515,26 @@ list-vms ()
 {
     local bucket; bucket=$(get-bucket) || return
     aws s3api list-objects --bucket "$bucket" --prefix 'dist/vm' --query 'Contents[].Key[]' | jq -r '.[] | match("^dist/vm/(.*)\\.tgz$").captures[0].string' || return
+}
+
+
+prep-filesystem ()
+{
+    mkdir -p /opt/actions-runner/
+    mkdir -p /opt/bin/
+    mkdir -p /opt/svc/
+}
+
+
+prep-service ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: prep-service $svcName\n' >&2; return 1; }
+    [[ -d "/opt/svc/" ]] || { echo "Non-existent folder: /opt/svc/" >&2; return 1; }
+    svcName=$1
+
+    mkdir -p "/opt/svc/$svcName"
+    mkdir -p "/opt/svc/$svcName/bin"
 }
 
 
@@ -1985,6 +2063,7 @@ main ()
 			create-loopback)	create-loopback "$@";;
 			create-lxd-user-data)	create-lxd-user-data "$@";;
 			create-publish-image-service)	create-publish-image-service "$@";;
+            create-pubbo-service) create-pubbo-service "$@";;
 			create-service-from-dist-script)	create-service-from-dist-script "$@";;
 			create-static-website)	create-static-website "$@";;
 			delete-lxd-instance)	delete-lxd-instance "$@";;
@@ -2025,6 +2104,7 @@ main ()
 			install-latest-httpie)	install-latest-httpie "$@";;
 			install-mssql-tools)	install-mssql-tools "$@";;
 			install-public-key)	install-public-key "$@";;
+            install-pubbo) install-pubbo "$@";;
 			install-python)	install-python "$@";;
 			install-service)	install-service "$@";;
 			install-service-from-script)	install-service-from-script "$@";;
@@ -2039,6 +2119,7 @@ main ()
 			list-public-keys)	list-public-keys "$@";;
 			list-services)	list-services "$@";;
 			list-vms)	list-vms "$@";;
+            prep-filesystem) prep-filesystem "$@";;
 			pull-app)	pull-app "$@";;
 			pull-daylight)	pull-daylight "$@";;
 			pull-flask-app)	pull-flask-app "$@";;
@@ -2069,4 +2150,4 @@ main ()
     fi
 }
 
-main $@
+main "$@"

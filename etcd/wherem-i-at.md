@@ -1,8 +1,8 @@
 So what do I have ...
 
-3 VMs, all on one provider
-Scripts to install etcd, as well as scripts to reset etcd and uninstall etcd
-A template of a script to run etcd, parameterized on IP and etcd node name (maybe node name should match hostname and then everything's the same
+- 3 VMs, all on one provider
+- Scripts to install etcd, as well as scripts to reset etcd and uninstall etcd
+- A template of a script to run etcd, parameterized on IP and etcd node name (maybe node name should match hostname and then everything's the same
 
 
 Tasks 
