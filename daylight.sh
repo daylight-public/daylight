@@ -389,7 +389,7 @@ WorkingDirectory=/opt/svc/$svcName
 WantedBy=multi-user.target
 EOT
     # envsubst to create the final unit file 
-    svcName=$svcName envsubst <"$unitTmplPath" >"/opt/svc/$svcName/$svcName.service"
+    filePath=$filePath socketPath=$socketPath svcName=$svcName envsubst <"$unitTmplPath" >"/opt/svc/$svcName/$svcName.service"
 
     # Catdoc the script
     local mainScriptTmplPath; mainScriptTmplPath=$(mktemp --tmpdir=/tmp/ .XXXXXX) || return
@@ -399,7 +399,6 @@ mkdir -p "$socketFolder"
 /opt/bin/pubbo \
 	--file-path "$filePath" \
 	--socket-path "$socketPath"
-chown www-data:www-data "$socketPath"
 EOT
     # envsubst to create the final script
     filePath=$filePath socketPath=$socketPath svcName=$svcName socketFolder=$socketFolder envsubst <"$mainScriptTmplPath" >"/opt/svc/$svcName/bin/main.sh"
@@ -422,9 +421,9 @@ EOT
     # envsubst
     svcName=$svcName port=$port envsubst <"$streamCfgTmplPath" >"/etc/nginx/streams.d/$svcName.conf"
 
-
     # Create the systemd service
     ln --symbolic --force "/opt/svc/$svcName/$svcName.service" "/etc/systemd/system/$svcName.service"
+    systemctl daemon-reload
     systemctl start "$svcName"
     systemctl enable "$svcName"
 }
