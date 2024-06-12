@@ -389,9 +389,7 @@ WorkingDirectory=/opt/svc/$svcName
 WantedBy=multi-user.target
 EOT
     # envsubst to create the final unit file 
-    filePath=$filePath \
-    socketPath=$socketPath \
-    envsubst <"$mainScriptTempPath" >"/opt/svc/$svcName/$svcName.service"
+    filePath=$filePath socketPath=$socketPath envsubst <"$mainScriptTempPath" >"/opt/svc/$svcName/$svcName.service"
 
     # Catdoc the script
     local mainScriptTmplPath; mainScriptTmplPath=$(mktemp --tmpdir=/tmp/ .XXXXXX) || return
@@ -403,8 +401,7 @@ mkdir -p "$socketFolder"
 	--socket-path "$socketPath"
 EOT
     # envsubst to create the final script
-    svcName=$svcName \
-    envsubst <"$unitTmplPath" >"/opt/svc/$svcName/bin/run.sh"
+    svcName=$svcName envsubst <"$unitTmplPath" >"/opt/svc/$svcName/bin/run.sh"
 
     # catdoc the nginx stream config file
     local streamCfgTmplPath; streamCfgTmplPath=$(mktemp --tmpdir= .XXXXXX) || return
@@ -421,9 +418,7 @@ stream {
 }
 EOT
     # envsubst
-    svcName=$svcName \
-    port=$port \
-    envsubst <"$streamCfgTmplPath" >"/etc/nginx/streams.d/$svcName.conf"
+    svcName=$svcName port=$port envsubst <"$streamCfgTmplPath" >"/etc/nginx/streams.d/$svcName.conf"
 
 
     # Create the systemd service
