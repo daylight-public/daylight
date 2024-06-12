@@ -427,6 +427,8 @@ EOT
     systemctl daemon-reload
     systemctl start "$svcName"
     systemctl enable "$svcName"
+	# Restart nginx to pickup the new Unix socket started by the new service
+	restart-nginx
 }
 
 #
@@ -1914,6 +1916,13 @@ http {
 }
 EOT
 
+	# Restart nginx, to validate and pickup the new config file
+	restart-nginx
+}
+
+
+restart-nginx ()
+{
     if ! nginx -t; then
         printf "Error with nginx config.\n" >&2
         return 1
