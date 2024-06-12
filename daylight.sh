@@ -397,8 +397,8 @@ EOT
 #! /bin/sh
 mkdir -p "$socketFolder"
 /opt/bin/pubbo \
-	--file-path "$filePath" \
-	--socket-path "$socketPath"
+    --file-path "$filePath" \
+    --socket-path "$socketPath"
 EOT
     # envsubst to create the final script
     filePath=$filePath socketPath=$socketPath svcName=$svcName socketFolder=$socketFolder envsubst <"$mainScriptTmplPath" >"/opt/svc/$svcName/bin/main.sh"
@@ -408,16 +408,17 @@ EOT
     local streamCfgTmplPath; streamCfgTmplPath=$(mktemp --tmpdir= .XXXXXX) || return
     cat >"$streamCfgTmplPath" <<- 'EOT'
 stream {
-	upstream sock {
-		server unix:$socketPath;
-	}
+    upstream sock {
+        server unix:$socketPath;
+    }
 
-	server {
-		listen $port;
-		proxy_pass sock;
-	}
+    server {
+        listen $port;
+        proxy_pass sock;
+    }
 }
 EOT
+
     # envsubst
     socketPath=$socketPath port=$port envsubst <"$streamCfgTmplPath" >"/etc/nginx/streams.d/$svcName.conf"
 
@@ -652,13 +653,13 @@ download-vm ()
 
 edit-daylight ()
 {
-	local daylightPath; daylightPath=$(command -v daylight.sh)
-	vim "$daylightPath"
-	source-daylight
-	read -r -p "Push changes [Y/n]? " yn
-	if [[ -z "$yn" ]] || [[ $yn = [Yy] ]]; then
-		push-daylight
-	fi
+    local daylightPath; daylightPath=$(command -v daylight.sh)
+    vim "$daylightPath"
+    source-daylight
+    read -r -p "Push changes [Y/n]? " yn
+    if [[ -z "$yn" ]] || [[ $yn = [Yy] ]]; then
+        push-daylight
+    fi
 }
 
 
@@ -687,20 +688,20 @@ etcd-gen-join-script ()
     cat >"$joinEtcdScriptTmplPath" <<- 'EOT'
 	#! /usr/bin/env bash
 	/opt/etcd/etcd \
-	    --name "$etcd_name" \
-	    --discovery-srv "$etcd_disc_svr" \
-	    --initial-advertise-peer-urls http://$etcd_ip:2380 \
-	    --initial-cluster-token hello \
-	    --initial-cluster-state existing \
-	    --advertise-client-urls http://$etcd_ip:2379 \
-	    --listen-client-urls http://$etcd_ip:2379,http://127.0.0.1:2379 \
-	    --listen-peer-urls http://$etcd_ip:2380 \
-	    --data-dir /var/lib/etcd/
+		--name "$etcd_name" \
+		--discovery-srv "$etcd_disc_svr" \
+		--initial-advertise-peer-urls http://$etcd_ip:2380 \
+		--initial-cluster-token hello \
+		--initial-cluster-state existing \
+		--advertise-client-urls http://$etcd_ip:2379 \
+		--listen-client-urls http://$etcd_ip:2379,http://127.0.0.1:2379 \
+		--listen-peer-urls http://$etcd_ip:2380 \
+		--data-dir /var/lib/etcd/
 	EOT
-    etcd_disc_svr=$etcdDiscSvr \
-    etcd_ip=$etcdIp \
-    etcd_name=$etcdName \
-    envsubst <"$joinEtcdScriptTmplPath"
+	etcd_disc_svr=$etcdDiscSvr \
+	etcd_ip=$etcdIp \
+	etcd_name=$etcdName \
+	envsubst <"$joinEtcdScriptTmplPath"
 }
 
 
@@ -713,17 +714,17 @@ etcd-gen-run-script ()
     local etcdName=$3
     local runEtcdScriptTmplPath; runEtcdScriptTmplPath=$(mktemp --tmpdir=/tmp/ run-etcd.sh.tmpl.XXXXXX) || return
     cat >"$runEtcdScriptTmplPath" <<- 'EOT'
-	#! /usr/bin/env bash
+    #! /usr/bin/env bash
 	/opt/etcd/etcd \
-	    --name "$etcd_name" \
-	    --discovery-srv "$etcd_disc_svr" \
-	    --initial-advertise-peer-urls http://$etcd_ip:2380 \
-	    --initial-cluster-token hello \
-	    --initial-cluster-state new \
-	    --advertise-client-urls http://$etcd_ip:2379 \
-	    --listen-client-urls http://$etcd_ip:2379,http://127.0.0.1:2379 \
-	    --listen-peer-urls http://$etcd_ip:2380 \
-	    --data-dir /var/lib/etcd/
+		--name "$etcd_name" \
+		--discovery-srv "$etcd_disc_svr" \
+		--initial-advertise-peer-urls http://$etcd_ip:2380 \
+		--initial-cluster-token hello \
+		--initial-cluster-state new \
+		--advertise-client-urls http://$etcd_ip:2379 \
+		--listen-client-urls http://$etcd_ip:2379,http://127.0.0.1:2379 \
+		--listen-peer-urls http://$etcd_ip:2380 \
+		--data-dir /var/lib/etcd/
 	EOT
     etcd_disc_svr=$etcdDiscSvr \
     etcd_ip=$etcdIp \
@@ -736,20 +737,20 @@ etcd-gen-unit-file ()
 {
     local unitFilePath; unitFilePath=$(mktemp --tmpdir=/tmp/ etcd.service.XXXXXX) || return
     cat <<- 'EOT'
-	[Unit]
-	Description=etcd service
-	Documentation=https://github.com/coreos/etcd
-	
-	[Service]
-	ExecStart=/opt/svc/etcd/run.sh		
-	User=ubuntu
-	Type=simple
-	Restart=on-failure
-	RestartSec=5
-	WorkingDirectory=/opt/etcd/
-	
-	[Install]
-	WantedBy=multi-user.target
+    [Unit]
+    Description=etcd service
+    Documentation=https://github.com/coreos/etcd
+    
+    [Service]
+    ExecStart=/opt/svc/etcd/run.sh		
+    User=ubuntu
+    Type=simple
+    Restart=on-failure
+    RestartSec=5
+    WorkingDirectory=/opt/etcd/
+    
+    [Install]
+    WantedBy=multi-user.target
 	EOT
 }
 
@@ -818,29 +819,29 @@ gen-nginx-flask ()
     # shellcheck disable=SC2154
     cat <<EOD
 server {
-	listen 80;
-	listen [::]:80;
-	server_name $domain;
-	return 301 https://$host$request_uri;
+    listen 80;
+    listen [::]:80;
+    server_name $domain;
+    return 301 https://$host$request_uri;
 }
 
 server {
-	listen [::]:443 ssl; # managed by Certbot
-	listen 443 ssl; # managed by Certbot
+    listen [::]:443 ssl; # managed by Certbot
+    listen 443 ssl; # managed by Certbot
 
-	server_name $domain;
-	root /www/$domain;
+    server_name $domain;
+    root /www/$domain;
 
- 	location /
-	{
-		include proxy_params;
-		proxy_pass http://unix:/app/flask/$name/app.sock;
-	}
+     location /
+    {
+        include proxy_params;
+        proxy_pass http://unix:/app/flask/$name/app.sock;
+    }
 
-	ssl_certificate /etc/letsencrypt/live/$domain/fullchain.pem; # managed by Certbot
-	ssl_certificate_key /etc/letsencrypt/live/$domain/privkey.pem; # managed by Certbot
-	include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
-	ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/$domain/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/$domain/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
 EOD
 }
@@ -854,39 +855,39 @@ gen-nginx-static ()
 
     cat <<EOD
 server {
-	listen 80;
-	listen [::]:80;
-	server_name $domain;
-	return 301 https://\$host\$request_uri;
+    listen 80;
+    listen [::]:80;
+    server_name $domain;
+    return 301 https://\$host\$request_uri;
 }
 
 server
 {
-	listen unix:/www/$domain.sock;
-	root /www/$domain;
+    listen unix:/www/$domain.sock;
+    root /www/$domain;
 }
 
 
 server
 {
-	listen 80;
-	listen [::]:80;
-	listen 443 ssl; # managed by Certbot
-	listen [::]:443 ssl; # managed by Certbot
-	
-	server_name $domain;
-	root /www/$domain;
+    listen 80;
+    listen [::]:80;
+    listen 443 ssl; # managed by Certbot
+    listen [::]:443 ssl; # managed by Certbot
+    
+    server_name $domain;
+    root /www/$domain;
 
-	location /
-	{
-		include proxy_params;
-		proxy_pass http://unix:/www/$domain.sock;
-	}
+    location /
+    {
+        include proxy_params;
+        proxy_pass http://unix:/www/$domain.sock;
+    }
 
-	ssl_certificate /etc/letsencrypt/live/$domain/fullchain.pem; # managed by Certbot
-	ssl_certificate_key /etc/letsencrypt/live/$domain/privkey.pem; # managed by Certbot
-	include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
-	ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
+    ssl_certificate /etc/letsencrypt/live/$domain/fullchain.pem; # managed by Certbot
+    ssl_certificate_key /etc/letsencrypt/live/$domain/privkey.pem; # managed by Certbot
+    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
 }
 EOD
 }
@@ -1123,11 +1124,11 @@ install-awscli ()
 
 install-etcd ()
 {
-	# shellcheck disable=SC2016
-	(( $# == 3 )) || { printf 'Usage: install-etcd $discSvr $ip $name\n' >&2; return 1; }
-	local discSvr=$1
-	local ip=$2
-	local name=$3
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: install-etcd $discSvr $ip $name\n' >&2; return 1; }
+    local discSvr=$1
+    local ip=$2
+    local name=$3
     local version; version=$(etcd-get-latest-version) || return
     local downloadUrl; downloadUrl=$(etcd-get-download-url "$version") || return
     local releasePath; releasePath=$(etcd-download-release "$downloadUrl") || return
@@ -1136,13 +1137,13 @@ install-etcd ()
     sudo chown -R ubuntu:ubuntu $installFolder
     etcd-install-release "$releasePath" "$installFolder"
     etcd-setup-data-dir /var/lib/etcd
-	mkdir -p /opt/svc/etcd/
-	etcd-gen-unit-file >/opt/svc/etcd/etcd.service
-	etcd-gen-run-script $discSvr $ip $name >/opt/svc/etcd/run.sh
-	chmod 755 /opt/svc/etcd/run.sh
-	chown -R ubuntu:ubuntu /opt/svc/etcd/
-	systemctl enable /opt/svc/etcd/etcd.service
-	systemctl start etcd
+    mkdir -p /opt/svc/etcd/
+    etcd-gen-unit-file >/opt/svc/etcd/etcd.service
+    etcd-gen-run-script $discSvr $ip $name >/opt/svc/etcd/run.sh
+    chmod 755 /opt/svc/etcd/run.sh
+    chown -R ubuntu:ubuntu /opt/svc/etcd/
+    systemctl enable /opt/svc/etcd/etcd.service
+    systemctl start etcd
 }
 
 
@@ -1184,9 +1185,9 @@ install-fresh-daylight-svc ()
 
 install-gnome-keyring ()
 {
-	sudo apt-get install libsecret-1-0 libsecret-1-dev
-	make -C /usr/share/doc/git/contrib/credential/libsecret
-	git config --global credential.helper /usr/share/doc/git/contrib/credential/libsecret/git-credential-libsecret
+    sudo apt-get install libsecret-1-0 libsecret-1-dev
+    make -C /usr/share/doc/git/contrib/credential/libsecret
+    git config --global credential.helper /usr/share/doc/git/contrib/credential/libsecret/git-credential-libsecret
 }
 
 
@@ -1600,36 +1601,36 @@ pull-flask-app ()
 
 pull-git-repo ()
 {
-	local repoUrl=$1
-	local username=${2:-''}
-	local token=${3:-''}
+    local repoUrl=$1
+    local username=${2:-''}
+    local token=${3:-''}
 
-	if [[ -z "$username" ]]; then
-		read -r -p 'GitHub username: ' username
-	fi
+    if [[ -z "$username" ]]; then
+        read -r -p 'GitHub username: ' username
+    fi
 
-	if [[ -z "$token" ]]; then
-		if [[ -n "$GITHUB_ACCESS_TOKEN" ]]; then
-			token="$GITHUB_ACCESS_TOKEN"
-		else
-			read -r -p 'GitHub Access Token: ' token
-		fi
-	fi
+    if [[ -z "$token" ]]; then
+        if [[ -n "$GITHUB_ACCESS_TOKEN" ]]; then
+            token="$GITHUB_ACCESS_TOKEN"
+        else
+            read -r -p 'GitHub Access Token: ' token
+        fi
+    fi
 
-	[[ -n "$username" ]] || { printf 'Invalid username\n'; return 1; }
-	[[ -n "$token" ]] || { printf 'Invalid token\n'; return 1; }
-			
+    [[ -n "$username" ]] || { printf 'Invalid username\n'; return 1; }
+    [[ -n "$token" ]] || { printf 'Invalid token\n'; return 1; }
+            
 
- 	local RX_repoUrl="^https://github.com/([^/]*)/([^/]*)";
- 	[[ "$repoUrl" =~ $RX_repoUrl ]] || return;
- 	local account="${BASH_REMATCH[1]}";
- 	local repo="${BASH_REMATCH[2]}";
-	local repoUrl="https://$username:$token@github.com/$account/$repo"
-	local repoFolder="$HOME/src/github.com/$account"
-	local repoPath="$repoFolder/$repo"
+     local RX_repoUrl="^https://github.com/([^/]*)/([^/]*)";
+     [[ "$repoUrl" =~ $RX_repoUrl ]] || return;
+     local account="${BASH_REMATCH[1]}";
+     local repo="${BASH_REMATCH[2]}";
+    local repoUrl="https://$username:$token@github.com/$account/$repo"
+    local repoFolder="$HOME/src/github.com/$account"
+    local repoPath="$repoFolder/$repo"
 
- 	mkdir -p "$repoFolder" || return;
- 	git -C "$repoFolder" clone "$repoUrl" || return;
+     mkdir -p "$repoFolder" || return;
+     git -C "$repoFolder" clone "$repoUrl" || return;
 # 	cd "$HOME/src/github.com/$account/$repo" || return
 }
 
@@ -1748,16 +1749,16 @@ pull-webapp ()
     # shellcheck disable=SC2016
     # shellcheck disable=SC2016
     { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: pull-webapp $name [$dstFolder]\n' >&2; return 1; }
-	local name=$1
+    local name=$1
     local dstFolder=${2:-"/www/$name"}
     
-	# I'm not sure but I think this might be out of step with the other pull-xxx fns, 
+    # I'm not sure but I think this might be out of step with the other pull-xxx fns, 
     #  which download and untar the tarball to a tmp folder, and then rsync. 
     #  I'm not actually sure that's better but it's good to be consistent.
     local s3key; s3key="s3://$(get-bucket)/dist/webapp/$name.tgz" || return
-	aws s3 cp "$s3key" "/tmp/$name.tgz" || return
+    aws s3 cp "$s3key" "/tmp/$name.tgz" || return
     mkdir -p "$dstFolder" || return
-	tar -xz -C "$dstFolder" --exclude ./**/__pycache__ -f "/tmp/$name.tgz" || return
+    tar -xz -C "$dstFolder" --exclude ./**/__pycache__ -f "/tmp/$name.tgz" || return
 }
 
 
@@ -1783,7 +1784,7 @@ push-app ()
 
 push-daylight ()
 {
-	# shellcheck disable=SC2016
+    # shellcheck disable=SC2016
     # shellcheck disable=SC2016
     (( $# == 1 )) || { printf 'Usage: push-daylight $message\n' >&2; return 1; }
     local message=$1
@@ -1820,12 +1821,12 @@ push-svc ()
     local name=$1
     local srcFolder=${2:-"/app/svc/$name"}
 
-	local tgzPath; tgzPath=$(mktemp).tgz >/dev/null || return
-	echo "$tgzPath"
-	tar -C "$srcFolder" -czf "$tgzPath" . >/dev/null || return
-	local bucket; bucket=$(get-bucket) || return
-	s3url="s3://$bucket/dist/svc/$name.tgz"
-	aws s3 cp "$tgzPath" "$s3url" >/dev/null || return
+    local tgzPath; tgzPath=$(mktemp).tgz >/dev/null || return
+    echo "$tgzPath"
+    tar -C "$srcFolder" -czf "$tgzPath" . >/dev/null || return
+    local bucket; bucket=$(get-bucket) || return
+    s3url="s3://$bucket/dist/svc/$name.tgz"
+    aws s3 cp "$tgzPath" "$s3url" >/dev/null || return
 }
 
 
@@ -1833,11 +1834,11 @@ push-webapp ()
 {
     # shellcheck disable=SC2016
     (( $# == 1 )) || { printf 'Usage: push-webapp $name\n' >&2; return 1; }
-	local name=$1
+    local name=$1
 
-	tar -C "/www/$name" --exclude ./**/__pycache__ -czf "/tmp/$name.tgz" . || return
-	local s3key; s3key="s3://$(get-bucket)/dist/webapp/$name.tgz" || return
-	aws s3 cp "/tmp/$name.tgz" "$s3key" || return
+    tar -C "/www/$name" --exclude ./**/__pycache__ -czf "/tmp/$name.tgz" . || return
+    local s3key; s3key="s3://$(get-bucket)/dist/webapp/$name.tgz" || return
+    aws s3 cp "/tmp/$name.tgz" "$s3key" || return
 }
 
 
@@ -1857,61 +1858,67 @@ include /etc/nginx/modules-enabled/*.conf;
 include /etc/nginx/streams.d/*.conf;
 
 events {
-	worker_connections 768;
-	# multi_accept on;
+    worker_connections 768;
+    # multi_accept on;
 }
 
 http {
 
-	##
-	# Basic Settings
-	##
+    ##
+    # Basic Settings
+    ##
 
-	sendfile on;
-	tcp_nopush on;
-	types_hash_max_size 2048;
-	# server_tokens off;
+    sendfile on;
+    tcp_nopush on;
+    types_hash_max_size 2048;
+    # server_tokens off;
 
-	# server_names_hash_bucket_size 64;
-	# server_name_in_redirect off;
+    # server_names_hash_bucket_size 64;
+    # server_name_in_redirect off;
 
-	include /etc/nginx/mime.types;
-	default_type application/octet-stream;
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
 
-	##
-	# SSL Settings
-	##
+    ##
+    # SSL Settings
+    ##
 
-	ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3; # Dropping SSLv3, ref: POODLE
-	ssl_prefer_server_ciphers on;
+    ssl_protocols TLSv1 TLSv1.1 TLSv1.2 TLSv1.3; # Dropping SSLv3, ref: POODLE
+    ssl_prefer_server_ciphers on;
 
-	##
-	# Logging Settings
-	##
+    ##
+    # Logging Settings
+    ##
 
-	access_log /var/log/nginx/access.log;
+    access_log /var/log/nginx/access.log;
 
-	##
-	# Gzip Settings
-	##
+    ##
+    # Gzip Settings
+    ##
 
-	gzip on;
+    gzip on;
 
-	# gzip_vary on;
-	# gzip_proxied any;
-	# gzip_comp_level 6;
-	# gzip_buffers 16 8k;
-	# gzip_http_version 1.1;
-	# gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
+    # gzip_vary on;
+    # gzip_proxied any;
+    # gzip_comp_level 6;
+    # gzip_buffers 16 8k;
+    # gzip_http_version 1.1;
+    # gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
 
-	##
-	# Virtual Host Configs
-	##
+    ##
+    # Virtual Host Configs
+    ##
 
-	include /etc/nginx/conf.d/*.conf;
-	include /etc/nginx/sites-enabled/*;
+    include /etc/nginx/conf.d/*.conf;
+    include /etc/nginx/sites-enabled/*;
 }
 EOT
+
+    if ! nginx -t; then
+        printf "Error with nginx config.\n" >&2
+        return 1
+    fi
+    systemctl restart nginx
 }
 
 
@@ -1974,8 +1981,8 @@ setup-domain ()
 
 source-daylight ()
 {
-	local daylightPath; daylightPath=$(command -v daylight.sh) || return
-	source "$daylightPath"
+    local daylightPath; daylightPath=$(command -v daylight.sh) || return
+    source "$daylightPath"
 }
 
 
@@ -2056,11 +2063,11 @@ sys-start ()
 
 uninstall-etcd ()
 {
-	systemctl stop etcd
-	systemctl disable etcd 
-	rm -r /var/lib/etcd/ 2>/dev/null
-	rm -r /opt/etcd/ 2>/dev/null
-	rm -r /opt/svc/etcd/ 2>/dev/null
+    systemctl stop etcd
+    systemctl disable etcd 
+    rm -r /var/lib/etcd/ 2>/dev/null
+    rm -r /opt/etcd/ 2>/dev/null
+    rm -r /opt/svc/etcd/ 2>/dev/null
 }
 
 
@@ -2079,9 +2086,9 @@ untar-to-temp-folder ()
 
 update-and-restart ()
 {
-	apt update -y
-	apt upgrade -y
-	reboot
+    apt update -y
+    apt upgrade -y
+    reboot
 }
 
 
@@ -2119,11 +2126,11 @@ if [[ ! -f /opt/bin/daylight.sh  &&  -t 0 ]]; then
     printf '\n' 
     install-fresh-daylight-svc
     if [[ -f /home/ubuntu/.bashrc ]]; then
-	{
+    {
         printf '%s\n' ""
         printf '%s\n' "# hello from daylight"
         printf '%s\n' "source /opt/bin/daylight.sh"
-	} >> /home/ubuntu/.bashrc;
+    } >> /home/ubuntu/.bashrc;
     fi
     printf '%s\n' Done.
     printf '\n' 
@@ -2139,104 +2146,105 @@ main ()
         cmd=$1
         shift
         case "$cmd" in
-			activate-flask-app)	activate-flask-app "$@";;
-			activate-svc)	activate-svc "$@";;
-			activate-vm)	activate-vm "$@";;
-			add-container-user)	add-container-user "$@";;
-			add-ssh-to-container)	add-ssh-to-container "$@";;
-			add-superuser)	add-superuser "$@";;
-			add-user)	add-user "$@";;
-			add-user-to-idmap)	add-user-to-idmap "$@";;
-			add-user-to-shadow-ids)	add-user-to-shadow-ids "$@";;
-			cat-conf-script)	cat-conf-script "$@";;
-			create-flask-app)	create-flask-app "$@";;
-			create-github-user-access-token)	create-github-user-access-token "$@";;
-			create-home-filesystem)	create-home-filesystem "$@";;
-			create-loopback)	create-loopback "$@";;
-			create-lxd-user-data)	create-lxd-user-data "$@";;
-			create-publish-image-service)	create-publish-image-service "$@";;
+            activate-flask-app)	activate-flask-app "$@";;
+            activate-svc)	activate-svc "$@";;
+            activate-vm)	activate-vm "$@";;
+            add-container-user)	add-container-user "$@";;
+            add-ssh-to-container)	add-ssh-to-container "$@";;
+            add-superuser)	add-superuser "$@";;
+            add-user)	add-user "$@";;
+            add-user-to-idmap)	add-user-to-idmap "$@";;
+            add-user-to-shadow-ids)	add-user-to-shadow-ids "$@";;
+            cat-conf-script)	cat-conf-script "$@";;
+            create-flask-app)	create-flask-app "$@";;
+            create-github-user-access-token)	create-github-user-access-token "$@";;
+            create-home-filesystem)	create-home-filesystem "$@";;
+            create-loopback)	create-loopback "$@";;
+            create-lxd-user-data)	create-lxd-user-data "$@";;
+            create-publish-image-service)	create-publish-image-service "$@";;
             create-pubbo-service) create-pubbo-service "$@";;
-			create-service-from-dist-script)	create-service-from-dist-script "$@";;
-			create-static-website)	create-static-website "$@";;
-			delete-lxd-instance)	delete-lxd-instance "$@";;
-			download-app)	download-app "$@";;
-			download-dist)	download-dist "$@";;
-			download-flask-app)	download-flask-app "$@";;
-			download-flask-service)	download-flask-service "$@";;
-			download-latest-release)    download-latest-release "$@";;
-			download-public-key)	download-public-key "$@";;
-			download-shr-tarball)	download-shr-tarball "$@";;
-			download-svc)	download-svc "$@";;
-			download-to-temp-dir)	download-to-temp-dir "$@";;
-			download-vm)	download-vm "$@";;
-			edit-daylight)	edit-daylight "$@";;
+            create-service-from-dist-script)	create-service-from-dist-script "$@";;
+            create-static-website)	create-static-website "$@";;
+            delete-lxd-instance)	delete-lxd-instance "$@";;
+            download-app)	download-app "$@";;
+            download-dist)	download-dist "$@";;
+            download-flask-app)	download-flask-app "$@";;
+            download-flask-service)	download-flask-service "$@";;
+            download-latest-release)    download-latest-release "$@";;
+            download-public-key)	download-public-key "$@";;
+            download-shr-tarball)	download-shr-tarball "$@";;
+            download-svc)	download-svc "$@";;
+            download-to-temp-dir)	download-to-temp-dir "$@";;
+            download-vm)	download-vm "$@";;
+            edit-daylight)	edit-daylight "$@";;
             etcd-gen-run-script) etcd-gen-run-script "$@";;
             etcd-gen-unit-file) etcd-gen-unit-file "$@";;
-			gen-nginx-flask)	gen-nginx-flask "$@";;
-			gen-nginx-static)	gen-nginx-static "$@";;
-			generate-unit-file)	generate-unit-file "$@";;
-			get-bucket)	get-bucket "$@";;
-			get-container-ip)	get-container-ip "$@";;
-			get-image-base)	get-image-base "$@";;
-			get-image-name)	get-image-name "$@";;
-			get-image-repo)	get-image-repo "$@";;
-			get-service-file-value)	get-service-file-value "$@";;
-			get-service-environment-file)	get-service-environment-file "$@";;
-			get-service-exec-start)	get-service-exec-start "$@";;
-			get-service-working-directory)	get-service-working-directory "$@";;
+            gen-nginx-flask)	gen-nginx-flask "$@";;
+            gen-nginx-static)	gen-nginx-static "$@";;
+            generate-unit-file)	generate-unit-file "$@";;
+            get-bucket)	get-bucket "$@";;
+            get-container-ip)	get-container-ip "$@";;
+            get-image-base)	get-image-base "$@";;
+            get-image-name)	get-image-name "$@";;
+            get-image-repo)	get-image-repo "$@";;
+            get-service-file-value)	get-service-file-value "$@";;
+            get-service-environment-file)	get-service-environment-file "$@";;
+            get-service-exec-start)	get-service-exec-start "$@";;
+            get-service-working-directory)	get-service-working-directory "$@";;
             hello) hello "$@";;
-			init-lxd)	init-lxd "$@";;
-			init-nginx)	init-nginx "$@";;
-			install-app)	install-app "$@";;
-			install-awscli)	install-awscli "$@";;
-			install-etcd)	install-etcd "$@";;
-			install-flask-app)	install-flask-app "$@";;
-			install-fresh-daylight-svc)	install-fresh-daylight-svc "$@";;
-			install-gnome-keyring)	install-gnome-keyring "$@";;
-			install-latest-httpie)	install-latest-httpie "$@";;
-			install-mssql-tools)	install-mssql-tools "$@";;
-			install-public-key)	install-public-key "$@";;
+            init-lxd)	init-lxd "$@";;
+            init-nginx)	init-nginx "$@";;
+            install-app)	install-app "$@";;
+            install-awscli)	install-awscli "$@";;
+            install-etcd)	install-etcd "$@";;
+            install-flask-app)	install-flask-app "$@";;
+            install-fresh-daylight-svc)	install-fresh-daylight-svc "$@";;
+            install-gnome-keyring)	install-gnome-keyring "$@";;
+            install-latest-httpie)	install-latest-httpie "$@";;
+            install-mssql-tools)	install-mssql-tools "$@";;
+            install-public-key)	install-public-key "$@";;
             install-pubbo) install-pubbo "$@";;
-			install-python)	install-python "$@";;
-			install-service)	install-service "$@";;
-			install-service-from-script)	install-service-from-script "$@";;
-			install-service-from-command)	install-service-from-command "$@";;
-			install-shellscript-part-handlers)	install-shellscript-part-handlers "$@";;
-			install-shr-token)	install-shr-token "$@";;
-			install-svc)	install-svc "$@";;
-			install-venv)	install-venv "$@";;
-			install-vm)	install-vm "$@";;
-			list-apps)	list-apps "$@";;
-			list-conf-scripts)	list-conf-scripts "$@";;
-			list-public-keys)	list-public-keys "$@";;
-			list-services)	list-services "$@";;
-			list-vms)	list-vms "$@";;
+            install-python)	install-python "$@";;
+            install-service)	install-service "$@";;
+            install-service-from-script)	install-service-from-script "$@";;
+            install-service-from-command)	install-service-from-command "$@";;
+            install-shellscript-part-handlers)	install-shellscript-part-handlers "$@";;
+            install-shr-token)	install-shr-token "$@";;
+            install-svc)	install-svc "$@";;
+            install-venv)	install-venv "$@";;
+            install-vm)	install-vm "$@";;
+            list-apps)	list-apps "$@";;
+            list-conf-scripts)	list-conf-scripts "$@";;
+            list-public-keys)	list-public-keys "$@";;
+            list-services)	list-services "$@";;
+            list-vms)	list-vms "$@";;
             prep-filesystem) prep-filesystem "$@";;
-			pull-app)	pull-app "$@";;
-			pull-daylight)	pull-daylight "$@";;
-			pull-flask-app)	pull-flask-app "$@";;
-			pull-git-repo)	pull-git-repo "$@";;
-			pull-image)	pull-image "$@";;
-			pull-ssh-tarball)	pull-ssh-tarball "$@";;
-			pull-svc)	pull-svc "$@";;
-			pull-vm)	pull-vm "$@";;
-			pull-webapp)	pull-webapp "$@";;
-			push-app)	push-app "$@";;
-			push-daylight)	push-daylight "$@";;
-			push-flask-app)	push-flask-app "$@";;
-			push-svc)	push-svc "$@";;
-			push-webapp)	push-webapp "$@";;
-			run-conf-script)	run-conf-script "$@";;
-			run-service)	run-service "$@";;
-			setup-domain)	setup-domain "$@";;
-			source-daylight)	source-daylight "$@";;
-			source-service-environment-file)	source-service-environment-file "$@";;
-			start-indexed-service)	start-indexed-service "$@";;
-			start-service)	start-service "$@";;
-			sys-start)	sys-start "$@";;
-			uninstall-etcd)	uninstall-etcd "$@";;
-			untar-to-temp-folder)	untar-to-temp-folder "$@";;
-			update-and-restart)	update-and-restart "$@";;
+            pull-app)	pull-app "$@";;
+            pull-daylight)	pull-daylight "$@";;
+            pull-flask-app)	pull-flask-app "$@";;
+            pull-git-repo)	pull-git-repo "$@";;
+            pull-image)	pull-image "$@";;
+            pull-ssh-tarball)	pull-ssh-tarball "$@";;
+            pull-svc)	pull-svc "$@";;
+            pull-vm)	pull-vm "$@";;
+            pull-webapp)	pull-webapp "$@";;
+            push-app)	push-app "$@";;
+            push-daylight)	push-daylight "$@";;
+            push-flask-app)	push-flask-app "$@";;
+            push-svc)	push-svc "$@";;
+            push-webapp)	push-webapp "$@";;
+            replace-nginx-conf)	replace-nginx-conf "$@";;
+            run-conf-script)	run-conf-script "$@";;
+            run-service)	run-service "$@";;
+            setup-domain)	setup-domain "$@";;
+            source-daylight)	source-daylight "$@";;
+            source-service-environment-file)	source-service-environment-file "$@";;
+            start-indexed-service)	start-indexed-service "$@";;
+            start-service)	start-service "$@";;
+            sys-start)	sys-start "$@";;
+            uninstall-etcd)	uninstall-etcd "$@";;
+            untar-to-temp-folder)	untar-to-temp-folder "$@";;
+            update-and-restart)	update-and-restart "$@";;
             *) printf 'Unknown command: %s \n' "$cmd";;
         esac
     fi
