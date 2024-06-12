@@ -368,7 +368,7 @@ create-pubbo-service ()
     filePath=$2
     port=$3
     socketFolder=/run/sock/pubbo
-    socketPath="$socketFolder/$svcName"
+    socketPath="$socketFolder/$svcName.sock"
     
     # Get ready
     prep-service "$svcName"
@@ -409,7 +409,7 @@ EOT
     cat >"$streamCfgTmplPath" <<- 'EOT'
 stream {
 	upstream sock {
-		server unix:/var/tmp/sock/$svcName.sock;
+		server unix:$socketPath;
 	}
 
 	server {
@@ -419,7 +419,7 @@ stream {
 }
 EOT
     # envsubst
-    svcName=$svcName port=$port envsubst <"$streamCfgTmplPath" >"/etc/nginx/streams.d/$svcName.conf"
+    socketPath=$socketPath port=$port envsubst <"$streamCfgTmplPath" >"/etc/nginx/streams.d/$svcName.conf"
 
     # Create the systemd service
     ln --symbolic --force "/opt/svc/$svcName/$svcName.service" "/etc/systemd/system/$svcName.service"
