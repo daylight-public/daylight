@@ -371,7 +371,7 @@ create-pubbo-service ()
     socketPath="$socketFolder/$svcName"
     
     # Get ready
-    prep-service "svcName"
+    prep-service "$svcName"
     
     # Catdoc the unit file
     local unitTmplPath; unitTmplPath=$(mktemp --tmpdir=/tmp/ .XXXXXX) || return
@@ -389,7 +389,7 @@ WorkingDirectory=/opt/svc/$svcName
 WantedBy=multi-user.target
 EOT
     # envsubst to create the final unit file 
-    filePath=$filePath socketPath=$socketPath envsubst <"$mainScriptTempPath" >"/opt/svc/$svcName/$svcName.service"
+    svcName=$svcName envsubst <"$unitTmplPath" >"/opt/svc/$svcName/$svcName.service"
 
     # Catdoc the script
     local mainScriptTmplPath; mainScriptTmplPath=$(mktemp --tmpdir=/tmp/ .XXXXXX) || return
@@ -399,13 +399,15 @@ mkdir -p "$socketFolder"
 /opt/bin/pubbo \
 	--file-path "$filePath" \
 	--socket-path "$socketPath"
+chown www-data:www-data "$socketPath"
 EOT
     # envsubst to create the final script
-    svcName=$svcName envsubst <"$unitTmplPath" >"/opt/svc/$svcName/bin/run.sh"
+    filePath=$filePath socketPath=$socketPath svcName=$svcName socketFolder=$socketFolder envsubst <"$mainScriptTmplPath" >"/opt/svc/$svcName/bin/main.sh"
+    chmod 777 /opt/svc/$svcName/bin/main.sh
 
     # catdoc the nginx stream config file
     local streamCfgTmplPath; streamCfgTmplPath=$(mktemp --tmpdir= .XXXXXX) || return
-    cat >"$treamCfgTmplPath" <<- 'EOT'
+    cat >"$streamCfgTmplPath" <<- 'EOT'
 stream {
 	upstream sock {
 		server unix:/var/tmp/sock/$svcName.sock;
@@ -1537,6 +1539,7 @@ list-vms ()
 prep-filesystem ()
 {
     mkdir -p /etc/nginx/streams.d/
+    chmod 777 /etc/nginx/streams.d/
     mkdir -p /opt/actions-runner/
     mkdir -p /opt/bin/
     mkdir -p /opt/svc/
