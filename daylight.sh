@@ -567,7 +567,7 @@ download-latest-release ()
     dstFolder=$4
     url="https://api.github.com/repos/$org/$repo/releases/latest"
     read -r -a args < <(curl -s "$url" \
-        | jq -r '.assets.[] | select(.name | contains("'"$platform"'")) | [.name, .browser_download_url] | @tsv')
+        | jq -r '.assets | .[] | select(.name | contains("'"$platform"'")) | [.name, .browser_download_url] | @tsv')
     name=${args[0]}
     urlDownload=${args[1]}
     printf 'name=%s urlDownload=%s\n' "$name" "$urlDownload"
