@@ -635,7 +635,7 @@ download-shr-tarball ()
         || return
     tarballFileName=${args[0]}
     tarballUrl=${args[1]}
-    local tarballPath; tarballPath="$(mktemp -t "XXX.$tarballFileName")" || return
+    local tarballPath; tarballPath="$(create-temp-file "XXX.$tarballFileName")" || return
     curl --location --silent --output "$tarballPath" "$tarballUrl"
     tar --list --gunzip --file "$tarballPath" >/dev/null
     tar --directory "$downloadFolder" --extract --gunzip --file "$tarballPath" || return
