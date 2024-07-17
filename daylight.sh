@@ -482,6 +482,34 @@ create-sudo2-group ()
 }
 
 
+create-temp-file ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: create-temp-file $template [$folder]\n' >&2; return 1; }
+    template=$1
+    folder=$2
+    if [[ -n "$folder" ]]; then
+        mktemp --tmpdir="$folder" "$template"
+    else
+        mktemp -t "$template"
+    fi
+}
+
+
+create-temp-folder ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: create-temp-file $template [$folder]\n' >&2; return 1; }
+    template=$1
+    folder=$2
+    if [[ -n "$folder" ]]; then
+        mktemp --directory --tmpdir="$folder" "$template"
+    else
+        mktemp --directory -t "$template"
+    fi
+}
+
+
 #
 # lxd does not have a nice way of safely deleting a VM if it does not exist; you end up with
 # a non-zero RC. This function simply checks that the VM exists before foricbly deleting it.
