@@ -561,17 +561,19 @@ download-latest-release ()
 {
     # shellcheck disable=SC2016
     (( $# == 4 )) || { printf 'Usage: download-latest-release $org $repo $platform $dstFolder\n' >&2; return 1; }
-    org=$1
-    repo=$2
-    platform=$3
-    dstFolder=$4
-    url="https://api.github.com/repos/$org/$repo/releases/latest"
-    read -r -a args < <(curl -s "$url" \
-        | jq -r '.assets | .[] | select(.name | contains("'"$platform"'")) | [.name, .browser_download_url] | @tsv')
+    local org=$1
+    local repo=$2
+    local platform=$3
+    local dstFolder=$4
+    local url="https://api.github.com/repos/$org/$repo/releases/latest"
+    curl --silent --output /tmp/MEAT.json "$url" || echo "curl failed" >&2
+    local jqExp='.assetsXXX | .[] | select(.name | contains("'"$platform"'")) | [.name, .browser_download_url] | @tsv'
+    jq -r "$jqExp" </tmp/MEAT.json >/tmp/PIE.txt || echo "jq failed" >&2 && return 1
+    read -r -a args </tmp/PIE.txt
     name=${args[0]}
-    urlDownload=${args[1]}
+    local urlDownload=${args[1]}
     printf 'name=%s urlDownload=%s\n' "$name" "$urlDownload"
-    tarballPath="/tmp/$name"
+    local tarballPath="/tmp/$name"
     curl --location --silent --output "$tarballPath" "$urlDownload"
     tar --directory "$dstFolder" -xzf "$tarballPath"
 }
