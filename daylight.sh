@@ -172,17 +172,12 @@ add-user-to-idmap ()
     local container=$2
 
     # Get id-map for the container, concatenate rows to it for the new user, update the idmap
-    local newIdMap; newIdMap=$(mktemp) || return
-    lxc query "/1.0/containers/$container" | jq -r '.expanded_config["raw.idmap"] // empty' | awk NF > "$newIdMap"
-
     local uid; uid=$(id --user "$username") || return
     local gid; gid=$(id --group "$username") || return
-    printf 'uid %d %d\n' "$uid" "$uid" >> "$newIdMap"
-    printf 'gid %d %d\n' "$gid" "$gid" >> "$newIdMap"
-
-    lxc config set "$container" raw.idmap - < <(sort "$newIdMap" | uniq)
-    lxc restart "$container" 2>/dev/null || lxc start "$container"
-    lxc exec "$container" -- cloud-init status --wait
+    local idMapPath; idMapPath=$(lxd-dump-id-map "$container") || return
+    printf 'uid %d %d\n' "$uid" "$uid" >> "$idMapPath"
+    printf 'gid %d %d\n' "$gid" "$gid" >> "$idMapPath"
+    lxd-set-id-map "$container" "$idMapPath"
 }
 
 
@@ -1584,6 +1579,18 @@ list-vms ()
 }
 
 
+lxd-dump-id-map ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: lxd-dump-id-map $container\n' >&2; return 1; }
+    local container=$1
+
+    local idMapPath; idMapPath=$(create-temp-file "$container.idmap.XXXXXX") || return
+    lxc query "/1.0/containers/$container" | jq -r '.expanded_config["raw.idmap"] // empty' | awk NF > "$idMapPath"
+    printf '%s' "$idMapPath"
+}
+
+
 lxd-instance-exists ()
 {
     # shellcheck disable=SC2016
@@ -1591,6 +1598,20 @@ lxd-instance-exists ()
     local name=$1
     lxc query "/1.0/instances/$name" >/dev/null 2>&1
 }
+
+
+lxd-set-id-map ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: lxd-set-id-map $container $idMapPath\n' >&2; return 1; }
+    local container=$1
+    local idMapPath=$2
+
+    lxc config set "$container" raw.idmap - < <(sort "$idMapPath" | uniq)
+    lxc restart "$container" 2>/dev/null || lxc start "$container"
+    lxc exec "$container" -- cloud-init status --wait
+}
+
 
 lxd-share-folder ()
 {
