@@ -535,6 +535,22 @@ download-app ()
 
 
 #
+# Download daylight script from the specified branch
+#
+download-daylight ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: download-daylight $branch $dstFolder\n' >&2; return 1; }
+    local branch=$1
+    local dstFolder=$2
+    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
+    local org=daylight-public
+    local repo=daylight
+    url="https://raw.githubusercontent.com/$org/$repo/$branch/daylight.sh"
+    curl --location --silent --output-dir "$dstFolder" --remote-name "$url"
+}
+
+#
 # Download the entire dist folder from S3 to /tmp/dist
 #
 download-dist ()
@@ -1585,6 +1601,25 @@ lxd-set-id-map ()
     lxc config set "$container" raw.idmap - < <(sort "$idMapPath" | uniq)
     lxc restart "$container" 2>/dev/null || lxc start "$container"
     lxc exec "$container" -- cloud-init status --wait
+lxd-instance-exists ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: lxc-instance-exists $container\n' >&2; return 1; }
+    local name=$1
+    lxc query "/1.0/instances/$name" >/dev/null 2>&1
+}
+
+lxd-share-folder ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: lxd-share-folder $container $share $srcDir $dstDir\n' >&2; return 1; }
+    local container=$1
+    lxd-instance-exists  "$container" || { printf 'Non-existent container: %s\n' "$container"; return 1; }
+    local share=$2
+    local srcDir=$3
+    [[ -d "$srcDir" ]] || { echo "Non-existent folder: $srcDir" >&2; return 1; }
+    local dstDir=$4
+    lxc config device add "$container" "$share" disk source="$srcDir" path="$dstDir"
 }
 
 
@@ -1630,6 +1665,8 @@ pull-app ()
 
 #
 # Download and source the latest daylight.sh from S3. Crucial for debugging.
+#
+# DEPRECATED - use download-daylight instead
 #
 pull-daylight ()
 {
