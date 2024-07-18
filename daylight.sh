@@ -540,6 +540,22 @@ download-app ()
 
 
 #
+# Download daylight script from the specified branch
+#
+download-daylight ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: download-daylight $branch $dstFolder\n' >&2; return 1; }
+    local branch=$1
+    local dstFolder=$2
+    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
+    local org=daylight-public
+    local repo=daylight
+    url="https://raw.githubusercontent.com/$org/$repo/$branch/daylight.sh"
+    curl --location --silent --output-dir "$dstFolder" --remote-name "$url"
+}
+
+#
 # Download the entire dist folder from S3 to /tmp/dist
 #
 download-dist ()
@@ -1632,6 +1648,8 @@ pull-app ()
 
 #
 # Download and source the latest daylight.sh from S3. Crucial for debugging.
+#
+# DEPRECATED - use download-daylight instead
 #
 pull-daylight ()
 {
