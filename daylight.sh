@@ -1591,6 +1591,15 @@ lxd-dump-id-map ()
 }
 
 
+lxd-instance-exists ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: lxc-instance-exists $container\n' >&2; return 1; }
+    local name=$1
+    lxc query "/1.0/instances/$name" >/dev/null 2>&1
+}
+
+
 lxd-set-id-map ()
 {
     # shellcheck disable=SC2016
@@ -1601,13 +1610,8 @@ lxd-set-id-map ()
     lxc config set "$container" raw.idmap - < <(sort "$idMapPath" | uniq)
     lxc restart "$container" 2>/dev/null || lxc start "$container"
     lxc exec "$container" -- cloud-init status --wait
-lxd-instance-exists ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: lxc-instance-exists $container\n' >&2; return 1; }
-    local name=$1
-    lxc query "/1.0/instances/$name" >/dev/null 2>&1
 }
+
 
 lxd-share-folder ()
 {
