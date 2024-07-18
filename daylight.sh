@@ -174,7 +174,7 @@ add-user-to-idmap ()
     # Get id-map for the container, concatenate rows to it for the new user, update the idmap
     local uid; uid=$(id --user "$username") || return
     local gid; gid=$(id --group "$username") || return
-    local idMapPath; idMapPath=$(lxd-dump-id-map) || return
+    local idMapPath; idMapPath=$(lxd-dump-id-map "$container") || return
     printf 'uid %d %d\n' "$uid" "$uid" >> "$idMapPath"
     printf 'gid %d %d\n' "$gid" "$gid" >> "$idMapPath"
     lxd-set-id-map "$container" "$idMapPath"
