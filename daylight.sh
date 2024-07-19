@@ -559,7 +559,7 @@ download-dylt ()
     { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: download-dylt [$dstFolder]\n' >&2; return 1; }
     local dstFolder=${1:-/opt/bin/}
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
-    download-latest-release dylt-dev dylt "$dstFolder"
+    download-latest-release dylt-dev dylt linux_amd64 "$dstFolder"
 }
 
 
@@ -2319,6 +2319,7 @@ main ()
             init-nginx)	init-nginx "$@";;
             install-app)	install-app "$@";;
             install-awscli)	install-awscli "$@";;
+            install-dylt) install-dylt "$@";;
             install-etcd)	install-etcd "$@";;
             install-flask-app)	install-flask-app "$@";;
             install-fresh-daylight-svc)	install-fresh-daylight-svc "$@";;
