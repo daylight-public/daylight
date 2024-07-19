@@ -620,14 +620,14 @@ download-latest-release ()
     local url="https://api.github.com/repos/$org/$repo/releases/latest"
     curl --silent --output /tmp/MEAT.json "$url" || echo "curl failed" >&2
     local jqExp='.assets | .[] | select(.name | contains("'"$platform"'")) | [.name, .browser_download_url] | @tsv'
-    jq -r "$jqExp" </tmp/MEAT.json >/tmp/PIE.txt || echo "jq failed" >&2 && return 1
+    jq -r "$jqExp" </tmp/MEAT.json >/tmp/PIE.txt || { echo "jq failed" >&2; return 1; }
     read -r -a args </tmp/PIE.txt
     name=${args[0]}
     local urlDownload=${args[1]}
     printf 'name=%s urlDownload=%s\n' "$name" "$urlDownload"
     local tarballPath="/tmp/$name"
-    curl --location --silent --output "$tarballPath" "$urlDownload"
-    tar --directory "$dstFolder" -xzf "$tarballPath"
+    curl --location --silent --output "$tarballPath" "$urlDownload" || return
+    printf '%s' "$tarballPath"
 }
 
 
@@ -1263,6 +1263,18 @@ install-latest-httpie ()
     curl -SsL https://packages.httpie.io/deb/KEY.gpg | gpg --dearmor | tee /etc/apt/trusted.gpg.d/httpie.gpg >/dev/null
     apt update -y
     apt install -y httpie
+}
+
+
+install-latest-release ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: install-latest-release $org $repo $platform $dstFolder\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local platform=$3
+    local dstFolder=$4
+    local tarballPath; tarballPath=$(download-latest-release "$org" "$repo" "$platform" "$dstFolder") || return
 }
 
 
