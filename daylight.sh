@@ -551,6 +551,19 @@ download-daylight ()
 }
 
 #
+# Download latest dylt release
+#
+download-dylt ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: download-dylt [$dstFolder]\n' >&2; return 1; }
+    local dstFolder=${1:-/opt/bin/}
+    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
+    download-latest-release dylt-dev dylt linux_amd64 "$dstFolder"
+}
+
+
+#
 # Download the entire dist folder from S3 to /tmp/dist
 #
 download-dist ()
@@ -606,7 +619,7 @@ download-latest-release ()
     local dstFolder=$4
     local url="https://api.github.com/repos/$org/$repo/releases/latest"
     curl --silent --output /tmp/MEAT.json "$url" || echo "curl failed" >&2
-    local jqExp='.assetsXXX | .[] | select(.name | contains("'"$platform"'")) | [.name, .browser_download_url] | @tsv'
+    local jqExp='.assets | .[] | select(.name | contains("'"$platform"'")) | [.name, .browser_download_url] | @tsv'
     jq -r "$jqExp" </tmp/MEAT.json >/tmp/PIE.txt || echo "jq failed" >&2 && return 1
     read -r -a args </tmp/PIE.txt
     name=${args[0]}
@@ -1162,6 +1175,16 @@ install-awscli ()
     aws configure set default.region "$defaultRegion" || return
     # This command needs to be run as ubuntu, since we want to set the ubuntu user's default region
     su ubuntu --login --command "aws configure set default.region $defaultRegion" || return
+}
+
+
+install-dylt ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: install-dylt [$dstFolder]\n' >&2; return 1; }
+    local dstFolder=${1:-/opt/bin/}
+    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
+    download-dylt "$dstFolder"
 }
 
 
@@ -2296,6 +2319,7 @@ main ()
             init-nginx)	init-nginx "$@";;
             install-app)	install-app "$@";;
             install-awscli)	install-awscli "$@";;
+            install-dylt) install-dylt "$@";;
             install-etcd)	install-etcd "$@";;
             install-flask-app)	install-flask-app "$@";;
             install-fresh-daylight-svc)	install-fresh-daylight-svc "$@";;
