@@ -7,7 +7,7 @@ This means uid 0 = uid 100000 in the container and eg uid 1000 = 101000.
 Anything mapped into the container that is not owned by one of these
 high-number uids will appear in the container as uid/gid = -1, or nobody/nogroup.
 
-Sometimes this isn't the best.
+Sometimes this isn't what you want.
 
 For one, it can be nice for ubuntu (uid 1000) on the host to act as ubuntu in the container as well.
 
@@ -15,5 +15,6 @@ For two, I _think_ there might be some issues with ssh. It might not be possible
 
 Linux has a facility to help with some of this: the shadow subsystem, notably the /etc/subuid and /etc/subgid. Each row in /etc/sub(ug)id is of the form user:baseid:numids. Each of these rows defines a range of userids that the user is able to control.
 
-
+### How to play with id maps
+To have any visibility into what's going on with id maps, the best thing to do is to share a folder from the host VM with an lxd container, and create files on the shared folder from both the host and the container. Playing with this, in conjunction with playing with id maps, is a great way to develop intuition.
 

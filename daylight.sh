@@ -172,17 +172,12 @@ add-user-to-idmap ()
     local container=$2
 
     # Get id-map for the container, concatenate rows to it for the new user, update the idmap
-    local newIdMap; newIdMap=$(mktemp) || return
-    lxc query "/1.0/containers/$container" | jq -r '.expanded_config["raw.idmap"] // empty' | awk NF > "$newIdMap"
-
     local uid; uid=$(id --user "$username") || return
     local gid; gid=$(id --group "$username") || return
-    printf 'uid %d %d\n' "$uid" "$uid" >> "$newIdMap"
-    printf 'gid %d %d\n' "$gid" "$gid" >> "$newIdMap"
-
-    lxc config set "$container" raw.idmap - < <(sort "$newIdMap" | uniq)
-    lxc restart "$container" 2>/dev/null || lxc start "$container"
-    lxc exec "$container" -- cloud-init status --wait
+    local idMapPath; idMapPath=$(lxd-dump-id-map "$container") || return
+    printf 'uid %d %d\n' "$uid" "$uid" >> "$idMapPath"
+    printf 'gid %d %d\n' "$gid" "$gid" >> "$idMapPath"
+    lxd-set-id-map "$container" "$idMapPath"
 }
 
 
@@ -540,6 +535,35 @@ download-app ()
 
 
 #
+# Download daylight script from the specified branch
+#
+download-daylight ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: download-daylight $branch $dstFolder\n' >&2; return 1; }
+    local branch=$1
+    local dstFolder=$2
+    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
+    local org=daylight-public
+    local repo=daylight
+    url="https://raw.githubusercontent.com/$org/$repo/$branch/daylight.sh"
+    curl --location --silent --output-dir "$dstFolder" --remote-name "$url"
+}
+
+#
+# Download latest dylt release
+#
+download-dylt ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: download-dylt [$dstFolder]\n' >&2; return 1; }
+    local dstFolder=${1:-/opt/bin/}
+    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
+    download-latest-release dylt-dev dylt linux_amd64 "$dstFolder"
+}
+
+
+#
 # Download the entire dist folder from S3 to /tmp/dist
 #
 download-dist ()
@@ -595,15 +619,15 @@ download-latest-release ()
     local dstFolder=$4
     local url="https://api.github.com/repos/$org/$repo/releases/latest"
     curl --silent --output /tmp/MEAT.json "$url" || echo "curl failed" >&2
-    local jqExp='.assetsXXX | .[] | select(.name | contains("'"$platform"'")) | [.name, .browser_download_url] | @tsv'
-    jq -r "$jqExp" </tmp/MEAT.json >/tmp/PIE.txt || echo "jq failed" >&2 && return 1
+    local jqExp='.assets | .[] | select(.name | contains("'"$platform"'")) | [.name, .browser_download_url] | @tsv'
+    jq -r "$jqExp" </tmp/MEAT.json >/tmp/PIE.txt || { echo "jq failed" >&2; return 1; }
     read -r -a args </tmp/PIE.txt
     name=${args[0]}
     local urlDownload=${args[1]}
     printf 'name=%s urlDownload=%s\n' "$name" "$urlDownload"
     local tarballPath="/tmp/$name"
-    curl --location --silent --output "$tarballPath" "$urlDownload"
-    tar --directory "$dstFolder" -xzf "$tarballPath"
+    curl --location --silent --output "$tarballPath" "$urlDownload" || return
+    printf '%s' "$tarballPath"
 }
 
 
@@ -1154,6 +1178,16 @@ install-awscli ()
 }
 
 
+install-dylt ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: install-dylt [$dstFolder]\n' >&2; return 1; }
+    local dstFolder=${1:-/opt/bin/}
+    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
+    download-dylt "$dstFolder"
+}
+
+
 install-etcd ()
 {
     # shellcheck disable=SC2016
@@ -1232,6 +1266,19 @@ install-latest-httpie ()
 }
 
 
+install-latest-release ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: install-latest-release $org $repo $platform $dstFolder\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local platform=$3
+    local dstFolder=$4
+    local tarballPath; tarballPath=$(download-latest-release "$org" "$repo" "$platform" "$dstFolder") || return
+    tar -C "$dstFolder" -zxf "$tarballPath"
+}
+
+
 install-mssql-tools ()
 {
     curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
@@ -1244,7 +1291,7 @@ install-mssql-tools ()
 install-pubbo ()
 {
     [[ -d "/opt/bin/" ]] || { echo "Non-existent folder: /opt/bin/" >&2; return 1; }
-    download-latest-release dylt-dev pubbo linux_amd64 /opt/bin/
+    install-latest-release dylt-dev pubbo linux_amd64 /opt/bin/
 }
 
 
@@ -1568,6 +1615,54 @@ list-vms ()
 }
 
 
+lxd-dump-id-map ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: lxd-dump-id-map $container\n' >&2; return 1; }
+    local container=$1
+
+    local idMapPath; idMapPath=$(create-temp-file "$container.idmap.XXXXXX") || return
+    lxc query "/1.0/containers/$container" | jq -r '.expanded_config["raw.idmap"] // empty' | awk NF > "$idMapPath"
+    printf '%s' "$idMapPath"
+}
+
+
+lxd-instance-exists ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: lxc-instance-exists $container\n' >&2; return 1; }
+    local name=$1
+    lxc query "/1.0/instances/$name" >/dev/null 2>&1
+}
+
+
+lxd-set-id-map ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: lxd-set-id-map $container $idMapPath\n' >&2; return 1; }
+    local container=$1
+    local idMapPath=$2
+
+    lxc config set "$container" raw.idmap - < <(sort "$idMapPath" | uniq)
+    lxc restart "$container" 2>/dev/null || lxc start "$container"
+    lxc exec "$container" -- cloud-init status --wait
+}
+
+
+lxd-share-folder ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: lxd-share-folder $container $share $srcDir $dstDir\n' >&2; return 1; }
+    local container=$1
+    lxd-instance-exists  "$container" || { printf 'Non-existent container: %s\n' "$container"; return 1; }
+    local share=$2
+    local srcDir=$3
+    [[ -d "$srcDir" ]] || { echo "Non-existent folder: $srcDir" >&2; return 1; }
+    local dstDir=$4
+    lxc config device add "$container" "$share" disk source="$srcDir" path="$dstDir"
+}
+
+
 prep-filesystem ()
 {
     mkdir -p /etc/nginx/streams.d/
@@ -1610,6 +1705,8 @@ pull-app ()
 
 #
 # Download and source the latest daylight.sh from S3. Crucial for debugging.
+#
+# DEPRECATED - use download-daylight instead
 #
 pull-daylight ()
 {
@@ -2235,6 +2332,7 @@ main ()
             init-nginx)	init-nginx "$@";;
             install-app)	install-app "$@";;
             install-awscli)	install-awscli "$@";;
+            install-dylt) install-dylt "$@";;
             install-etcd)	install-etcd "$@";;
             install-flask-app)	install-flask-app "$@";;
             install-fresh-daylight-svc)	install-fresh-daylight-svc "$@";;
