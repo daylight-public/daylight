@@ -619,7 +619,7 @@ download-latest-release ()
     local dstFolder=$4
     local url="https://api.github.com/repos/$org/$repo/releases/latest"
     curl --silent --output /tmp/MEAT.json "$url" || echo "curl failed" >&2
-    local jqExp='.assetsXXX | .[] | select(.name | contains("'"$platform"'")) | [.name, .browser_download_url] | @tsv'
+    local jqExp='.assets | .[] | select(.name | contains("'"$platform"'")) | [.name, .browser_download_url] | @tsv'
     jq -r "$jqExp" </tmp/MEAT.json >/tmp/PIE.txt || echo "jq failed" >&2 && return 1
     read -r -a args </tmp/PIE.txt
     name=${args[0]}
