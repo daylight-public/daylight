@@ -551,6 +551,19 @@ download-daylight ()
 }
 
 #
+# Download latest dylt release
+#
+download-dylt ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: download-dylt [$dstFolder]\n' >&2; return 1; }
+    local dstFolder=${1:-/opt/bin/}
+    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
+    download-latest-release dylt-dev dylt "$dstFolder"
+}
+
+
+#
 # Download the entire dist folder from S3 to /tmp/dist
 #
 download-dist ()
@@ -1162,6 +1175,16 @@ install-awscli ()
     aws configure set default.region "$defaultRegion" || return
     # This command needs to be run as ubuntu, since we want to set the ubuntu user's default region
     su ubuntu --login --command "aws configure set default.region $defaultRegion" || return
+}
+
+
+install-dylt ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: install-dylt [$dstFolder]\n' >&2; return 1; }
+    local dstFolder=${1:-/opt/bin/}
+    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
+    download-dylt "$dstFolder"
 }
 
 
