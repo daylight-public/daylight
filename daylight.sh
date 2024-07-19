@@ -1275,6 +1275,7 @@ install-latest-release ()
     local platform=$3
     local dstFolder=$4
     local tarballPath; tarballPath=$(download-latest-release "$org" "$repo" "$platform" "$dstFolder") || return
+    tar -C "$dstFolder" -zxf "$tarballPath"
 }
 
 
