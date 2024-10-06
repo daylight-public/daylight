@@ -720,6 +720,11 @@ edit-daylight ()
 
 
 
+# Download a release of etcd from the specified URL.
+#
+# @Note this function changes the name of the release file to 
+# etcd-release.tar.gz. This guarantees a consistent file name,
+# but losing the version might not be a good tradeoff.
 etcd-download-release ()
 {
     # shellcheck disable=SC2016
@@ -733,6 +738,8 @@ etcd-download-release ()
 }
 
 
+# Generate an etcd script to join an existing cluster, using a heredoc
+# template.
 etcd-gen-join-script ()
 {
     # shellcheck disable=SC2016
@@ -754,6 +761,7 @@ etcd-gen-join-script ()
 		--listen-peer-urls http://$etcd_ip:2380 \
 		--data-dir /var/lib/etcd/
 	EOT
+    # Note the line continuations - this is all one command
 	etcd_disc_svr=$etcdDiscSvr \
 	etcd_ip=$etcdIp \
 	etcd_name=$etcdName \
@@ -761,6 +769,8 @@ etcd-gen-join-script ()
 }
 
 
+# Generate an etcd script to join an new cluster, using a heredoc
+# template.
 etcd-gen-run-script ()
 {
     # shellcheck disable=SC2016
@@ -770,7 +780,7 @@ etcd-gen-run-script ()
     local etcdName=$3
     local runEtcdScriptTmplPath; runEtcdScriptTmplPath=$(mktemp --tmpdir=/tmp/ run-etcd.sh.tmpl.XXXXXX) || return
     cat >"$runEtcdScriptTmplPath" <<- 'EOT'
-    #! /usr/bin/env bash
+	#! /usr/bin/env bash
 	/opt/etcd/etcd \
 		--name "$etcd_name" \
 		--discovery-srv "$etcd_disc_svr" \
@@ -781,7 +791,7 @@ etcd-gen-run-script ()
 		--listen-client-urls http://$etcd_ip:2379,http://127.0.0.1:2379 \
 		--listen-peer-urls http://$etcd_ip:2380 \
 		--data-dir /var/lib/etcd/
-	EOT
+		EOT
     etcd_disc_svr=$etcdDiscSvr \
     etcd_ip=$etcdIp \
     etcd_name=$etcdName \
@@ -789,6 +799,11 @@ etcd-gen-run-script ()
 }
 
 
+# Generate a systemd etcd unit file a from the heredoc template
+#
+# This is very boilerplate. All the goodness is in the run.sh
+# script references in ExecStart
+#
 etcd-gen-unit-file ()
 {
     local unitFilePath; unitFilePath=$(mktemp --tmpdir=/tmp/ etcd.service.XXXXXX) || return
@@ -810,19 +825,30 @@ etcd-gen-unit-file ()
 	EOT
 }
 
-
+# Statically create the URL from which to download a specific version of etcd.
+#
+# An optional $platform argument is supported as well. If omitted it defaults to
+# linux-amd64.
+# 
+# @Note this seems like it could be further parameterized on org+repo and used
+# generally
 etcd-get-download-url ()
 {
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: etcd-get-download-url $version\n' >&2; return 1; }
+    # shellcheck disable=SC2016
+    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: etcd-get-download-url $version [platform]\n' >&2; return 1; }
     local version=$1
+    local platform=${2:-'linux-amd64'}
 
     local GITHUB_URL=https://github.com/etcd-io/etcd/releases/download
-    local downloadUrl=${GITHUB_URL}/${version}/etcd-${version}-linux-amd64.tar.gz
+    local downloadUrl=${GITHUB_URL}/${version}/etcd-${version}-${platform}.tar.gz
     printf '%s' "$downloadUrl"
 }
 
-
+# Dynamically get the version number for the latest etcd release.
+#
+# @Note this seems like it could be further parameterized on org+repo and used
+# generally
 etcd-get-latest-version ()
 {
     command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq"; return 255; }
@@ -831,6 +857,8 @@ etcd-get-latest-version ()
 }
 
 
+# @Note this logic is elsewhere in this script. Maybe it can be extracted and
+# to build this function
 etcd-install-as-service ()
 {
     :
@@ -843,6 +871,7 @@ etcd-install-as-service ()
 }
 
 
+# Install an etcd release tarball into the specified folder
 etcd-install-release ()
 {
     # shellcheck disable=SC2016
@@ -855,6 +884,11 @@ etcd-install-release ()
 }
 
 
+# etcd needs a data directory set up, and chown'd to ubuntu. Otherwise it 
+# would be owned by root which is problematic.
+#
+# @Note etcd has a standard folder it uses by default. It might be good to
+# default to that value as well.
 etcd-setup-data-dir ()
 {
     # shellcheck disable=SC2016
@@ -1188,6 +1222,16 @@ install-dylt ()
 }
 
 
+# Install etcd from source
+#   - Get latest version
+#   - Get the URL for the latest release
+#   - Download the tarball of the latest release
+#   - Install the release in the specified install folder
+#   - Setup the data directory
+#   - Generate the systemd unit file
+#   - Generate a run script specifying the DNS SRV name for the cluster
+#   - Setup permissions
+#   - Enable + start the service
 install-etcd ()
 {
     # shellcheck disable=SC2016
@@ -1202,14 +1246,15 @@ install-etcd ()
     sudo mkdir -p $installFolder
     sudo chown -R ubuntu:ubuntu $installFolder
     etcd-install-release "$releasePath" "$installFolder"
+	sudo rm -r /var/lib/etcd
     etcd-setup-data-dir /var/lib/etcd
-    mkdir -p /opt/svc/etcd/
+    sudo mkdir -p /opt/svc/etcd/
+    chown -R ubuntu:ubuntu /opt/svc/etcd/
     etcd-gen-unit-file >/opt/svc/etcd/etcd.service
     etcd-gen-run-script $discSvr $ip $name >/opt/svc/etcd/run.sh
     chmod 755 /opt/svc/etcd/run.sh
-    chown -R ubuntu:ubuntu /opt/svc/etcd/
-    systemctl enable /opt/svc/etcd/etcd.service
-    systemctl start etcd
+    sudo systemctl enable /opt/svc/etcd/etcd.service
+    sudo systemctl start etcd
 }
 
 
@@ -2197,6 +2242,10 @@ sys-start ()
 }
 
 
+# Uninstall an installed etcd service.
+#
+# @Note this doesn't do any checking to see if any of the assets exist.
+# And it probably should.
 uninstall-etcd ()
 {
     systemctl stop etcd

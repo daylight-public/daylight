@@ -1,5 +1,7 @@
 ## How to Create an lxd host VM
 
+[DIY Storage Pools](#diy-storage-pools)
+
 _There are 2 kinds of 'How To LXD' information out there. The first is reference material that tells you everything. The second is quickstart material that gets you up and going as fast as possible. The first is too long to ever read in its entirety. The second is too short to leave you understanding anything at all about the lxd system you've just unleashed. The result is no one ever looks at the first kind of info, and they instead barrel ahead in relative ignorance with quickstarts, ending up with a system they don't understand, and that all-to-familiar dread-and-anxiety of being responsible for a system you can't fix and you have to hope always magically works, and never breaks in soul-crushing ways._
 
 _What's needed is a variety of opinionated 'How To LXD' guides, that skip what you don't need to know, and force you to learn about the things you don't want to learn about but will be very glad that you did._

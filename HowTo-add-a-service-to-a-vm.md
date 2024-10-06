@@ -21,7 +21,7 @@ There are 2 main VM setup files to look at: `prep-host-vm.sh` and `create-lxd-vm
 
 ## VM-level setup
 
-We seen to be seeing the same files repeatedly: `on-install.sh` and `on-commit.sh`. Let's have a look.
+We seem to be seeing the same files repeatedly: `on-install.sh` and `on-commit.sh`. Let's have a look.
 
 #### `on-install.sh`
 Designed to be run once per service.
