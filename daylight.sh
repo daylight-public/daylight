@@ -237,6 +237,7 @@ create-github-user-access-token ()
 {
     client_id=Iv1.f69b43d6e5f4ea24
     s="$(http --body POST https://github.com/login/device/code?client_id=$client_id | tail -n 1)"
+    # shellcheck source=/dev/null
     source <(python3 -m parse_query_string --names device_code user_code verification_uri --output env <<<"$s")
     # shellcheck disable=SC2154
     printf 'Please visit %s and enter the user code %s ...' "$verification_uri" "$user_code"
@@ -244,6 +245,7 @@ create-github-user-access-token ()
     grant_type=urn:ietf:params:oauth:grant-type:device_code
     # shellcheck disable=SC2154
     s="$(http --body post "https://github.com/login/oauth/access_token?client_id=$client_id&device_code=$device_code&grant_type=$grant_type")"
+    # shellcheck source=/dev/null
     source <(python3 -m parse_query_string --names access_token refresh_token --output env <<<"$s")
 }
 
@@ -397,7 +399,7 @@ mkdir -p "$socketFolder"
 EOT
     # envsubst to create the final script
     filePath=$filePath socketPath=$socketPath svcName=$svcName socketFolder=$socketFolder envsubst <"$mainScriptTmplPath" >"/opt/svc/$svcName/bin/main.sh"
-    chmod 777 /opt/svc/$svcName/bin/main.sh
+    chmod 777 "/opt/svc/$svcName/bin/main.sh"
 
     # catdoc the nginx stream config file
     local streamCfgTmplPath; streamCfgTmplPath=$(mktemp --tmpdir= .XXXXXX) || return
@@ -807,7 +809,7 @@ etcd-gen-run-script ()
 etcd-gen-unit-file ()
 {
     local unitFilePath; unitFilePath=$(mktemp --tmpdir=/tmp/ etcd.service.XXXXXX) || return
-    cat <<- 'EOT'
+    cat >"$unitFilePath" <<- 'EOT'
     [Unit]
     Description=etcd service
     Documentation=https://github.com/coreos/etcd
@@ -1168,6 +1170,30 @@ init-lxd ()
 }
 
 
+incus-create-ssh-profile ()
+{
+	# shellcheck disable=SC2016
+	{ (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: incus-create-www-profile [$sshPort]\n' >&2; return 1; }
+	local sshPort=${1:-22}
+    # profile: serve HTTP/S
+    incus profile create www || return
+    incus profile device add www ssh proxy listen="tcp:0.0.0.0:$sshPort" connect=tcp:127.0.0.1:22 || return
+}
+
+
+incus-create-www-profile ()
+{
+	# shellcheck disable=SC2016
+	{ (( $# >= 0 )) && (( $# <= 2 )); } || { printf 'Usage: incus-create-www-profile [$httpPort [$httpsPort]]\n' >&2; return 1; }
+	local httpPort=${1:-80}
+	local httpsPort=${2:-443}
+    # profile: serve HTTP/S
+    incus profile create www || return
+    incus profile device add www http proxy listen"=tcp:0.0.0.0:$httpPort" connect=tcp:127.0.0.1:80 || return
+    incus profile device add www https proxy listen="tcp:0.0.0.0:$httpsPort" connect=tcp:127.0.0.1:443 || return
+}
+
+
 init-nginx ()
 {
     :
@@ -1251,7 +1277,7 @@ install-etcd ()
     sudo mkdir -p /opt/svc/etcd/
     chown -R ubuntu:ubuntu /opt/svc/etcd/
     etcd-gen-unit-file >/opt/svc/etcd/etcd.service
-    etcd-gen-run-script $discSvr $ip $name >/opt/svc/etcd/run.sh
+    etcd-gen-run-script "$discSvr" "$ip" "$name" >/opt/svc/etcd/run.sh
     chmod 755 /opt/svc/etcd/run.sh
     sudo systemctl enable /opt/svc/etcd/etcd.service
     sudo systemctl start etcd
@@ -1286,8 +1312,8 @@ install-fresh-daylight-svc ()
     sudo chown -R ubuntu:ubuntu /opt/svc/fresh-daylight
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.service"
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.timer"
-    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight/bin "$repo/svc/fresh-daylight/bin/main.sh"
-    chmod 777 /opt/svc/fresh-daylight/bin/main.sh
+    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight/bin "$repo/svc/fresh-daylight/bin/run.sh"
+    chmod 777 /opt/svc/fresh-daylight/bin/run.sh
     sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
     sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
     sudo systemctl start fresh-daylight.timer
@@ -1637,6 +1663,26 @@ list-conf-scripts ()
 }
 
 
+list-git-repos () 
+{ 
+	# shellcheck disable=SC2016
+	{ (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: list-git-remotes $repo [$shrHome]\n' >&2; return 1; }
+    repo=$1;
+    shrHome=${2:-/opt/actions-runner/_work};
+    shrPath="$shrHome/$repo/$repo";
+    git -C "$shrPath" remote --verbose
+}
+
+
+list-shr-entries () 
+{ 
+	# shellcheck disable=SC2016
+	{ (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: list-shr-entries [shrHome]\n' >&2; return 1; }
+    shrHome=${1:-/opt/actions-runner/_work};
+
+    ( cd "$shrHome" && find . -mindepth 1 -maxdepth 1 -type d -regex '^\./[A-Za-z0-9].*$' )
+}
+
 list-public-keys ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -1757,6 +1803,7 @@ pull-daylight ()
 {
     curl -s https://raw.githubusercontent.com/daylight-public/daylight/master/daylight.sh >/usr/bin/daylight.sh
     chmod 777 /usr/bin/daylight.sh
+    # shellcheck source=/dev/null
     source /usr/bin/daylight.sh
 }
 
@@ -1801,7 +1848,7 @@ pull-git-repo ()
      local repo="${BASH_REMATCH[2]}";
     local repoUrl="https://$username:$token@github.com/$account/$repo"
     local repoFolder="$HOME/src/github.com/$account"
-    local repoPath="$repoFolder/$repo"
+    # local repoPath="$repoFolder/$repo"
 
      mkdir -p "$repoFolder" || return;
      git -C "$repoFolder" clone "$repoUrl" || return;
@@ -1829,15 +1876,15 @@ pull-image ()
 
     # Both the base and the image can be of the form repo:name or just name.
     # Dealing with that is simple but it takes a few lines of bash.
-    local baseRepo
-    local baseName
-    if [[ "$base" == *:* ]]; then
-        baseRepo="${base%%:*}"
-        baseName="${base##*:}"
-    else
-        baseRepo='local'
-        baseName="$base"
-    fi
+    # local baseRepo
+    # local baseName
+    # if [[ "$base" == *:* ]]; then
+    #     baseRepo="${base%%:*}"
+    #     baseName="${base##*:}"
+    # else
+    #     baseRepo='local'
+    #     baseName="$base"
+    # fi
 
     local imageRepo
     local imageName
@@ -2144,25 +2191,26 @@ setup-domain ()
     local email=$3
 
     # Create the nginx unit file, write it to /etc/nginx/sites-available, and symlink to /etc/nginx/sites-enabled
-    /opt/bin/nginxer "$domain" "$port" 2>/dev/null | cat - >/etc/nginx/sites-available/$domain
-    ln -sf /etc/nginx/sites-available/$domain /etc/nginx/sites-enabled/$domain
+    /opt/bin/nginxer "$domain" "$port" 2>/dev/null | cat - >"/etc/nginx/sites-available/$domain"
+    ln -sf "/etc/nginx/sites-available/$domain" "/etc/nginx/sites-enabled/$domain"
     # User certbot to create the cert files and update the nginx unit files
     /opt/venv/main/bin/certbot --nginx -n --agree-tos --domain "$domain" --email "$email"
     # Create tar file of cert files
-    tar -C /etc/letsencrypt/ -czf /tmp/setup/$domain-certs.tar.gz \
-        ./archive/$domain \
-        ./live/$domain \
-        ./renewal/$domain.conf
+    tar -C /etc/letsencrypt/ -czf "/tmp/setup/$domain-certs.tar.gz" \
+        "./archive/$domain" \
+        "./live/$domain" \
+        "./renewal/$domain.conf"
     # Create tar file of nginx unit files
-    tar -C /etc/nginx/ -czf /tmp/setup/$domain-nginx.tar.gz \
-        ./sites-available/$domain \
-        ./sites-enabled/$domain
+    tar -C /etc/nginx/ -czf "/tmp/setup/$domain-nginx.tar.gz" \
+        "./sites-available/$domain" \
+        "./sites-enabled/$domain"
 }
 
 
 source-daylight ()
 {
     local daylightPath; daylightPath=$(command -v daylight.sh) || return
+    # shellcheck source=/dev/null
     source "$daylightPath"
 }
 
@@ -2174,6 +2222,7 @@ source-service-environment-file ()
     local name=$1
 
     set -a
+    # shellcheck source=/dev/null
     source "$(get-service-environment-file "$name")"
     set +a
 }
@@ -2306,6 +2355,7 @@ if [[ ! -f /opt/bin/daylight.sh  &&  -t 0 ]]; then
     printf '\n' 
     url=https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
     curl --silent --remote-name --output-dir /opt/bin "$url"
+    # shellcheck source=/dev/null
     source /opt/bin/daylight.sh
     printf '%s\n' "Installing fresh-daylight service ..."
     printf '\n' 

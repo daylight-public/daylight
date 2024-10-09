@@ -64,3 +64,4 @@ That's it!
 |`add-ssh-to-container`|`lxc config` incantation necessary to set an ssh proxy to a container on a specified port.
 |`gen-nginx-static`|`nginx` snippet for setting up a server on a Unix domain, and proxying an https:/domain to it (basically a 2-liner server block associating a `.sock` file with a path of content; 
 |`prep-vm-host.sh`|Magical magic that creates a GitHub access token and a GitHub SHR token, and does plenty of other useful stuff
+|`setup-domain`| Very useful `tar` invocations for tarballing necessary certbot files and  
