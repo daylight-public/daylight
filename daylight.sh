@@ -2410,10 +2410,15 @@ watch-daylight-gen-run-script ()
 
 	main () 
 	{ 
+        printf "Downloading current script ...";
+        /opt/etcd/etcdctl \
+            --discovery-srv hello.dylt.dev \
+            get --print-value-only daylight.sh >/opt/bin/daylight.sh || return
+        printf 'Watching for further updates ....'
 	    /opt/etcd/etcdctl \
 	        --discovery-srv hello.dylt.dev \
 	        watch daylight.sh \
-	            -- sh -c '{ printf "Downloading update ..."; /opt/etcd/etcdctl --discovery-srv hello.dylt.dev get daylight.sh >/opt/bin/daylight.sh; printf "Complete.\n"; }' || return
+	            -- sh -c '{ printf "Downloading update ..."; /opt/etcd/etcdctl --discovery-srv hello.dylt.dev get --print-value-only daylight.sh >/opt/bin/daylight.sh; printf "Complete.\n"; }' || return`
 	}
 
 	main "$@"
@@ -2450,22 +2455,6 @@ watch-daylight-install-service ()
     sudo systemctl enable "$svcFolder/$svc.service"
     sudo systemctl start "$svc"
 
-}
-
-#
-# If daylight is invoked as a command, well all right then
-#
-old-main ()
-{
-    if (( $# >= 1 )); then
-        set -ux
-        cmd=$1
-        shift
-        case "$cmd" in
-            install-vm) install-vm "$@";;
-            *) printf 'Unknown command: %s \n' "$cmd";;
-        esac
-    fi
 }
 
 
@@ -2539,7 +2528,7 @@ main ()
             edit-daylight)	edit-daylight "$@";;
             etcd-gen-run-script) etcd-gen-run-script "$@";;
             etcd-gen-unit-file) etcd-gen-unit-file "$@";;
-			etcd-install-latest) etcd-install-latest "$@";;
+            etcd-install-latest) etcd-install-latest "$@";;
             gen-nginx-flask)	gen-nginx-flask "$@";;
             gen-nginx-static)	gen-nginx-static "$@";;
             generate-unit-file)	generate-unit-file "$@";;
