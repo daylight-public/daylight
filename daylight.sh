@@ -1172,7 +1172,6 @@ github-download-latest-release ()
     read -r -a args < <(curl --silent "$url" | jq -r --arg platform "$platform" '.assets[] | select(.name | contains($platform)) | [.name, .browser_download_url] | @tsv')
     name=${args[0]}
     local urlDownload=${args[1]}
-    printf 'name=%s urlDownload=%s\n' "$name" "$urlDownload"
     local releasePath="$downloadFolder/$name"
     curl --location --silent --output "$releasePath" "$urlDownload" || return
     printf '%s' "$releasePath"
@@ -1220,9 +1219,6 @@ github-install-latest-release ()
     tar -C "$installFolder" -xzf "$releasePath"
 	printf '%s' "$installFolder"
 }
-
-
-
 
 
 hello ()
