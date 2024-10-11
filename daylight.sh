@@ -874,10 +874,10 @@ etcd-get-latest-version ()
 
 # @Note this logic is elsewhere in this script. Maybe it can be extracted and
 # to build this function
-etcd-install-as-service ()
+etcd-install-service ()
 {
     # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: etcd-install-as-service $discSvr $name $ip\n' >&2; return 1; }
+    (( $# == 3 )) || { printf 'Usage: etcd-install-service $discSvr $name $ip\n' >&2; return 1; }
     local discSvr=$1
     local name=$2
     local ip=$3
@@ -1372,7 +1372,7 @@ install-etcd ()
     # Handle the data directory
     etcd-setup-data-dir /var/lib/etcd
     # Create & start a systemd service
-    etcd-install-as-service "$discSvr" "$name" "$ip"
+    etcd-install-service "$discSvr" "$name" "$ip"
 }
 
 
@@ -2404,6 +2404,55 @@ update-and-restart ()
     reboot
 }
 
+
+watch-daylight-gen-run-script ()
+{
+    cat <<- 'EOT'
+	#! /usr/bin/env bash -x
+
+	main () 
+	{ 
+	    /opt/etcd/etcdctl \
+	        --discovery-srv hello.dylt.dev \
+	        watch daylight.sh \
+	            -- sh -c '{ printf "Downloading update ..."; /opt/etcd/etcdctl --discovery-srv hello.dylt.dev get daylight.sh >/opt/bin/daylight.sh; printf "Complete.\n"; }' || return
+	}
+
+	main "$@"
+
+	EOT
+}
+
+watch-daylight-gen-unit-file ()
+{
+    cat <<- "EOT"
+	[Unit]
+	Description=Watch cluster for daylight.sh 
+
+	[Service]
+	ExecStart=/opt/svc/watch-daylight/run.sh
+	Type=exec
+	User=ubuntu
+	WorkingDirectory=/opt/svc/watch-daylight
+
+	[Install]
+	WantedBy=multi-user.target
+	EOT
+}
+
+watch-daylight-install-service ()
+{
+	local svc=watch-daylight
+	local svcFolder="/opt/svc/$svc"
+	mkdir -p "$svcFolder"
+    chown -R ubuntu:ubuntu "$svcFolder/"
+    watch-daylight-gen-unit-file >"$svcFolder/$svc.service"
+    watch-daylight-gen-run-script >"$svcFolder/run.sh"
+    chmod 755 "$svcFolder/run.sh"
+    sudo systemctl enable "$svcFolder/$svc"
+    sudo systemctl start "$svc"
+
+}
 
 #
 # If daylight is invoked as a command, well all right then

@@ -1,15 +1,13 @@
-To download `daylight.sh` to `/opt/bin` ...
-```
-curl --silent --remote-name --output-dir /opt/bin https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
-```
-
-To create the `daylight.sh` download folder, download `daylight.sh`, and install the `fresh-daylight` service to download updates ...
+Download `daylight.sh` to `/opt/bin`
 ```
 sudo mkdir -p /opt/bin/
 sudo chown -R ubuntu:ubuntu /opt/bin/
-curl --remote-name --output-dir /opt/bin https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
+curl --silent --remote-name --output-dir /opt/bin https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
 ```
 
-To download and run the script like a maniac ...
+Use `daylight.sh` to install etcd
+/opt/bin/daylight.sh etcd-install-latest
 ```
-curl --silent /opt/bin/daylight.sh https://raw.githubusercontent.com/daylight-public/daylight/sentience/daylight.sh | bash
+
+Use `daylight.sh` to install `watch-daylight` which will keep `daylight.sh` updated from etcd
+/opt/bin/daylight.sh watch-daylight-install-service
