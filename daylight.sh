@@ -493,16 +493,18 @@ create-temp-file ()
 }
 
 
+# shellcheck disable=SC2120 # It's valid and common to use this function with 0 arguments
 create-temp-folder ()
 {
     # shellcheck disable=SC2016
-    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: create-temp-file $template [$folder]\n' >&2; return 1; }
-    template=$1
-    folder=$2
-    if [[ -n "$folder" ]]; then
-        mktemp --directory --tmpdir="$folder" "$template"
-    else
+    { (( $# >= 0 )) && (( $# <= 2 )); } || { printf 'Usage: create-temp-file $template [$template [$folder]]\n' >&2; return 1; }
+    if (( $# == 0)); then
+        mktemp --directory
+    elif (( $# == 1)); then
+        template=$0
         mktemp --directory -t "$template"
+    else
+        mktemp --directory --tmpdir="$folder" "$template"
     fi
 }
 
@@ -704,9 +706,10 @@ etcd-download-latest ()
 {
     # shellcheck disable=SC2016
     { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-download-latest [$downloadFolder]\n' >&2; return 1; }
-    local version; version=$(etcd-get-latest-version) || return
-    local downloadUrl; downloadUrl=$(etcd-get-download-url "$version") || return
-    local releasePath; releasePath=$(etcd-download-release "$downloadUrl") || return
+    local downloadFolder=${1:-/tmp}
+    local org=etcd-io
+    local repo=etcd
+    local releasePath; releasePath=$(github-download-latest-release "$org" "$repo" "$downloadFolder")
     printf '%s' "$releasePath"
 }
 
@@ -765,30 +768,51 @@ etcd-gen-join-script ()
 etcd-gen-run-script ()
 {
     # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: etcd-gen-run-script $etcd_disc_svr $etcd_ip $etcd_name\n' >&2; return 1; }
-    local etcdDiscSvr=$1
-    local etcdIp=$2
-    local etcdName=$3
-    local runEtcdScriptTmplPath; runEtcdScriptTmplPath=$(mktemp --tmpdir=/tmp/ run-etcd.sh.tmpl.XXXXXX) || return
-    cat >"$runEtcdScriptTmplPath" <<- 'EOT'
+    (( $# == 5 )) || { printf 'Usage: etcd-gen-run-script $etcd_disc_svr $etcd_ip $etcd_name $initialState $dataDir\n' >&2; return 1; }
+    local discSvr=$1
+    local ip=$2
+    local name=$3
+    local initialState=$4
+    local dataDir=$5
+    cat <<- EOT
 	#! /usr/bin/env bash
-	/opt/etcd/etcd \
-		--name "$etcd_name" \
-		--discovery-srv "$etcd_disc_svr" \
-		--initial-advertise-peer-urls http://$etcd_ip:2380 \
-		--initial-cluster-token hello \
-		--initial-cluster-state new \
-		--advertise-client-urls http://$etcd_ip:2379 \
-		--listen-client-urls http://$etcd_ip:2379,http://127.0.0.1:2379 \
-		--listen-peer-urls http://$etcd_ip:2380 \
-		--data-dir /var/lib/etcd/
+	/opt/etcd/etcd \\
+		--name "$name" \\
+		--discovery-srv "$discSvr" \\
+		--initial-advertise-peer-urls http://$ip:2380 \\
+		--initial-cluster-token hello \\
+		--initial-cluster-state $initialState \\
+		--advertise-client-urls http://$ip:2379 \\
+		--listen-client-urls http://$ip:2379,http://127.0.0.1:2379 \\
+		--listen-peer-urls http://$ip:2380 \\
+		--data-dir "$dataDir"
 		EOT
-    etcd_disc_svr=$etcdDiscSvr \
-    etcd_ip=$etcdIp \
-    etcd_name=$etcdName \
-    envsubst <"$runEtcdScriptTmplPath"
 }
 
+    # (( $# == 4 )) || { printf 'Usage: etcd-gen-run-script $etcd_disc_svr $etcd_ip $etcd_name $initialState\n' >&2; return 1; }
+    # local etcdDiscSvr=$1
+    # local etcdIp=$2
+    # local etcdName=$3
+    # local initialState=$4
+    # local runEtcdScriptTmplPath; runEtcdScriptTmplPath=$(mktemp --tmpdir=/tmp/ run-etcd.sh.tmpl.XXXXXX) || return
+    # cat >"$runEtcdScriptTmplPath" <<- 'EOT'
+	# #! /usr/bin/env bash
+	# /opt/etcd/etcd \
+	# 	--name "$etcd_name" \
+	# 	--discovery-srv "$etcd_disc_svr" \
+	# 	--initial-advertise-peer-urls http://$etcd_ip:2380 \
+	# 	--initial-cluster-token hello \
+	# 	--initial-cluster-state $initial_state \
+	# 	--advertise-client-urls http://$etcd_ip:2379 \
+	# 	--listen-client-urls http://$etcd_ip:2379,http://127.0.0.1:2379 \
+	# 	--listen-peer-urls http://$etcd_ip:2380 \
+	# 	--data-dir /var/lib/etcd/
+	# 	EOT
+    # etcd_disc_svr=$etcdDiscSvr \
+    # etcd_ip=$etcdIp \
+    # etcd_name=$etcdName \
+    # initial_state=$initialState \
+    # envsubst <"$runEtcdScriptTmplPath"
 
 # Generate a systemd etcd unit file a from the heredoc template
 #
@@ -852,13 +876,17 @@ etcd-get-latest-version ()
 # to build this function
 etcd-install-as-service ()
 {
-    :
-    # Generate run file from template ... or use an existing run file that got generated in a previous step
-
-    # Generate unit file from a heredoc
-
-    # systemctl enable /opt/svc/etcd/etcd.service
-    # ssytemctl sttart etcd
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: etcd-install-as-service $discSvr $name $ip\n' >&2; return 1; }
+    local discSvr=$1
+    local name=$2
+    local ip=$3
+    chown -R ubuntu:ubuntu /opt/svc/etcd/
+    etcd-gen-unit-file >/opt/svc/etcd/etcd.service
+    etcd-gen-run-script "$discSvr" "$ip" "$name" "existing" >/opt/svc/etcd/run.sh
+    chmod 755 /opt/svc/etcd/run.sh
+    sudo systemctl enable /opt/svc/etcd/etcd.service
+    sudo systemctl start etcd
 }
 
 
@@ -882,15 +910,12 @@ etcd-install-latest-release ()
     # shellcheck disable=SC2016
     { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-install-latest-release [$installFolder]\n' >&2; return 1; }
     local installFolder=${1:-/opt/etcd/}
-
-    local releasePath; releasePath=$(etcd-download-latest) || return;
-
-    (( $# == 2 )) || { printf 'Usage: etcd-install-release $releasePath $installFolder\n' >&2; return 1; }
-    local releasePath=$1
-    local installFolder=$2
-    [[ -f "$releasePath" ]] || { echo "Non-existent path: $releasePath" >&2; return 1; }
-    [[ -d "$installFolder" ]] || { printf 'Non-existent folder: %s\n' "$installFolder" >&2; return 1; }
-    tar --gunzip --extract --file "$releasePath" --directory "$installFolder" --strip-components=1
+    local org=etcd-io
+    local repo=etcd
+    local platform=linux-amd64
+    sudo mkdir -p "$installFolder"
+    sudo chown -R ubuntu:ubuntu "$installFolder"
+    github-install-latest-release "$org" "$repo" "$platform" "$installFolder"
 }
 
 
@@ -902,10 +927,15 @@ etcd-install-latest-release ()
 etcd-setup-data-dir ()
 {
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: etcd-setup-data-dir $dataDir\n' >&2; return 1; }
-    local dataDir=$1    
-    sudo mkdir -p "$dataDir"
-    sudo chown -R ubuntu:ubuntu "$dataDir"
+    # shellcheck disable=SC2016
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-setup-data-dir [$folder]\n' >&2; return 1; }
+    local dataDir=${1:-/var/lib/data/}
+    if [[ -d "$dataDir" ]]; then
+        find "$dataDir" -type f -delete
+    else
+        mkdir -p "$dataDir"
+    fi
+    chown -R ubuntu:ubuntu "$dataDir"
 }
 
 
@@ -1177,6 +1207,23 @@ github-get-releases-url ()
 }
 
 
+github-install-latest-release ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 5 )) || { printf 'Usage: download-latest-release $org $repo $platform $downloadFolder $installFolder\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local platform=$3
+    local installFolder=$4
+    local tmpFolder; tmpFolder=$(create-temp-folder) 
+    local releasePath; releasePath=$(github-download-latest-release "$org" "$repo" "$platform" "$tmpFolder") || return
+    tar -C "$installFolder" -xzf "$releasePath"
+}
+
+
+
+
+
 hello ()
 {
     printf "Hello!\n"
@@ -1320,22 +1367,12 @@ install-etcd ()
     local discSvr=$1
     local ip=$2
     local name=$3
-    local version; version=$(etcd-get-latest-version) || return
-    local downloadUrl; downloadUrl=$(etcd-get-download-url "$version") || return
-    local releasePath; releasePath=$(etcd-download-release "$downloadUrl") || return
-    local installFolder=/opt/etcd
-    sudo mkdir -p $installFolder
-    sudo chown -R ubuntu:ubuntu $installFolder
-    etcd-install-release "$releasePath" "$installFolder"
-	sudo rm -r /var/lib/etcd
+    # Download and install the latest binary
+    etcd-install-latest-release "$installFolder"
+    # Handle the data directory
     etcd-setup-data-dir /var/lib/etcd
-    sudo mkdir -p /opt/svc/etcd/
-    chown -R ubuntu:ubuntu /opt/svc/etcd/
-    etcd-gen-unit-file >/opt/svc/etcd/etcd.service
-    etcd-gen-run-script "$discSvr" "$ip" "$name" >/opt/svc/etcd/run.sh
-    chmod 755 /opt/svc/etcd/run.sh
-    sudo systemctl enable /opt/svc/etcd/etcd.service
-    sudo systemctl start etcd
+    # Create & start a systemd service
+    etcd-install-as-service "$discSvr" "$name" "$ip"
 }
 
 
@@ -1389,19 +1426,6 @@ install-latest-httpie ()
     curl -SsL https://packages.httpie.io/deb/KEY.gpg | gpg --dearmor | tee /etc/apt/trusted.gpg.d/httpie.gpg >/dev/null
     apt update -y
     apt install -y httpie
-}
-
-
-github-install-latest-release ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: install-latest-release $org $repo $platform $dstFolder\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local platform=$3
-    local dstFolder=$4
-    local tarballPath; tarballPath=$(github-download-latest-release "$org" "$repo" "$platform" "$dstFolder") || return
-    tar -C "$dstFolder" -zxf "$tarballPath"
 }
 
 
