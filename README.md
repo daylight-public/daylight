@@ -2,7 +2,7 @@ Download `daylight.sh` to `/opt/bin`
 ```
 sudo mkdir -p /opt/bin/
 sudo chown -R ubuntu:ubuntu /opt/bin/
-curl --silent --remote-name --output-dir /opt/bin https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
+curl --remote-name --output-dir /opt/bin https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
 ```
 
 Use `daylight.sh` to install etcd
