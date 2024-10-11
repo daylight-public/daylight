@@ -908,7 +908,7 @@ etcd-install-latest ()
 {
     # shellcheck disable=SC2016
     # shellcheck disable=SC2016
-    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-install-latest-release [$installFolder]\n' >&2; return 1; }
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-install-latest [$installFolder]\n' >&2; return 1; }
     local installFolder=${1:-/opt/etcd/}
     local org=etcd-io
     local repo=etcd
@@ -1210,14 +1210,15 @@ github-get-releases-url ()
 github-install-latest-release ()
 {
     # shellcheck disable=SC2016
-    (( $# == 5 )) || { printf 'Usage: download-latest-release $org $repo $platform $downloadFolder $installFolder\n' >&2; return 1; }
+    (( $# == 4 )) || { printf 'Usage: github-install-latest-release $org $repo $platform $installFolder $downloadFolder\n' >&2; return 1; }
     local org=$1
     local repo=$2
     local platform=$3
     local installFolder=$4
-    local tmpFolder; tmpFolder=$(create-temp-folder) 
-    local releasePath; releasePath=$(github-download-latest-release "$org" "$repo" "$platform" "$tmpFolder") || return
+	local downloadFolder=${5:-$(create-temp-folder)}
+    local releasePath; releasePath=$(github-download-latest-release "$org" "$repo" "$platform" "$downloadFolder") || return
     tar -C "$installFolder" -xzf "$releasePath"
+	printf '%s' "$installFolder"
 }
 
 
