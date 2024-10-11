@@ -1216,7 +1216,7 @@ github-install-latest-release ()
     local installFolder=$4
 	local downloadFolder=${5:-$(create-temp-folder)}
     local releasePath; releasePath=$(github-download-latest-release "$org" "$repo" "$platform" "$downloadFolder") || return
-    tar -C "$installFolder" -xzf "$releasePath"
+    tar --strip-components=1 -C "$installFolder" -xzf "$releasePath"
 	printf '%s' "$installFolder"
 }
 
@@ -2402,10 +2402,11 @@ update-and-restart ()
 }
 
 
+# Generate a run script for the watch-daylight.service
 watch-daylight-gen-run-script ()
 {
     cat <<- 'EOT'
-	#! /usr/bin/env bash -x
+	#! /usr/bin/env bash
 
 	main () 
 	{ 
@@ -2446,7 +2447,7 @@ watch-daylight-install-service ()
     watch-daylight-gen-unit-file >"$svcFolder/$svc.service"
     watch-daylight-gen-run-script >"$svcFolder/run.sh"
     chmod 755 "$svcFolder/run.sh"
-    sudo systemctl enable "$svcFolder/$svc"
+    sudo systemctl enable "$svcFolder/$svc.service"
     sudo systemctl start "$svc"
 
 }
@@ -2608,11 +2609,12 @@ main ()
             uninstall-etcd)	uninstall-etcd "$@";;
             untar-to-temp-folder)	untar-to-temp-folder "$@";;
             update-and-restart)	update-and-restart "$@";;
+            watch-daylight-gen-run-script) watch-daylight-gen-run-script "$@";;
+            watch-daylight-gen-unit-file) watch-daylight-gen-unit-file "$@";;
+            watch-daylight-install-service) watch-daylight-install-service "$@";;	
             *) printf 'Unknown command: %s \n' "$cmd";;
         esac
     fi
 }
 
 main "$@"
-
-# hi :) :) :)
