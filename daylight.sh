@@ -904,7 +904,7 @@ etcd-install-release ()
 
 
 # Install an etcd release tarball into the specified folder
-etcd-install-latest-release ()
+etcd-install-latest ()
 {
     # shellcheck disable=SC2016
     # shellcheck disable=SC2016
@@ -1368,7 +1368,7 @@ install-etcd ()
     local ip=$2
     local name=$3
     # Download and install the latest binary
-    etcd-install-latest-release "$installFolder"
+    etcd-install-latest "$installFolder"
     # Handle the data directory
     etcd-setup-data-dir /var/lib/etcd
     # Create & start a systemd service
@@ -2541,6 +2541,7 @@ main ()
             edit-daylight)	edit-daylight "$@";;
             etcd-gen-run-script) etcd-gen-run-script "$@";;
             etcd-gen-unit-file) etcd-gen-unit-file "$@";;
+			etcd-install-latest) etcd-install-latest "$@";;
             gen-nginx-flask)	gen-nginx-flask "$@";;
             gen-nginx-static)	gen-nginx-static "$@";;
             generate-unit-file)	generate-unit-file "$@";;
