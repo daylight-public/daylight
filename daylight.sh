@@ -561,7 +561,7 @@ download-dylt ()
     { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: download-dylt [$dstFolder]\n' >&2; return 1; }
     local dstFolder=${1:-/opt/bin/}
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
-    download-latest-release dylt-dev dylt linux_amd64 "$dstFolder"
+    github-download-latest-release dylt-dev dylt linux_amd64 "$dstFolder"
 }
 
 
@@ -608,28 +608,6 @@ download-flask-service ()
     local dir; dir=$(download-to-temp-dir "$s3Url") || return
 
     printf '%s' "$dir"
-}
-
-
-download-latest-release ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: download-latest-release $org $repo $platform $dstFolder\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local platform=$3
-    local dstFolder=$4
-    local url="https://api.github.com/repos/$org/$repo/releases/latest"
-    curl --silent --output /tmp/MEAT.json "$url" || echo "curl failed" >&2
-    local jqExp='.assets | .[] | select(.name | contains("'"$platform"'")) | [.name, .browser_download_url] | @tsv'
-    jq -r "$jqExp" </tmp/MEAT.json >/tmp/PIE.txt || { echo "jq failed" >&2; return 1; }
-    read -r -a args </tmp/PIE.txt
-    name=${args[0]}
-    local urlDownload=${args[1]}
-    printf 'name=%s urlDownload=%s\n' "$name" "$urlDownload"
-    local tarballPath="/tmp/$name"
-    curl --location --silent --output "$tarballPath" "$urlDownload" || return
-    printf '%s' "$tarballPath"
 }
 
 
@@ -720,6 +698,17 @@ edit-daylight ()
     fi
 }
 
+
+# Download latest release
+etcd-download-latest ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-download-latest [$downloadFolder]\n' >&2; return 1; }
+    local version; version=$(etcd-get-latest-version) || return
+    local downloadUrl; downloadUrl=$(etcd-get-download-url "$version") || return
+    local releasePath; releasePath=$(etcd-download-release "$downloadUrl") || return
+    printf '%s' "$releasePath"
+}
 
 
 # Download a release of etcd from the specified URL.
@@ -877,6 +866,25 @@ etcd-install-as-service ()
 etcd-install-release ()
 {
     # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: etcd-install-release $releasePath $installFolder\n' >&2; return 1; }
+    local releasePath=$1
+    local installFolder=$2
+    [[ -f "$releasePath" ]] || { echo "Non-existent path: $releasePath" >&2; return 1; }
+    [[ -d "$installFolder" ]] || { printf 'Non-existent folder: %s\n' "$installFolder" >&2; return 1; }
+    tar --gunzip --extract --file "$releasePath" --directory "$installFolder" --strip-components=1
+}
+
+
+# Install an etcd release tarball into the specified folder
+etcd-install-latest-release ()
+{
+    # shellcheck disable=SC2016
+    # shellcheck disable=SC2016
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-install-latest-release [$installFolder]\n' >&2; return 1; }
+    local installFolder=${1:-/opt/etcd/}
+
+    local releasePath; releasePath=$(etcd-download-latest) || return;
+
     (( $# == 2 )) || { printf 'Usage: etcd-install-release $releasePath $installFolder\n' >&2; return 1; }
     local releasePath=$1
     local installFolder=$2
@@ -1122,6 +1130,53 @@ get-service-working-directory ()
 }
 
 
+github-download-latest-release ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: download-latest-release $org $repo $platform $downloadFolder\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local platform=$3
+    local downloadFolder=$4
+    local url; url="$(github-get-releases-url "$org" "$repo")" || return
+    read -r -a args < <(curl --silent "$url" | jq -r --arg platform "$platform" '.assets[] | select(.name | contains($platform)) | [.name, .browser_download_url] | @tsv')
+    name=${args[0]}
+    local urlDownload=${args[1]}
+    printf 'name=%s urlDownload=%s\n' "$name" "$urlDownload"
+    local releasePath="$downloadFolder/$name"
+    curl --location --silent --output "$releasePath" "$urlDownload" || return
+    printf '%s' "$releasePath"
+}
+
+
+# Dynamically get the version number for the latest etcd release.
+#
+# @Note this seems like it could be further parameterized on org+repo and used
+# generally
+github-get-latest-version-tag ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: github-get-latest-version $org $repo\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    releasesUrl=$(github-get-releases-url "$org" "$repo")
+    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq"; return 255; }
+    local VER; VER=$(curl -L -s "$releasesUrl" | jq -r .tag_name)
+    printf '%s' "$VER"
+}
+
+
+github-get-releases-url ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: github-get-latest-version $org $repo\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local url="https://api.github.com/repos/$org/$repo/releases/latest"
+    printf '%s' "$url"
+}
+
+
 hello ()
 {
     printf "Hello!\n"
@@ -1337,7 +1392,7 @@ install-latest-httpie ()
 }
 
 
-install-latest-release ()
+github-install-latest-release ()
 {
     # shellcheck disable=SC2016
     (( $# == 4 )) || { printf 'Usage: install-latest-release $org $repo $platform $dstFolder\n' >&2; return 1; }
@@ -1345,7 +1400,7 @@ install-latest-release ()
     local repo=$2
     local platform=$3
     local dstFolder=$4
-    local tarballPath; tarballPath=$(download-latest-release "$org" "$repo" "$platform" "$dstFolder") || return
+    local tarballPath; tarballPath=$(github-download-latest-release "$org" "$repo" "$platform" "$dstFolder") || return
     tar -C "$dstFolder" -zxf "$tarballPath"
 }
 
@@ -1362,7 +1417,7 @@ install-mssql-tools ()
 install-pubbo ()
 {
     [[ -d "/opt/bin/" ]] || { echo "Non-existent folder: /opt/bin/" >&2; return 1; }
-    install-latest-release dylt-dev pubbo linux_amd64 /opt/bin/
+    github-install-latest-release dylt-dev pubbo linux_amd64 /opt/bin/
 }
 
 
@@ -2405,7 +2460,6 @@ main ()
             download-dist)	download-dist "$@";;
             download-flask-app)	download-flask-app "$@";;
             download-flask-service)	download-flask-service "$@";;
-            download-latest-release)    download-latest-release "$@";;
             download-public-key)	download-public-key "$@";;
             download-shr-tarball)	download-shr-tarball "$@";;
             download-svc)	download-svc "$@";;
@@ -2426,6 +2480,8 @@ main ()
             get-service-environment-file)	get-service-environment-file "$@";;
             get-service-exec-start)	get-service-exec-start "$@";;
             get-service-working-directory)	get-service-working-directory "$@";;
+            github-download-latest-release)    github-download-latest-release "$@";;
+            github-install-latest-release) github-install-latest-release "$@";;
             hello) hello "$@";;
             init-lxd)	init-lxd "$@";;
             init-nginx)	init-nginx "$@";;
@@ -2487,3 +2543,5 @@ main ()
 }
 
 main "$@"
+
+# hi :) :) :)
