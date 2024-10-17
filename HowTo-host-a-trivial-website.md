@@ -1,3 +1,5 @@
+## How to Host a Trivial Web site
+
 Even trivial Websites need https.
 So you're going to need a LetsEncrypt cert.
 So you're going to need a domain name.

@@ -1739,6 +1739,18 @@ list-conf-scripts ()
 }
 
 
+list-funcs ()
+{
+    grep --extended-regexp \
+          '^[A-Za-z0-9_-]+ \(\)' \
+          /opt/bin/daylight.sh \
+    | grep --extended-regexp \
+           --only-matching \
+           '^[A-Za-z0-9_-]+' \
+    | sort
+}
+
+
 list-git-repos () 
 { 
 	# shellcheck disable=SC2016
@@ -2568,6 +2580,7 @@ main ()
             install-vm)	install-vm "$@";;
             list-apps)	list-apps "$@";;
             list-conf-scripts)	list-conf-scripts "$@";;
+            list-funcs) list-funcs "$@";;
             list-public-keys)	list-public-keys "$@";;
             list-services)	list-services "$@";;
             list-vms)	list-vms "$@";;
