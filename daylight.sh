@@ -2430,7 +2430,7 @@ watch-daylight-gen-run-script ()
 	    /opt/etcd/etcdctl \
 	        --discovery-srv hello.dylt.dev \
 	        watch daylight.sh \
-	            -- sh -c '{ printf "Downloading update ..."; /opt/etcd/etcdctl --discovery-srv hello.dylt.dev get --print-value-only daylight.sh >/opt/bin/daylight.sh; printf "Complete.\n"; }' || return`
+	            -- sh -c '{ printf "Downloading update ..."; /opt/etcd/etcdctl --discovery-srv hello.dylt.dev get --print-value-only daylight.sh >/opt/bin/daylight.sh; printf "Complete.\n"; }' || return
 	}
 
 	main "$@"
