@@ -2434,7 +2434,7 @@ watch-daylight-gen-run-script ()
 	        printf 'Download succeeded. Copying script to final location ...\n'
 	        cp "$tmpfile" /opt/bin/daylight.sh
 	    fi
-	    printf 'Watching for further updates ....'
+	    printf 'Watching for further updates ....\n'
 	    /opt/etcd/etcdctl \
 	        --discovery-srv hello.dylt.dev \
 	        watch daylight.sh \
