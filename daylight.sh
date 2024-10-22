@@ -2418,6 +2418,8 @@ update-and-restart ()
 watch-daylight-gen-run-script ()
 {
     cat <<- "EOT"
+	#! /usr/bin/env bash
+
 	main () 
 	{ 
 	    printf "Downloading current script ...\n";
