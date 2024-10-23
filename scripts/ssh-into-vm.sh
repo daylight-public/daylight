@@ -8,7 +8,7 @@ main ()
     local name=$1
     shift 1
     local host; host=$(./get-host.sh "$user" "$name") || return
-    ssh -t "ubuntu@$host" "$@"
+    ssh -t -o ConnectTimeout=300 "ubuntu@$host" "$@"
 }
 
 main "$@";
