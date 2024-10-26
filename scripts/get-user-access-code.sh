@@ -17,7 +17,7 @@ main ()
     github-get-app-info appInfo "$appSlug"
     declare -p appInfo
 
-    local clientId=${appInfo['client_id']}
+    local clientId=${appInfo[client_id]}
     local -A deviceCodeInfo
     github-get-device-code-info deviceCodeInfo "$clientId"
     declare -p deviceCodeInfo
