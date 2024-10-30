@@ -1160,48 +1160,194 @@ get-service-working-directory ()
 }
 
 
+github-curl ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: github-curl $urlPath [$urlBase]\n' >&2; return 1; }
+    local urlPath=$1
+    local urlBase=${2:-'https://api.github.com'}
+
+    # Trim leading slash
+    if [[ $urlPath == /* ]]; then
+        urlPath=${urlPath:1}
+    fi
+    local url="$urlBase/$urlPath"
+    if [[ -n $GITHUB_ACCESS_TOKEN ]]; then
+        curl --fail-with-body \
+             --location \
+             --silent \
+             --header "Accept: application/json" \
+             --header "Authorization: Token $GITHUB_ACCESS_TOKEN" \
+             "$url" \
+        || return
+    else
+        curl --fail-with-body \
+             --location \
+             --silent \
+             --header "Accept: application/json" \
+             "$url" \
+        || return
+    fi
+}
+
+
+github-curl-post ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-curl $urlPath $postData [$urlBase]\n' >&2; return 1; }
+    local urlPath=$1
+    local postData=$2
+    local urlBase=${3:-'https://api.github.com'}
+
+    # Trim leading slash
+    if [[ $urlPath == /* ]]; then
+        urlPath=${urlPath:1}
+    fi
+    local url="$urlBase/$urlPath"
+    if [[ -n $GITHUB_ACCESS_TOKEN ]]; then
+        curl --fail-with-body \
+             --location \
+             --silent \
+             --data "'$postData'" \
+             --header "Accept: application/json" \
+             --header "Authorization: Token $GITHUB_ACCESS_TOKEN" \
+             "$url" \
+        || return
+    else
+        curl --fail-with-body \
+             --location \
+             --silent \
+             --data "'$postData'" \
+             --header "Accept: application/json" \
+             "$url" \
+        || return
+    fi
+}
+
+
 github-download-latest-release ()
 {
     # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: download-latest-release $org $repo $platform $downloadFolder\n' >&2; return 1; }
+    (( $# == 4 )) || { printf 'Usage: download-latest-release $org $repo $name $downloadFolder\n' >&2; return 1; }
     local org=$1
     local repo=$2
-    local platform=$3
+    local name=$3
     local downloadFolder=$4
-    local url; url="$(github-get-releases-url "$org" "$repo")" || return
-    read -r -a args < <(curl --silent "$url" | jq -r --arg platform "$platform" '.assets[] | select(.name | contains($platform)) | [.name, .browser_download_url] | @tsv')
-    name=${args[0]}
-    local urlDownload=${args[1]}
-    local releasePath="$downloadFolder/$name"
-    curl --location --silent --output "$releasePath" "$urlDownload" || return
+    local urlPath; urlPath="$(github-get-releases-url-path "$org" "$repo")" || return
+    read -r -a args < <(github-curl "$urlPath" \curl --silent  \
+                        | jq -r --arg name "$name" \
+                          '.assets[] 
+                           | select(.name == $name) 
+                           | [.id, .name, .browser_download_url] | @tsv') \
+                        || return
+    local id=${args[0]}
+    local releaseName=${args[1]}
+    local urlDownload=${args[2]}
+    local remoteName=${urlDownload##*/}
+    local releasePath="$downloadFolder/$remoteName"
+    curl --location --silent \
+         --output "$releasePath" \
+         "$urlDownload" \
+         || return
     printf '%s' "$releasePath"
 }
 
 
-# Dynamically get the version number for the latest etcd release.
+github-get-app-data ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: github-get-app-data $appSlug\n' >&2; return 1; }
+    local appSlug=$1
+
+    github-curl "/apps/$appSlug" || return
+}
+
+
+github-get-app-info ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: github-get-app-data $infovar $appSlug\n' >&2; return 1; }
+    local -n _info=$1
+    local appSlug=$2
+
+    declare -a args
+    read -r -a args < <(github-curl "http://api.github.com/apps/$appSlug" \
+                        | jq -r '[.id, .client_id, .slug] | @tsv') \
+        || return
+    _info[id]=${args[0]}
+    _info[client_id]=${args[1]}
+    _info[slug]=${args[2]}
+}
+
+
+github-get-app-client-id ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: github-get-app-id $appSlug\n' >&2; return 1; }
+    local appSlug=$1
+
+    local -A info
+    github-get-app-info info "$appSlug" || return
+    local clientId=${info[client_id]}
+    printf '%s' "$clientId"
+}
+
+
+# Dynamically get the latest release version tag of a repo
 #
-# @Note this seems like it could be further parameterized on org+repo and used
-# generally
-github-get-latest-version-tag ()
+github-get-latest-release-tag ()
 {
     # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: github-get-latest-version $org $repo\n' >&2; return 1; }
     local org=$1
     local repo=$2
-    releasesUrl=$(github-get-releases-url "$org" "$repo")
-    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq"; return 255; }
-    local VER; VER=$(curl -L -s "$releasesUrl" | jq -r .tag_name)
+    releasesUrlPath=$(github-get-releases-url-path "$org" "$repo")
+    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq"; return 1; }
+    local VER; VER=$(github-curl "$releasesUrlPath" \
+                     | jq -r .tag_name)
     printf '%s' "$VER"
 }
 
 
-github-get-releases-url ()
+
+github-get-release-data ()
 {
     # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-get-latest-version $org $repo\n' >&2; return 1; }
+    { (( $# >= 2 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-data $org $repo [$releaseTag [$platform]]\n' >&2; return 1; }
     local org=$1
     local repo=$2
-    local url="https://api.github.com/repos/$org/$repo/releases/latest"
+    local tag=${3:-""}
+    
+    local urlPath; urlPath="$(github-get-releases-url-path "${@:1}")" || return
+    github-curl "$urlPath"
+}
+
+
+github-get-release-name-list ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 3 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-name-list $listVar $org $repo [$tag]\n' >&2; return 1; }
+    local -n list=$1
+    # ${@:2} trick to deal with the optional tag arg
+    read -r -a list < <(github-get-release-data "${@:2}" \
+                      | jq -r '[.assets[].name] | sort | @tsv')
+}
+
+
+github-get-releases-url-path ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-get-releases-url $org $repo [$releaseTag]\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local tag=${3:-""}
+    
+    local url
+    if (( $# == 3 )) && [[ -n "$tag" ]]; then
+        local url="/repos/$org/$repo/releases/tags/$tag"
+    else
+        local url="/repos/$org/$repo/releases/latest"
+    fi
     printf '%s' "$url"
 }
 
@@ -1883,7 +2029,7 @@ pull-app ()
 
 
 #
-# Download and source the latest daylight.sh from S3. Crucial for debugging.
+# Download and source the latest daylight.sh from github. Crucial for debugging.
 #
 # DEPRECATED - use download-daylight instead
 #

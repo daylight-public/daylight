@@ -1,7 +1,0 @@
-ec () 
-{
-	local discSrv='hello.dylt.dev'
-	/opt/etcd/etcdctl --discovery-srv "$discSrv" "$@"
-}
-
-

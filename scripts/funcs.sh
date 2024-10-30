@@ -3,8 +3,8 @@ github-get-app-data ()
 { 
     appSlug=$1;
     curl --silent \
-	 --location \
-	 "https://api.github.com/apps/$appSlug"
+	     --location \
+	     "https://api.github.com/apps/$appSlug"
 }
 
 
