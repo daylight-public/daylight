@@ -1,4 +1,0 @@
-getting started
-===============
-
-## Welcome!

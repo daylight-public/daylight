@@ -1160,6 +1160,59 @@ get-service-working-directory ()
 }
 
 
+github-create-user-access-token ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: github-create-user-access-token tokenvar $appslug\n' >&2; return 1; }
+    local -n tokenvar=$1
+    local appSlug=$2
+
+    # Get the clientId for the dylt-cli GitHub App CLI, which must be installed 
+    local urlPath="/apps/$appSlug"
+    read -r clientId < <(github-curl "$urlPath" \
+                         | jq -r '.client_id' \
+                         || return \
+                        )
+
+    # Use client id to invoke device code flow
+    urlPath="/login/device/code?client_id=$clientId"
+    urlBase="https://github.com"
+    local -a args
+    read -r -a args < <(github-curl-post "$urlPath" "" "$urlBase" \
+                        | jq -r '[.device_code, .user_code, .verification_uri] | @tsv') \
+                        || { printf 'Call failed: github-curl-post()\n'; return; }
+    local deviceCode=${args[0]}
+    local userCode=${args[1]}
+    local verificationUri=${args[2]}
+
+    # Prompt user to do stuff in the browser
+    echo
+    printf '%-40s%s\n' "User Code" "$userCode"
+    printf '%-40s%s\n' "Verification Uri" "$verificationUri"
+    if command -v pbcopy >/dev/null; then
+        printf '%s' "$userCode" | pbcopy
+    fi
+    if command -v open >/dev/null; then
+        echo
+        read -r -p "Hit <Enter> to open $verificationUri in your browser ..." _
+        open "$verificationUri"
+    fi
+    echo
+    
+    # Post to the thing and grab the access token
+    local prompt; prompt=$(printf 'Go to %s and enter %s. Then return here and press <Enter> ...' "$verificationUri" "$userCode") || return
+    read -r -p  "$prompt" _
+    local grantType='urn:ietf:params:oauth:grant-type:device_code'
+    urlPath="$(printf '/login/oauth/access_token?client_id=%s&device_code=%s&grant_type=%s' "$clientId" "$deviceCode" "$grantType")"
+    urlBase="https://github.com"
+    read -r -a args < <(github-curl-post "$urlPath" "" "$urlBase" \
+                        | jq -r '[.access_token] | @tsv') \
+                        || return
+    # return the access token
+    tokenvar=${args[0]}
+}
+
+
 github-curl ()
 {
     # shellcheck disable=SC2016
@@ -1234,17 +1287,17 @@ github-download-latest-release ()
     local name=$3
     local downloadFolder=$4
     local urlPath; urlPath="$(github-get-releases-url-path "$org" "$repo")" || return
-    read -r -a args < <(github-curl "$urlPath" \curl --silent  \
+    read -r -a args < <(github-curl "$urlPath" \
                         | jq -r --arg name "$name" \
                           '.assets[] 
                            | select(.name == $name) 
                            | [.id, .name, .browser_download_url] | @tsv') \
                         || return
     local id=${args[0]}
-    local releaseName=${args[1]}
+    # local releaseName=${args[1]}
     local urlDownload=${args[2]}
-    local remoteName=${urlDownload##*/}
-    local releasePath="$downloadFolder/$remoteName"
+    local filename=${urlDownload##*/}
+    local releasePath="$downloadFolder/$filename"
     curl --location --silent \
          --output "$releasePath" \
          "$urlDownload" \
@@ -1327,9 +1380,9 @@ github-get-release-name-list ()
 {
     # shellcheck disable=SC2016
     { (( $# >= 3 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-name-list $listVar $org $repo [$tag]\n' >&2; return 1; }
-    local -n list=$1
-    # ${@:2} trick to deal with the optional tag arg
-    read -r -a list < <(github-get-release-data "${@:2}" \
+    local -n listVar; listVar=$1
+    # ${@:2} skips the first two args, which are $0 and the $listVar nameref 
+    read -r -a listVar < <(github-get-release-data "${@:2}" \
                       | jq -r '[.assets[].name] | sort | @tsv')
 }
 
@@ -2525,6 +2578,53 @@ sys-start ()
 }
 
 
+# Simple attempt to get info for a repo
+# If it does not succeed, it could mean the org or repo are nonexistent or misspelled
+# But it could also mean that the repo is non-public and requires a token for authentication
+# The Github API returns 404s for all of the above, so the error status doesn't tell us anything
+test-repo ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: test-repo $org $repo\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+
+    # We don't care about the info, just if we can successfully call the endpoint
+    # --output /dev/null and --fail suppress any output
+    # Because the flags are different we can't use github-curl()
+    curl --location \
+         --silent \
+         --output /dev/null \
+         --fail \
+         "https://api.github.com/repos/$org/$repo" \
+    || return
+}
+
+
+# Simple attempt to get info for a repo
+# If it does not succeed, it could mean the org or repo are nonexistent or misspelled
+# But it could also mean that the repo is non-public and requires a token for authentication
+# The Github API returns 404s for all of the above, so the error status doesn't tell us anything
+test-repo-with-auth ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: test-repo-with-auth $org $repo $token\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local token=$3
+
+    # We don't care about the info, just if we can successfully call the endpoint
+    # --output /dev/null and --fail suppress any output
+    # Because the flags are different we can't use github-curl()
+    curl --location \
+         --silent \
+         --output /dev/null \
+         --header "Authorization: Token $token" \
+         --fail \
+         "https://api.github.com/repos/$org/$repo" \
+    || return
+}
+
 # Uninstall an installed etcd service.
 #
 # @Note this doesn't do any checking to see if any of the assets exist.
@@ -2622,6 +2722,22 @@ watch-daylight-install-service ()
     chmod 755 "$svcFolder/run.sh"
     sudo systemctl enable "$svcFolder/$svc.service"
     sudo systemctl start "$svc"
+}
+
+
+yesno ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: yesno varname $prompt\n' >&2; return 1; }
+    local prompt=$1
+    local -n varname=$2
+
+    while :; do
+        read -r -p "$prompt" varname
+        if [[ ${varname,,} =~ y|n|yes|no ]]; then
+            break
+        fi
+    done
 }
 
 

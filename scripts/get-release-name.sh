@@ -1,5 +1,59 @@
 #! /usr/bin/env bash
 
+get-user-access-token ()
+{
+    declare -F github-curl >/dev/null || { printf 'Unknown function: %s\n' "github-curl"; return 1; }
+    declare -F github-curl-post >/dev/null || { printf 'Unknown function: %s\n' "github-curl-post"; return 1; }
+    
+    # Get the clientId for the dylt-cli GitHub App CLI, which must be installed 
+    local appSlug="dylt-cli"
+    local urlPath="/apps/$appSlug"
+    read -r clientId < <(github-curl "$urlPath" \
+                         | jq -r '.client_id' \
+                         || return \
+                        )
+    declare -p clientId
+
+    # Use client id to invoke device code flow
+    urlPath="/login/device/code?client_id=$clientId"
+    urlBase="https://github.com"
+    local -a args
+    read -r -a args < <(github-curl-post "$urlPath" "" "$urlBase" \
+                        | jq -r '[.device_code, .user_code, .verification_uri] | @tsv') \
+                        || { printf 'Call failed: github-curl-post()\n'; return; }
+    local deviceCode=${args[0]}
+    local userCode=${args[1]}
+    local verificationUri=${args[2]}
+
+    # Prompt user to do stuff in the browser
+    echo
+    printf '%-40s%s\n' "User Code" "$userCode"
+    printf '%-40s%s\n' "Verification Uri" "$verificationUri"
+    if command -v pbcopy >/dev/null; then
+        printf '%s' "$userCode" | pbcopy
+    fi
+    if command -v open >/dev/null; then
+        echo
+        read -r -p "Hit <Enter> to open $verificationUri in your browser ..." _
+        open "$verificationUri"
+    fi
+    echo
+    
+    # Post to the thing and grab the access token
+    local prompt; prompt=$(printf 'Go to %s and enter %s. Then return here and press <Enter> ...' "$verificationUri" "$userCode") || return
+    read -r -p  "$prompt" _
+    local grantType='urn:ietf:params:oauth:grant-type:device_code'
+    urlPath="$(printf '/login/oauth/access_token?client_id=%s&device_code=%s&grant_type=%s' "$clientId" "$deviceCode" "$grantType")"
+    urlBase="https://github.com"
+    read -r -a args < <(github-curl-post "$urlPath" "" "$urlBase" \
+                        | jq -r '[.access_token] | @tsv') \
+                        || return
+    # return the access token
+    local accessToken=${args[0]}
+    _GAT=$accessToken
+}
+
+
 # Auth is always hard. GitHub Auth is no exception.
 #
 # The hardest part of this whole operation is successfully auth'ing to GitHub.
@@ -45,6 +99,8 @@
 #       If not, we'll return non-zero
 #   fi
 #
+
+
 init-access-token ()
 {
     # shellcheck disable=SC2016
@@ -59,134 +115,82 @@ init-access-token ()
         isPublic=1
     else
         isPublic=0
+    fi
     if (( isPublic == 1)); then
-        # If a token exists, we'll check if it's valid
+        # If no token exists, we don't need a token but we will ask anyway
         if [[ -z $_GAT ]]; then
-            # Public repo + no token = OK
-            return 0
-        elif check-token "$org" "$repo" "$_GAT"; then
+            echo
+            printf '%s/%s is a public repo, so you do not need to create an access token.\n' "$org" "$repo"
+            echo
+            local ynCreateToken
+            yesno 'Would you like to create a token anyway? [yn] ' ynCreateToken
+            if [[ ! ${ynCreateToken,,} =~ y|yes ]]; then
+                # Public repo + no token = OK
+                echo
+                printf "No worries! You're all set.\n"
+                echo "# Public repo + no token = OK"
+                return 0
+            elif github-create-user-access-token _GAT dylt-cli; then
+                # Public repo + new token = OK
+                echo "# Public repo + new token = OK"
+                return 0
+            else
+                printf "No valid token was created, but no token is needed so you're all set.\n"
+                echo 
+                # Public repo + no token = OK
+                echo "# Public repo + no token = OK"
+                return 0
+            fi
+        elif test-repo-with-auth "$org" "$repo" "$_GAT"; then
             # Public repo + valid token = OK
+            echo "# Public repo + valid token = OK"
             return 0
-        elif ! get-user-access-token "$org" $repo"; then
-            # Getting the access token failed, so we make sure
-            # the token is clear but the call is still a success
+        else
+            # The current token is invalid. The user can get a new one or the old one can be discarded.
             unset _GAT
+            echo
+            printf 'You have an existing token, but it is invalid. The invalid token will be discarded, and since this is public repo you can proceed.\n'
+            echo
+            local ynCreateToken
+            yesno 'Would you like to create a new token? [yn] ' ynCreateToken
+            if [[ ! ${yesno,,} =~ y|yes ]]; then
+                # Public repo + no token = OK
+                echo
+                printf "No worries! You're all set.\n"
+                echo "# Public repo + no token = OK"
+                return 0
+            elif github-create-user-access-token _GAT dylt-cli; then
+                # Public repo + new token = OK
+                echo "# Public repo + new token = OK"
+                return 0
+            else
+                printf "No valid token was created, but no token is needed so you're all set.\n"
+                echo 
+                # Public repo + no token = OK
+                echo "# Public repo + no token = OK"
+                return 0
+            fi
         fi
-        # Public repo + new token or cleared/no token = OK
-        return 0
     else
         # If a token exists, we'll check if it's valid
         if [[ -n $_GAT ]]; then
-            if check-token "$org" "$repo" "$_GAT"; then
+            if test-repo-with-auth "$org" "$repo" "$_GAT"; then
                 # Non-public repo + valid token = OK
+                echo "# Non-public repo + valid token = OK"
                 return 0
-            elif
+	    else
                 # Invalid token - fall through to no-token case
                 :
             fi
-        elif get-user-access-token "$org" $repo"; then
+        elif github-create-user-access-token _GAT dylt-cli; then
             # Non-public repo + new token = OK
+            echo "# Non-public repo + new token = OK"
             return 0
         fi
     fi
     # No successful case happened, so we assume failure
+    echo "return 1"
     return 1
-}
-
-get-user-access-token ()
-{
-    declare -F github-curl >/dev/null || { printf 'Unknown function: %s\n' "github-curl"; return 1; }
-    declare -F github-curl-post >/dev/null || { printf 'Unknown function: %s\n' "github-curl-post"; return 1; }
-    
-    # Get the clientId for the dylt-cli GitHub App CLI, which must be installed 
-    local appSlug="dylt-cli"
-    local urlPath="/apps/$appSlug"
-    read -r clientId < <(github-curl "$urlPath" \
-                         | jq -r '.client_id' \
-                         || return \
-                        )
-    declare -p clientId
-
-    # Use client id to invoke device code flow
-    urlPath="/login/device/code?client_id=$clientId"
-    urlBase="https://github.com"
-    local -a args
-    read -r -a args < <(github-curl-post "$urlPath" "" "$urlBase" \
-                        | jq -r '[.device_code, .user_code, .verification_uri] | @tsv') \
-                        || { printf 'Call failed: github-curl-post()\n'; return; }
-    local deviceCode=${args[0]}
-    local userCode=${args[1]}
-    local verificationUri=${args[2]}
-
-    # Prompt user to do stuff in the browser
-    echo
-    printf '%-40s%s\n' "User Code" "$userCode"
-    printf '%-40s%s\n' "Verification Uri" "$verificationUri"
-    if command -v pbcopy; then
-        pbcopy <<<"$userCode"
-    fi
-    if command -v open; then
-        open "$verificationUri"
-    fi
-    echo
-    
-    # Post to the thing and grab the access token
-    local prompt; prompt=$(printf 'Go to %s and enter %s. Then return here and press <Enter> ...' "$verificationUri" "$userCode") || return
-    read -r -p  "$prompt" _
-    local grantType='urn:ietf:params:oauth:grant-type:device_code'
-    urlPath="$(printf '/login/oauth/access_token?client_id=%s&device_code=%s&grant_type=%s' "$clientId" "$deviceCode" "$grantType")"
-    urlBase="https://github.com"
-    read -r -a args < <(github-curl-post "$urlPath" "" "$urlBase" \
-                        | jq -r '[.access_token] | @tsv') \
-                        || return
-    # return the access token
-    local accessToken=${args[0]}
-    _GAT=$accessToken
-}
-
-# Simple attempt to get info for a repo
-# If it does not succeed, it could mean the org or repo are nonexistent or misspelled
-# But it could also mean that the repo is non-public and requires a token for authentication
-# The Github API returns 404s for all of the above, so the error status doesn't tell us anything
-test-repo ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: test-repo $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-
-    # We don't care about the info, just if we can successfully call the endpoint
-    # --output /dev/null and --fail suppress any output
-    curl --location \
-         --silent \
-         --output /dev/null \
-         --fail \
-         "https://api.github.com/repos/$org/$repo" \
-    || return
-}
-
-
-# Simple attempt to get info for a repo
-# If it does not succeed, it could mean the org or repo are nonexistent or misspelled
-# But it could also mean that the repo is non-public and requires a token for authentication
-# The Github API returns 404s for all of the above, so the error status doesn't tell us anything
-test-repo-with-auth ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: test-repo-with-auth $org $repo $token\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local token=$3
-
-    # We don't care about the info, just if we can successfully call the endpoint
-    # --output /dev/null and --fail suppress any output
-    curl --location \
-         --silent \
-         --output /dev/null \
-         --header "Authorization: Token $token" \
-         --fail \
-         "https://api.github.com/repos/$org/$repo" \
-    || return
 }
 
 
@@ -196,71 +200,11 @@ main ()
     { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: get-release-name.sh $org $repo [$tag]\n' >&2; return 1; }
     local org=$1
     local repo=$2
-    local tag=${3:-''}
+    # local tag=${3:-''}
 
-    # See if we're able to access the repo without authentication
-    # If not, we will try and get a token
-    local isPublic
-    if test-repo "$org" "$repo"; then
-        isPublic=1
-    else
-        isPublic=0
-        # See if there's already a envvar token
-        # If not, try and read a token from a file
-        if [[ -z $GITHUB_ACCESS_TOKEN ]]; then
-            if [[ -f ~/.github_access_token ]]; then
-                GITHUB_ACCESS_TOKEN=$(< ~/.github_access_token)
-            else
-                echo
-                printf 'Repo is not public and no access token is available.\n'
-                echo
-                local yesno
-                while [[ $yesno != [YyNn] ]]; do
-                    read -r -p "Would you like to get an access token? [yn] " yesno
-                done
-                if [[ $yesno == [Nn] ]]; then
-                    printf "No worries. Come back any time!"
-                    echo
-                    return 1
-                fi
-                if ! get-user-access-token; then
-                    echo
-                    printf "Not a problem! Come back any time."
-                    echo
-                    return 1
-                fi
-            fi
-        fi
-        if ! test-repo-with-auth "$org" "$repo" "$GITHUB_ACCESS_TOKEN"; then
-            echo
-            printf 'Repo is not public and no valid access token was found.\n'
-            echo
-            local yesno
-            while [[ $yesno != [YyNn] ]]; do
-                read -r -p "Would you like to get an access token? [yn] " yesno
-            done
-            if [[ $yesno == [Nn] ]]; then
-                printf "No worries. Come back any time!"
-                echo
-                return 1
-            fi
-            if ! get-user-access-token; then
-                echo
-                printf "Not a problem! Come back any time."
-                echo
-                return 1
-            fi
-        fi
-        if [[ -z $GITHUB_ACCESS_TOKEN ]]; then
-            printf 'Weird. $GITHUB_ACCESS_TOKEN should have a value here. Weird.'
-            echo
-            return
-        fi
-        # We have a token now. We can get release stuff. The logic for that exists, but I don't think it can do auth.
-        # And I'll need different curls for public and private repos because of the header thing.
-        # Next up -- plan out how to get all release info, then prompt for a name, and then be good to go.
-    fi
-
+    init-access-token "$org" "$repo" || return
+    declare -p _GAT
+    
     # We've confirmed we can access this repo so let's get the list of release names for this tag
     declare -F github-get-release-name-list >/dev/null || { printf 'Unknown function: %s\n' "github-get-release-name-list"; return 1; }
     local -a names
@@ -283,5 +227,4 @@ main ()
     printf 'releaseName=%s\n' "$releaseName"
 }
 
-
-main "$@"
+# main "$@"
