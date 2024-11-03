@@ -484,11 +484,12 @@ create-temp-file ()
     # shellcheck disable=SC2016
     { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: create-temp-file $template [$folder]\n' >&2; return 1; }
     template=$1
-    folder=$2
+    folder=${2:-''}
+
     if [[ -n "$folder" ]]; then
         mktemp --tmpdir="$folder" "$template"
     else
-        mktemp -t "$template"
+        mktemp --tmpdir -t "$template"
     fi
 }
 
@@ -1166,13 +1167,15 @@ github-create-user-access-token ()
     (( $# == 2 )) || { printf 'Usage: github-create-user-access-token tokenvar $appslug\n' >&2; return 1; }
     local -n tokenvar=$1
     local appSlug=$2
-
     # Get the clientId for the dylt-cli GitHub App CLI, which must be installed 
+    
     local urlPath="/apps/$appSlug"
-    read -r clientId < <(github-curl "$urlPath" \
-                         | jq -r '.client_id' \
-                         || return \
-                        )
+    tmpCurl=$(create-temp-file 'curl.apps')
+    github-curl "$urlPath" >"$tmpCurl" || return
+    tmpJq=$(create-temp-file 'jq.apps')
+    jq -r '.client_id' <"$tmpCurl" >"$tmpJq" || return
+    read -r clientId <"$tmpJq" || return
+    [[ -n $clientId ]] || return 1
 
     # Use client id to invoke device code flow
     urlPath="/login/device/code?client_id=$clientId"
@@ -1209,7 +1212,8 @@ github-create-user-access-token ()
                         | jq -r '[.access_token] | @tsv') \
                         || return
     # return the access token
-    tokenvar=${args[0]}
+    # shellcheck disable=SC2034
+     tokenvar=${args[0]}
 }
 
 
@@ -1232,14 +1236,14 @@ github-curl ()
              --header "Accept: application/json" \
              --header "Authorization: Token $GITHUB_ACCESS_TOKEN" \
              "$url" \
-        || return
+        || { printf 'curl failed inside github-curl\n'; return 1; }
     else
         curl --fail-with-body \
              --location \
              --silent \
              --header "Accept: application/json" \
              "$url" \
-        || return
+        || { printf 'curl failed inside github-curl\n'; return 1; }
     fi
 }
 
@@ -1329,7 +1333,7 @@ github-get-app-info ()
         || return
     _info[id]=${args[0]}
     _info[client_id]=${args[1]}
-    _info[slug]=${args[2]}
+    _info['slug']=${args[2]}
 }
 
 
@@ -1382,8 +1386,52 @@ github-get-release-name-list ()
     { (( $# >= 3 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-name-list $listVar $org $repo [$tag]\n' >&2; return 1; }
     local -n listVar; listVar=$1
     # ${@:2} skips the first two args, which are $0 and the $listVar nameref 
+    # shellcheck disable=SC2034
     read -r -a listVar < <(github-get-release-data "${@:2}" \
                       | jq -r '[.assets[].name] | sort | @tsv')
+}
+
+
+github-get-release-package-data ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: github-release-package-data $org $repo $name\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local name=$3
+
+    local urlPath; urlPath="$(github-get-releases-url-path "$org" "$repo")" || return
+    local tmpCurl; tmpCurl="$(create-temp-file 'curl.release')" || return
+    github-curl "$urlPath" >"$tmpCurl" || return
+    local tmpJq; tmpJq="$(create-temp-file 'jq.release')" || return
+    jq -r --arg name "$name" \
+       '.assets[]
+        | select(.name == $name)' \
+      </"$tmpCurl" >/"$tmpJq" \
+      || return 
+    printf '%s' "$tmpJq"
+}
+
+
+github-get-release-package-info ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: github-get-release-package-info infovar $org $repo $name\n' >&2; return 1; }
+    local -n info=$1
+    local releaseDataPath; releaseDataPath=$(github-get-release-package-data "${@:2}") || return
+    local tmpJq; tmpJq=$(create-temp-file 'jq.release.info') || return
+    jq -r '[.id, .url, .browser_download_url] | @tsv' \
+      <"$releaseDataPath" \
+      >"$tmpJq" \
+      || return
+    local -a args
+    read -r -a args <"$tmpJq" || return
+    info[id]=${args[0]}
+    info[url]=${args[1]}
+    local browser_download_url=${args[2]}
+    local filename=${browser_download_url##*/}
+    info[browser_download_url]=$browser_download_url
+    info[filename]=$filename
 }
 
 
@@ -1417,6 +1465,86 @@ github-install-latest-release ()
     local releasePath; releasePath=$(github-download-latest-release "$org" "$repo" "$platform" "$downloadFolder") || return
     tar --strip-components=1 -C "$installFolder" -xzf "$releasePath"
 	printf '%s' "$installFolder"
+}
+
+
+go-service-gen-run-script ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: go-service-gen-unit-file infovar\n' >&2; return 1; }
+    local -n _appInfo=$1
+
+    local binaryName=${_appInfo[binaryName]}
+    local description=${_appInfo[description]}
+    local name=${_appInfo[name]}
+    cat <<- EOT
+    #! /usr/bin/env bash
+
+    main ()
+    {
+        # shellcheck disable=SC2016
+        [[ -n "\$APP_NETWORK" ]] || { echo 'Please set \$APP_NETWORK' >&2; return 1; }
+        # shellcheck disable=SC2016
+        [[ -n "\$APP_ADDRESS" ]] || { echo 'Please set \$APP_ADDRESS' >&2; return 1; }
+    
+            if [[ \$APP_NETWORK == 'unix' ]] && [[ -S "\$APP_ADDRESS" ]]; then
+                    rm "\$APP_ADDRESS"
+            fi
+            ./$binaryName
+    }
+
+    main "\$@"
+
+	EOT
+}
+
+go-service-gen-stop-script ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: go-service-gen-unit-file infovar\n' >&2; return 1; }
+    local -n _appInfo=$1
+
+    cat <<- EOT
+    main ()
+    {
+        # shellcheck disable=SC2016
+        [[ -n "\$APP_NETWORK" ]] || { echo 'Please set \$APP_NETWORK' >&2; return 1; }
+        # shellcheck disable=SC2016
+        [[ -n "\$APP_ADDRESS" ]] || { echo 'Please set \$APP_ADDRESS' >&2; return 1; }
+    
+        if [[ \$APP_NETWORK == 'unix' ]] && [[ -S "\$APP_ADDRESS" ]]; then
+            rm "\$APP_ADDRESS"
+        fi
+    }
+
+    main "\$@"
+
+	EOT
+}
+
+go-service-gen-unit-file ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: go-service-gen-unit-file infovar\n' >&2; return 1; }
+    local -n _appInfo=$1
+
+    local description=${_appInfo[description]}
+    local name=${_appInfo[name]}
+    cat <<- EOT
+    [Unit]
+    Description=$description
+
+    [Service]
+    EnvironmentFile="/opt/svc/$name/config.env"
+    ExecStart="/opt/svc/$name/run.sh"
+    ExecStop="/opt/svc/$name/stop.sh"
+    Type=exec
+    User=ubuntu
+    WorkingDirectory="/opt/svc/$name"
+
+    [Install]
+    WantedBy=multi-user.target
+	EOT
 }
 
 
