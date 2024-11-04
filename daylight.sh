@@ -2216,6 +2216,36 @@ pull-app ()
 }
 
 
+pullAppInfo ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: pullAppInfo infovar $user $appName\n' >&2; return 1; }
+    local -n _appInfo=$1
+    local user=$2
+    local name=$3
+
+    local -a args
+    local prefix="/$/$user/app/$name"
+    read -r -a args < <( \
+        ec get --prefix "$prefix" --write-out json \
+        | jq -r '.kvs 
+                | [.[] | {key: (.key | @base64d | match(".*/(.*)") | .captures[0].string),
+                        value: .value | @base64d}]
+                | from_entries
+                | [.domain, .org, .repo, .type] | @tsv') \
+        || return
+    declare -p args
+    _appInfo[domain]=${args[0]}
+    _appInfo[org]=${args[1]}
+    _appInfo[repo]=${args[2]}
+    _appInfo[type]=${args[3]}
+    # envFile requires special handling
+    local tmpEnvFile; tmpEnvFile=$(create-temp-file "$name.envFile") || return
+    local envFileKey="/$/$user/app/$name/envFile"
+    ec get --print-value-only "$envFileKey" >"$tmpEnvFile"
+    _appInfo[envFilePath]="$tmpEnvFile"
+}
+
 #
 # Download and source the latest daylight.sh from github. Crucial for debugging.
 #
