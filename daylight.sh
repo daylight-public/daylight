@@ -486,6 +486,9 @@ create-temp-file ()
     template=$1
     folder=${2:-''}
 
+    if [[ ! $template == *XXXXXX* ]]; then
+        template="$template.XXXXXX"
+    fi
     if [[ -n "$folder" ]]; then
         mktemp --tmpdir="$folder" "$template"
     else
