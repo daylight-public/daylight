@@ -1483,10 +1483,13 @@ go-service-gen-run-script ()
     # shellcheck disable=SC2016
     (( $# == 1 )) || { printf 'Usage: go-service-gen-unit-file infovar\n' >&2; return 1; }
     local -n _appInfo=$1
-
-    local binaryName=${_appInfo[binaryName]}
+    local binaryFilename=${_appInfo[binaryFilename]}
     local description=${_appInfo[description]}
     local name=${_appInfo[name]}
+    [[ -n "$binaryFilename" ]] || { echo '$binaryFilename is not set' >&2; return 1; }
+    [[ -n "$description" ]] || { echo '$description is not set' >&2; return 1; }
+    [[ -n "$name" ]] || { echo '$name is not set' >&2; return 1; }
+
     cat <<- EOT
     #! /usr/bin/env bash
 
@@ -1500,7 +1503,7 @@ go-service-gen-run-script ()
             if [[ \$APP_NETWORK == 'unix' ]] && [[ -S "\$APP_ADDRESS" ]]; then
                     rm "\$APP_ADDRESS"
             fi
-            ./$binaryName
+            ./$binaryFilename
     }
 
     main "\$@"
@@ -1537,9 +1540,11 @@ go-service-gen-unit-file ()
     # shellcheck disable=SC2016
     (( $# == 1 )) || { printf 'Usage: go-service-gen-unit-file infovar\n' >&2; return 1; }
     local -n _appInfo=$1
-
     local description=${_appInfo[description]}
     local name=${_appInfo[name]}
+    [[ -n "$description" ]] || { echo '$description is not set' >&2; return 1; }
+    [[ -n "$name" ]] || { echo '$name is not set' >&2; return 1; }
+    
     cat <<- EOT
     [Unit]
     Description=$description
@@ -2235,13 +2240,14 @@ pullAppInfo ()
                 | [.[] | {key: (.key | @base64d | match(".*/(.*)") | .captures[0].string),
                         value: .value | @base64d}]
                 | from_entries
-                | [.domain, .org, .repo, .type] | @tsv') \
+                | [.binaryFilename, .domain, .org, .repo, .type] | @tsv') \
         || return
     declare -p args
-    _appInfo[domain]=${args[0]}
-    _appInfo[org]=${args[1]}
-    _appInfo[repo]=${args[2]}
-    _appInfo[type]=${args[3]}
+    _appInfo[binaryFilename]=${args[0]}
+    _appInfo[domain]=${args[1]}
+    _appInfo[org]=${args[2]}
+    _appInfo[repo]=${args[3]}
+    _appInfo[type]=${args[4]}
     # envFile requires special handling
     local tmpEnvFile; tmpEnvFile=$(create-temp-file "$name.envFile") || return
     local envFileKey="/$/$user/app/$name/envFile"
