@@ -690,6 +690,13 @@ download-vm ()
 }
 
 
+ec ()
+{
+    local discSrv='hello.dylt.dev'
+    /opt/etcd/etcdctl --discovery-srv "$discSrv" "$@"
+}
+
+
 edit-daylight ()
 {
     local daylightPath; daylightPath=$(command -v daylight.sh)
