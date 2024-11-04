@@ -1491,19 +1491,19 @@ go-service-gen-run-script ()
     [[ -n "$name" ]] || { echo '$name is not set' >&2; return 1; }
 
     cat <<- EOT
-    #! /usr/bin/env bash
+	#! /usr/bin/env bash
 
 	main ()
 	{
-		# shellcheck disable=SC2016
-		[[ -n "\$APP_NETWORK" ]] || { echo 'Please set \$APP_NETWORK' >&2; return 1; }
-		# shellcheck disable=SC2016
-		[[ -n "\$APP_ADDRESS" ]] || { echo 'Please set \$APP_ADDRESS' >&2; return 1; }
+	    # shellcheck disable=SC2016
+	    [[ -n "\$APP_NETWORK" ]] || { echo 'Please set \$APP_NETWORK' >&2; return 1; }
+	    # shellcheck disable=SC2016
+	    [[ -n "\$APP_ADDRESS" ]] || { echo 'Please set \$APP_ADDRESS' >&2; return 1; }
 
-		if [[ \$APP_NETWORK == 'unix' ]] && [[ -S "\$APP_ADDRESS" ]]; then
-			rm "\$APP_ADDRESS" || return
-		fi
-		./$binaryFilename || return
+	    if [[ \$APP_NETWORK == 'unix' ]] && [[ -S "\$APP_ADDRESS" ]]; then
+	       rm "\$APP_ADDRESS" || return
+	    fi
+	    ./$binaryFilename || return
 	}
 
 	main "\$@"
@@ -1518,16 +1518,18 @@ go-service-gen-stop-script ()
     local -n _appInfo=$1
 
     cat <<- EOT
+	#! /usr/bin/env bash
+
 	main ()
 	{
-		# shellcheck disable=SC2016
-		[[ -n "\$APP_NETWORK" ]] || { echo 'Please set \$APP_NETWORK' >&2; return 1; }
-		# shellcheck disable=SC2016
-		[[ -n "\$APP_ADDRESS" ]] || { echo 'Please set \$APP_ADDRESS' >&2; return 1; }
+	    # shellcheck disable=SC2016
+	    [[ -n "\$APP_NETWORK" ]] || { echo 'Please set \$APP_NETWORK' >&2; return 1; }
+	    # shellcheck disable=SC2016
+	    [[ -n "\$APP_ADDRESS" ]] || { echo 'Please set \$APP_ADDRESS' >&2; return 1; }
 
-		if [[ \$APP_NETWORK == 'unix' ]] && [[ -S "\$APP_ADDRESS" ]]; then
-			rm "\$APP_ADDRESS"
-		fi
+	    if [[ \$APP_NETWORK == 'unix' ]] && [[ -S "\$APP_ADDRESS" ]]; then
+	        rm "\$APP_ADDRESS"
+	    fi
 	}
 
 	main "\$@"
