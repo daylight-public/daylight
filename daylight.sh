@@ -2232,9 +2232,10 @@ pullAppInfo ()
     local user=$2
     local name=$3
 
+    appInfo[name]=$name
     local -a args
     local prefix="/$/$user/app/$name"
-    read -r -a args < <( \
+    IFS=$'\t' read -r -a args < <( \
         ec get --prefix "$prefix" --write-out json \
         | jq -r '.kvs 
                 | [.[] | {key: (.key | @base64d | match(".*/(.*)") | .captures[0].string),
