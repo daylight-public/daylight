@@ -1493,20 +1493,20 @@ go-service-gen-run-script ()
     cat <<- EOT
     #! /usr/bin/env bash
 
-    main ()
-    {
-        # shellcheck disable=SC2016
-        [[ -n "\$APP_NETWORK" ]] || { echo 'Please set \$APP_NETWORK' >&2; return 1; }
-        # shellcheck disable=SC2016
-        [[ -n "\$APP_ADDRESS" ]] || { echo 'Please set \$APP_ADDRESS' >&2; return 1; }
-    
-            if [[ \$APP_NETWORK == 'unix' ]] && [[ -S "\$APP_ADDRESS" ]]; then
-                    rm "\$APP_ADDRESS"
-            fi
-            ./$binaryFilename
-    }
+	main ()
+	{
+		# shellcheck disable=SC2016
+		[[ -n "\$APP_NETWORK" ]] || { echo 'Please set \$APP_NETWORK' >&2; return 1; }
+		# shellcheck disable=SC2016
+		[[ -n "\$APP_ADDRESS" ]] || { echo 'Please set \$APP_ADDRESS' >&2; return 1; }
 
-    main "\$@"
+		if [[ \$APP_NETWORK == 'unix' ]] && [[ -S "\$APP_ADDRESS" ]]; then
+			rm "\$APP_ADDRESS" || return
+		fi
+		./$binaryFilename || return
+	}
+
+	main "\$@"
 
 	EOT
 }
@@ -1518,19 +1518,19 @@ go-service-gen-stop-script ()
     local -n _appInfo=$1
 
     cat <<- EOT
-    main ()
-    {
-        # shellcheck disable=SC2016
-        [[ -n "\$APP_NETWORK" ]] || { echo 'Please set \$APP_NETWORK' >&2; return 1; }
-        # shellcheck disable=SC2016
-        [[ -n "\$APP_ADDRESS" ]] || { echo 'Please set \$APP_ADDRESS' >&2; return 1; }
-    
-        if [[ \$APP_NETWORK == 'unix' ]] && [[ -S "\$APP_ADDRESS" ]]; then
-            rm "\$APP_ADDRESS"
-        fi
-    }
+	main ()
+	{
+		# shellcheck disable=SC2016
+		[[ -n "\$APP_NETWORK" ]] || { echo 'Please set \$APP_NETWORK' >&2; return 1; }
+		# shellcheck disable=SC2016
+		[[ -n "\$APP_ADDRESS" ]] || { echo 'Please set \$APP_ADDRESS' >&2; return 1; }
 
-    main "\$@"
+		if [[ \$APP_NETWORK == 'unix' ]] && [[ -S "\$APP_ADDRESS" ]]; then
+			rm "\$APP_ADDRESS"
+		fi
+	}
+
+	main "\$@"
 
 	EOT
 }
@@ -1546,19 +1546,19 @@ go-service-gen-unit-file ()
     [[ -n "$name" ]] || { echo '$name is not set' >&2; return 1; }
     
     cat <<- EOT
-    [Unit]
-    Description=$description
+	[Unit]
+	Description=$description
 
-    [Service]
-    EnvironmentFile="/opt/svc/$name/config.env"
-    ExecStart="/opt/svc/$name/run.sh"
-    ExecStop="/opt/svc/$name/stop.sh"
-    Type=exec
-    User=ubuntu
-    WorkingDirectory="/opt/svc/$name"
+	[Service]
+	EnvironmentFile="/opt/svc/$name/config.env"
+	ExecStart="/opt/svc/$name/run.sh"
+	ExecStop="/opt/svc/$name/stop.sh"
+	Type=exec
+	User=ubuntu
+	WorkingDirectory="/opt/svc/$name"
 
-    [Install]
-    WantedBy=multi-user.target
+	[Install]
+	WantedBy=multi-user.target
 	EOT
 }
 
