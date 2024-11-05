@@ -1397,7 +1397,9 @@ github-get-release-data ()
     local tag=${3:-""}
     
     local urlPath; urlPath="$(github-get-releases-url-path "${@:1}")" || return
-    github-curl "$urlPath"
+	local tmpCurl; tmpCurl=$(create-temp-file github.get.release.data.json) || return
+    github-curl "$urlPath" >"$tmpCurl" || return
+	printf '%s' "$tmpCurl"
 }
 
 
@@ -1407,9 +1409,15 @@ github-get-release-name-list ()
     { (( $# >= 3 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-name-list $listVar $org $repo [$tag]\n' >&2; return 1; }
     local -n listVar; listVar=$1
     # ${@:2} skips the first two args, which are $0 and the $listVar nameref 
+    local tmpCurl; tmpCurl=$(github-get-release-data "${@:2}" || return
     # shellcheck disable=SC2034
-    read -r -a listVar < <(github-get-release-data "${@:2}" \
-                      | jq -r '[.assets[].name] | sort | @tsv')
+	local tmpJq; tmpJq=$(create-temp-file jq.get.release.name.list.txt) || return
+	jq -r '[.assets[].name] | sort | @tsv' \
+	<"$tmpCurl" \
+	>"$tmpJq" \
+	|| return
+
+    read -r -a listVar <"$tmpJq" || return
 }
 
 
