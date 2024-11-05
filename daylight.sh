@@ -3019,6 +3019,7 @@ main ()
             github-install-latest-release) github-install-latest-release "$@";;
             github-test-repo) github-test-repo "$@";;
             github-test-repo-with-auth) github-test-repo-with-auth "$@";;
+			go-service-install) go-service-install "$@";;
             hello) hello "$@";;
             init-lxd)	init-lxd "$@";;
             init-nginx)	init-nginx "$@";;
