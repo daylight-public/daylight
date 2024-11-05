@@ -1660,6 +1660,23 @@ go-service-install ()
 	local -A releaseInfo
 	github-get-release-package-info releaseInfo "$org" "$repo" "$releaseName" || return
 	declare -p releaseInfo
+
+	# download the release binary
+	local downloadUrl=${releaseInfo[url]}
+	local filename=${releaseInfo[filename]}
+	local downloadPath="/tmp/$filename"
+	# shellcheck disable=SC2016
+	[[ -n "$GITHUB_ACCESS_TOKEN" ]] || { echo 'Please set $GITHUB_ACCESS_TOKEN' >&2; return 1; }
+    curl --location \
+         --verbose \
+         --fail-with-body \
+         --header "Accept: application/octet-stream" \
+         --header "Authorization: Token $GITHUB_ACCESS_TOKEN" \
+         --output "$downloadPath" \
+         "$downloadUrl" \
+    || return
+    printf '%s' "$downloadPath"
+	file "$downloadPath"
 }
 
 
