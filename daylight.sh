@@ -501,14 +501,13 @@ create-temp-file ()
 create-temp-folder ()
 {
     # shellcheck disable=SC2016
-    { (( $# >= 0 )) && (( $# <= 2 )); } || { printf 'Usage: create-temp-file $template [$template [$folder]]\n' >&2; return 1; }
-    if (( $# == 0)); then
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: create-temp-file $template [$template [$folder]]\n' >&2; return 1; }
+	local template=${1:-''}
+
+    if (( $# == 0)) || [[ -z "$template" ]]; then
         mktemp --directory
-    elif (( $# == 1)); then
-        template=$0
-        mktemp --directory -t "$template"
     else
-        mktemp --directory --tmpdir="$folder" "$template"
+        mktemp --directory --tmpdir "$template"
     fi
 }
 
