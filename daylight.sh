@@ -1565,6 +1565,11 @@ go-service-gen-unit-file ()
 }
 
 
+go-service-install ()
+{
+	:
+}
+
 hello ()
 {
     printf "Hello!\n"
@@ -2760,10 +2765,10 @@ sys-start ()
 # If it does not succeed, it could mean the org or repo are nonexistent or misspelled
 # But it could also mean that the repo is non-public and requires a token for authentication
 # The Github API returns 404s for all of the above, so the error status doesn't tell us anything
-test-repo ()
+github-test-repo ()
 {
     # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: test-repo $org $repo\n' >&2; return 1; }
+    (( $# == 2 )) || { printf 'Usage: github-test-repo $org $repo\n' >&2; return 1; }
     local org=$1
     local repo=$2
 
@@ -2783,10 +2788,10 @@ test-repo ()
 # If it does not succeed, it could mean the org or repo are nonexistent or misspelled
 # But it could also mean that the repo is non-public and requires a token for authentication
 # The Github API returns 404s for all of the above, so the error status doesn't tell us anything
-test-repo-with-auth ()
+github-test-repo-with-auth ()
 {
     # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: test-repo-with-auth $org $repo $token\n' >&2; return 1; }
+    (( $# == 3 )) || { printf 'Usage: github-test-repo-with-auth $org $repo $token\n' >&2; return 1; }
     local org=$1
     local repo=$2
     local token=$3
