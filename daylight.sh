@@ -1478,6 +1478,53 @@ github-install-latest-release ()
 }
 
 
+# Simple attempt to get info for a repo
+# If it does not succeed, it could mean the org or repo are nonexistent or misspelled
+# But it could also mean that the repo is non-public and requires a token for authentication
+# The Github API returns 404s for all of the above, so the error status doesn't tell us anything
+github-test-repo ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: github-test-repo $org $repo\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+
+    # We don't care about the info, just if we can successfully call the endpoint
+    # --output /dev/null and --fail suppress any output
+    # Because the flags are different we can't use github-curl()
+    curl --location \
+         --silent \
+         --output /dev/null \
+         --fail \
+         "https://api.github.com/repos/$org/$repo" \
+    || return
+}
+
+
+# Simple attempt to get info for a repo
+# If it does not succeed, it could mean the org or repo are nonexistent or misspelled
+# But it could also mean that the repo is non-public and requires a token for authentication
+# The Github API returns 404s for all of the above, so the error status doesn't tell us anything
+github-test-repo-with-auth ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: github-test-repo-with-auth $org $repo $token\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local token=$3
+
+    # We don't care about the info, just if we can successfully call the endpoint
+    # --output /dev/null and --fail suppress any output
+    # Because the flags are different we can't use github-curl()
+    curl --location \
+         --silent \
+         --output /dev/null \
+         --header "Authorization: Token $token" \
+         --fail \
+         "https://api.github.com/repos/$org/$repo" \
+    || return
+}
+
 go-service-gen-run-script ()
 {
     # shellcheck disable=SC2016
@@ -1510,6 +1557,7 @@ go-service-gen-run-script ()
 
 	EOT
 }
+
 
 go-service-gen-stop-script ()
 {
@@ -1567,6 +1615,13 @@ go-service-gen-unit-file ()
 
 go-service-install ()
 {
+	local -n appInfo=$1
+	local user=$2
+	local name=$3
+
+	# Pull app info from cluster
+	pullAppInfo appInfo "$user" "$name" || return
+	declare -p appInfo
 	:
 }
 
@@ -2760,53 +2815,6 @@ sys-start ()
     sudo systemctl restart "$service" || journalctl --unit "$service"
 }
 
-
-# Simple attempt to get info for a repo
-# If it does not succeed, it could mean the org or repo are nonexistent or misspelled
-# But it could also mean that the repo is non-public and requires a token for authentication
-# The Github API returns 404s for all of the above, so the error status doesn't tell us anything
-github-test-repo ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-test-repo $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-
-    # We don't care about the info, just if we can successfully call the endpoint
-    # --output /dev/null and --fail suppress any output
-    # Because the flags are different we can't use github-curl()
-    curl --location \
-         --silent \
-         --output /dev/null \
-         --fail \
-         "https://api.github.com/repos/$org/$repo" \
-    || return
-}
-
-
-# Simple attempt to get info for a repo
-# If it does not succeed, it could mean the org or repo are nonexistent or misspelled
-# But it could also mean that the repo is non-public and requires a token for authentication
-# The Github API returns 404s for all of the above, so the error status doesn't tell us anything
-github-test-repo-with-auth ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: github-test-repo-with-auth $org $repo $token\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local token=$3
-
-    # We don't care about the info, just if we can successfully call the endpoint
-    # --output /dev/null and --fail suppress any output
-    # Because the flags are different we can't use github-curl()
-    curl --location \
-         --silent \
-         --output /dev/null \
-         --header "Authorization: Token $token" \
-         --fail \
-         "https://api.github.com/repos/$org/$repo" \
-    || return
-}
 
 # Uninstall an installed etcd service.
 #
