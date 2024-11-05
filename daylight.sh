@@ -1677,6 +1677,9 @@ go-service-install ()
     || return
     printf '%s' "$downloadPath"
 	file "$downloadPath"
+
+	# Push file to VM
+	incus file push "$downloadPath" "$vm/tmp/"
 }
 
 
