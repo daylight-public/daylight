@@ -2341,15 +2341,16 @@ pullAppInfo ()
                 | [.[] | {key: (.key | @base64d | match(".*/(.*)") | .captures[0].string),
                         value: .value | @base64d}]
                 | from_entries
-                | [.binaryFilename, .description, .domain, .org, .repo, .type] | @tsv') \
+                | [.binaryFilename, .description, .domain, .org, .releaseName, .repo, .type] | @tsv') \
         || return
     declare -p args
-    _appInfo[binaryFilename]="${args[0]}"
-    _appInfo[description]="${args[1]}"
-    _appInfo[domain]="${args[2]}"
-    _appInfo[org]="${args[3]}"
-    _appInfo[repo]="${args[4]}"
-    _appInfo[type]="${args[5]}"
+    _appInfo[binaryFilename]=${args[0]}
+    _appInfo[description]=${args[1]}
+    _appInfo[domain]=${args[2]}
+    _appInfo[org]=${args[3]}
+	_appInfo[releaseName]=${args[4]}
+    _appInfo[repo]=${args[5]}
+    _appInfo[type]=${args[6]}
     # envFile requires special handling
     local tmpEnvFile; tmpEnvFile=$(create-temp-file "$name.envFile") || return
     local envFileKey="/$/$user/app/$name/envFile"
