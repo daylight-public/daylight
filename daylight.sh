@@ -1679,7 +1679,7 @@ go-service-install ()
 	file "$downloadPath"
 
 	# Push file to VM
-	incus file push "$downloadPath" "$vm/tmp/"
+	incus file push "$downloadPath" "$vmName/tmp/"
 }
 
 
