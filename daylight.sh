@@ -1616,18 +1616,18 @@ go-service-gen-unit-file ()
 go-service-install ()
 {
 	# shellcheck disable=SC2016
-	(( $# == 3 )) || { printf 'Usage: go-service-install infovar $user $name\n' >&2; return 1; }
+	(( $# == 2 )) || { printf 'Usage: go-service-install $user $name\n' >&2; return 1; }
 	# shellcheck disable=SC2016
 	[[ -n "$GITHUB_ACCESS_TOKEN" ]] || { echo 'Please set $GITHUB_ACCESS_TOKEN' >&2; return 1; }
-	local -n appInfo=$1
-	local user=$2
-	local name=$3
+	local user=$1
+	local name=$2
 
 	# Pull app info from cluster
+	local -A appInfo
 	pullAppInfo appInfo "$user" "$name" || return
 	declare -p appInfo
-	:
 }
+
 
 hello ()
 {
