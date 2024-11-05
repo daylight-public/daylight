@@ -1689,7 +1689,7 @@ go-service-install ()
 	chmod 777 "$distroFolder/stop.sh"
 	envFilePath=${appInfo[envFilePath]}
 	[[ -n "$envFilePath" ]] || { echo '$envFilePath is not set' >&2; return 1; }
-	cp "$envFilePath "$distroFolder/config.env"
+	cp "$envFilePath" "$distroFolder/config.env"
 	tar -C "$distroFolder" -zvf "$downloadPath"
 	echo
 	printf '%s\n' "$distroFolder"
