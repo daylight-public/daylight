@@ -1406,10 +1406,10 @@ github-get-release-data ()
 github-get-release-name-list ()
 {
     # shellcheck disable=SC2016
-    { (( $# >= 3 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-name-list $listVar $org $repo [$tag]\n' >&2; return 1; }
+    { (( $# >= 3 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-name-list listVar $org $repo [$tag]\n' >&2; return 1; }
     local -n listVar; listVar=$1
     # ${@:2} skips the first two args, which are $0 and the $listVar nameref 
-    local tmpCurl; tmpCurl=$(github-get-release-data "${@:2}" || return
+    local tmpCurl; tmpCurl=$(github-get-release-data "${@:2}") || return
     # shellcheck disable=SC2034
 	local tmpJq; tmpJq=$(create-temp-file jq.get.release.name.list.txt) || return
 	jq -r '[.assets[].name] | sort | @tsv' \
