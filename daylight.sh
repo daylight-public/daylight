@@ -3009,6 +3009,8 @@ main ()
             get-service-working-directory)	get-service-working-directory "$@";;
             github-download-latest-release)    github-download-latest-release "$@";;
             github-install-latest-release) github-install-latest-release "$@";;
+            github-test-repo) github-test-repo "$@";;
+            github-test-repo-with-auth) github-test-repo-with-auth "$@";;
             hello) hello "$@";;
             init-lxd)	init-lxd "$@";;
             init-nginx)	init-nginx "$@";;
