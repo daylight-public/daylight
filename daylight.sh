@@ -507,6 +507,9 @@ create-temp-folder ()
     if (( $# == 0)) || [[ -z "$template" ]]; then
         mktemp --directory
     else
+		if [[ ! $template == *XXXXXX* ]]; then
+			template="$template.XXXXXX"
+		fi
         mktemp --directory --tmpdir "$template"
     fi
 }
