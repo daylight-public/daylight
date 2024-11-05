@@ -1641,6 +1641,17 @@ go-service-install ()
 	# Get name of vm to user
 	local vmName; vmName=$(getVmName appInfo "$user") || return
 	declare -p vmName
+
+	# Get release info, in preparation for downloading the release binary
+	local org=${appInfo[org]}
+	local repo=${appInfo[repo]}
+	local releaseName=${appInfo[releaseName]}
+	[[ -n "$org" ]] || { echo '$org is not set' >&2; return 1; }
+	[[ -n "$repo" ]] || { echo '$repo is not set' >&2; return 1; }
+	[[ -n "$releaseName" ]] || { echo '$releaseName is not set' >&2; return 1; }
+	local -A releaseInfo
+	github-get-release-package-info releaseInfo "$org" "$repo" "$releaseName" || return
+	declare -p releaseInfo
 }
 
 
