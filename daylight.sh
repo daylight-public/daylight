@@ -1680,8 +1680,22 @@ go-service-install ()
     printf '%s' "$downloadPath"
 	file "$downloadPath"
 
+	# Create a tmp folder for service folder, and populate it
+	local distroFolder; distroFolder=$(create-temp-folder "$name.distro") || return
+	go-service-gen-unit-file appInfo >"$distroFolder/$name.service"
+	go-service-gen-run-script appInfo >"$distroFolder/run.sh"
+	chmod 777 "$distroFolder/run.sh"
+	go-service-gen-stop-script appInfo >"$distroFolder/stop.sh"
+	chmod 777 "$distroFolder/stop.sh"
+	envFilePath=${appInfo[envFilePath]}
+	[[ -n "$envFilePath" ]] || { echo '$envFilePath is not set' >&2; return 1; }
+	cp "$envFilePath "$distroFolder/config.env"
+	tar -C "$distroFolder" -zvf "$downloadPath"
+	echo
+	printf '%s\n' "$distroFolder"
+
 	# Push file to VM
-	incus file push "$downloadPath" "$vmName/tmp/"
+#	incus file push "$downloadPath" "$vmName/tmp/"
 }
 
 
