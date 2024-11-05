@@ -1171,6 +1171,17 @@ get-service-working-directory ()
 }
 
 
+getVmName ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: getVmName infovar $user\n' >&2; return 1; }
+    local -n _appInfo=$1
+    local user=$2
+
+    printf '%s' "$user"
+}
+
+
 github-create-user-access-token ()
 {
     # shellcheck disable=SC2016
@@ -1626,6 +1637,10 @@ go-service-install ()
 	local -A appInfo
 	pullAppInfo appInfo "$user" "$name" || return
 	declare -p appInfo
+
+	# Get name of vm to user
+	local vmName; vmName=$(getVmName appInfo "$user") || return
+	declare -p vmName
 }
 
 
