@@ -1561,7 +1561,7 @@ go-service-gen-nginx-domain-file ()
 	    server_name $domain;
 	    location / {
 	        include proxy_params;
-	            proxy_pass http://unix:/run/sock/$name.sock:/;
+	        proxy_pass http://unix:/run/sock/$name.sock:/;
 	    }
 	}
 	EOT
@@ -1716,8 +1716,74 @@ go-service-install ()
 	echo
 	printf '%s\n' "$distroFolder"
 
-	# Push file to VM
-#	incus file push "$downloadPath" "$vmName/tmp/"
+	# tar the distro
+	echo
+	printf '-- %s ---\n' "tar the distro"
+	echo
+	local tarballName="$name.distro.tgz"
+	local tarballPath="./$tarballName"
+	tar -C "$distroFolder/" -czf "$tarballPath"
+	read -r -p "Ok? "
+
+	# push distro to vm
+	echo
+	printf '-- %s ---\n' "push distro to vm"
+	echo
+	incus file push "$tarballPath" "$vmName/tmp/$tarballName"
+	read -r -p "Ok? "
+
+	# untar distro on vm
+	echo
+	printf '-- %s ---\n' "untar distro on vm"
+	echo
+	incus exec "$vmName" -- mkdir "/opt/svc/$name"
+	incus exec "$vmName" -- tar -C "/opt/svc/$name" -xzf "/tmp/$tarballName"
+	incus exec "$vmName" -- chown -$ ubuntu:ubuntu "/opt/svc/$name"
+	read -r -p "Ok? "
+
+	# enable + start service
+	echo
+	printf '--- %s ---\n' "enable + start service"
+	echo
+	incus exec "$vmName" -- systemctl enable "/opt/svc/$name/$name.service"
+	incus exec "$vmName" -- systemctl start "$name"
+	read -r -p "Ok? "
+
+	# create unix-to-unix incus proxy
+	echo
+	printf '--- %s ---\n' "create unix-to-unix incus proxy"
+	echo
+	incus config device add "$vmName" uu proxy connect=unix:/run/sock/$name.sock listen=unix:/run/sock/$name.sock mode=777
+	read -r -p "Ok? "
+
+	# gen nginx file + create enabled symlink
+	echo
+	printf '--- %s ---\n' "gen nginx file + create enabled symlink"
+	echo
+	local domain=${appInfo[domain]}
+	[[ -n "$domain" ]] || { echo '$domain is not set' >&2; return 1; }
+	local domainFilePath="/tmp/$domain"
+	go-service-gen-nginx-domain-file appInfo >"$domainFilePath"
+	incus file push "$domainFilePath" "$vmName/etc/nginx/sites-available/$domain"
+	incus exec "$vmName" -- ln -s /etc/nginx/sites-available/$domain /etc/nginx/sites-enabled/$domain
+	read -r -p "Ok? "
+
+	# run certbot & restart nginx
+	echo
+	printf '--- %s ---\n' "run certbot & restart nginx"
+	echo
+	sudo certbot --nginx -n -d "$domain" --agree-tos --email chris@dylt.dev  || return
+	sudo nginx -t || return
+	read -r -p "Ok? "
+
+	# test endpoint
+	echo
+	printf '--- %s ---\n' "test endpoint"
+	echo
+	local tesEndpoint=${appInfo[testEndpoint]}
+	[[ -n "$testEndpoint" ]] || { echo '$testEndpoint is not set' >&2; return 1; }
+	curl --unix-socket "/run/sock/$name.sock" "http:/$testEndpoint"
+	read -r -p "Ok? "
 }
 
 
@@ -2399,16 +2465,16 @@ pullAppInfo ()
                 | [.[] | {key: (.key | @base64d | match(".*/(.*)") | .captures[0].string),
                         value: .value | @base64d}]
                 | from_entries
-                | [.binaryFilename, .description, .domain, .org, .releaseName, .repo, .type] | @tsv') \
+                | [.binaryFilename, .description, .domain, .org, .releaseName, .repo, .testEndpoint, .type] | @tsv') \
         || return
-    declare -p args
     _appInfo[binaryFilename]=${args[0]}
     _appInfo[description]=${args[1]}
     _appInfo[domain]=${args[2]}
     _appInfo[org]=${args[3]}
 	_appInfo[releaseName]=${args[4]}
     _appInfo[repo]=${args[5]}
-    _appInfo[type]=${args[6]}
+	_appInfo[repo]=${args[6]}
+    _appInfo[type]=${args[7]}
     # envFile requires special handling
     local tmpEnvFile; tmpEnvFile=$(create-temp-file "$name.envFile") || return
     local envFileKey="/$/$user/app/$name/envFile"
