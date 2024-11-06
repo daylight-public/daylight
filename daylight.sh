@@ -1718,7 +1718,7 @@ go-service-install ()
 
 	# tar the distro
 	echo
-	printf '-- %s ---\n' "tar the distro"
+	printf '=== %s ===\n' "tar the distro"
 	echo
 	local tarballName="$name.distro.tgz"
 	local tarballPath="./$tarballName"
@@ -1727,14 +1727,14 @@ go-service-install ()
 
 	# push distro to vm
 	echo
-	printf '-- %s ---\n' "push distro to vm"
+	printf '=== %s ===\n' "push distro to vm"
 	echo
 	incus file push "$tarballPath" "$vmName/tmp/$tarballName"
 	read -r -p "Ok? "
 
 	# untar distro on vm
 	echo
-	printf '-- %s ---\n' "untar distro on vm"
+	printf '=== %s ===\n' "untar distro on vm"
 	echo
 	incus exec "$vmName" -- mkdir "/opt/svc/$name"
 	incus exec "$vmName" -- tar -C "/opt/svc/$name" -xzf "/tmp/$tarballName"
@@ -1743,7 +1743,7 @@ go-service-install ()
 
 	# enable + start service
 	echo
-	printf '--- %s ---\n' "enable + start service"
+	printf '=== %s ===\n' "enable + start service"
 	echo
 	incus exec "$vmName" -- systemctl enable "/opt/svc/$name/$name.service"
 	incus exec "$vmName" -- systemctl start "$name"
@@ -1751,14 +1751,14 @@ go-service-install ()
 
 	# create unix-to-unix incus proxy
 	echo
-	printf '--- %s ---\n' "create unix-to-unix incus proxy"
+	printf '=== %s ===\n' "create unix-to-unix incus proxy"
 	echo
 	incus config device add "$vmName" uu proxy connect=unix:/run/sock/$name.sock listen=unix:/run/sock/$name.sock mode=777
 	read -r -p "Ok? "
 
 	# gen nginx file + create enabled symlink
 	echo
-	printf '--- %s ---\n' "gen nginx file + create enabled symlink"
+	printf '=== %s ===\n' "gen nginx file + create enabled symlink"
 	echo
 	local domain=${appInfo[domain]}
 	[[ -n "$domain" ]] || { echo '$domain is not set' >&2; return 1; }
@@ -1770,7 +1770,7 @@ go-service-install ()
 
 	# run certbot & restart nginx
 	echo
-	printf '--- %s ---\n' "run certbot & restart nginx"
+	printf '=== %s ===\n' "run certbot & restart nginx"
 	echo
 	sudo certbot --nginx -n -d "$domain" --agree-tos --email chris@dylt.dev  || return
 	sudo nginx -t || return
@@ -1778,7 +1778,7 @@ go-service-install ()
 
 	# test endpoint
 	echo
-	printf '--- %s ---\n' "test endpoint"
+	printf '=== %s ===\n' "test endpoint"
 	echo
 	local tesEndpoint=${appInfo[testEndpoint]}
 	[[ -n "$testEndpoint" ]] || { echo '$testEndpoint is not set' >&2; return 1; }
