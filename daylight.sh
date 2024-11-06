@@ -1723,7 +1723,7 @@ go-service-install ()
 	local tarballName="$name.distro.tgz"
 	local tarballPath="./$tarballName"
 	tar -C "$distroFolder/" -czf "$tarballPath" .
-	read -r -p "Ok? "
+	# read -r -p "Ok? "
 
 	# push distro to vm
 	echo
@@ -1731,15 +1731,15 @@ go-service-install ()
 	echo
 	incus exec "$vmName" -- bash -c 'if [[ -f "/tmp/$tarballName" ]]; then rm "/tmp/$tarballName"; fi'
 	incus file push "$tarballPath" "$vmName/tmp/$tarballName"
-	read -r -p "Ok? "
+	# read -r -p "Ok? "
 
 	# untar distro on vm
 	echo
 	printf '=== %s ===\n' "untar distro on vm"
 	echo
-	incus exec "$vmName" -- mkdir "/opt/svc/$name"
+	incus exec "$vmName" -- mkdir -p "/opt/svc/$name"
 	incus exec "$vmName" -- tar -C "/opt/svc/$name" -xzf "/tmp/$tarballName"
-	incus exec "$vmName" -- chown -$ ubuntu:ubuntu "/opt/svc/$name"
+	incus exec "$vmName" -- chown -R ubuntu:ubuntu "/opt/svc/$name"
 	read -r -p "Ok? "
 
 	# enable + start service
