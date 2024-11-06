@@ -2473,7 +2473,7 @@ pullAppInfo ()
     _appInfo[org]=${args[3]}
 	_appInfo[releaseName]=${args[4]}
     _appInfo[repo]=${args[5]}
-	_appInfo[repo]=${args[6]}
+	_appInfo[testEndpoint]=${args[6]}
     _appInfo[type]=${args[7]}
     # envFile requires special handling
     local tmpEnvFile; tmpEnvFile=$(create-temp-file "$name.envFile") || return
