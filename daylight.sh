@@ -1738,7 +1738,7 @@ go-service-install ()
 	printf '=== %s ===\n' "untar distro on vm"
 	echo
 	incus exec "$vmName" -- mkdir -p "/opt/svc/$name"
-	incus exec "$vmName" -- tar -C "/opt/svc/$name" -xzf "/tmp/$tarballName"
+	incus exec "$vmName" -- tar --preserve-permissions -C "/opt/svc/$name" -xzf "/tmp/$tarballName"
 	incus exec "$vmName" -- chown -R ubuntu:ubuntu "/opt/svc/$name"
 	read -r -p "Ok? "
 
