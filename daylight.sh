@@ -1722,7 +1722,7 @@ go-service-install ()
 	echo
 	local tarballName="$name.distro.tgz"
 	local tarballPath="./$tarballName"
-	tar -C "$distroFolder/" -czf "$tarballPath"
+	tar -C "$distroFolder/" -czf "$tarballPath" .
 	read -r -p "Ok? "
 
 	# push distro to vm
