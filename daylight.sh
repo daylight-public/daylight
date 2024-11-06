@@ -1765,8 +1765,8 @@ go-service-install ()
 	[[ -n "$domain" ]] || { echo '$domain is not set' >&2; return 1; }
 	local domainFilePath="/tmp/$domain"
 	go-service-gen-nginx-domain-file appInfo >"$domainFilePath"
-	incus file push "$domainFilePath" "$vmName/etc/nginx/sites-available/$domain"
-	incus exec "$vmName" -- ln -s /etc/nginx/sites-available/$domain /etc/nginx/sites-enabled/$domain
+	cp "$domainFilePath" "/etc/nginx/sites-available/$domain"
+	ln -s "/etc/nginx/sites-available/$domain" "/etc/nginx/sites-enabled/$domain"
 	read -r -p "Ok? "
 
 	# run certbot & restart nginx
