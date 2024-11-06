@@ -1729,6 +1729,7 @@ go-service-install ()
 	echo
 	printf '=== %s ===\n' "push distro to vm"
 	echo
+	incus exec "$vmName" --rm "/tmp/$tarballName"
 	incus file push "$tarballPath" "$vmName/tmp/$tarballName"
 	read -r -p "Ok? "
 
