@@ -1579,21 +1579,22 @@ go-service-gen-run-script ()
     [[ -n "$binaryFilename" ]] || { echo '$binaryFilename is not set' >&2; return 1; }
     [[ -n "$description" ]] || { echo '$description is not set' >&2; return 1; }
     [[ -n "$name" ]] || { echo '$name is not set' >&2; return 1; }
-
     cat <<- EOT
 	#! /usr/bin/env bash
-
+	
 	main ()
 	{
 	    # shellcheck disable=SC2016
 	    [[ -n "\$APP_NETWORK" ]] || { echo 'Please set \$APP_NETWORK' >&2; return 1; }
 	    # shellcheck disable=SC2016
 	    [[ -n "\$APP_ADDRESS" ]] || { echo 'Please set \$APP_ADDRESS' >&2; return 1; }
+		[[ -d "/run/sock" ]] || { echo "Non-existent folder: /run/sock" >&2; return 1; }
 
 	    if [[ \$APP_NETWORK == 'unix' ]] && [[ -S "\$APP_ADDRESS" ]]; then
 	       rm "\$APP_ADDRESS" || return
 	    fi
-	    ./$binaryFilename || return
+	    
+		./$binaryFilename || return
 	}
 
 	main "\$@"
@@ -1766,9 +1767,8 @@ go-service-install ()
 	local domainFilePath="/tmp/$domain"
 	go-service-gen-nginx-domain-file appInfo >"$domainFilePath"
 	cp "$domainFilePath" "/etc/nginx/sites-available/$domain"
-	sudo ln -s "/etc/nginx/sites-available/$domain" "/etc/nginx/sites-enabled/$domain"
+	ln -s "/etc/nginx/sites-available/$domain" "/etc/nginx/sites-enabled/$domain"
 	read -r -p "Ok? "
-
 
 	# test endpoint
 	echo
@@ -1783,8 +1783,8 @@ go-service-install ()
 	echo
 	printf '=== %s ===\n' "run certbot & restart nginx"
 	echo
-	sudo certbot --nginx -n -d "$domain" --agree-tos --email chris@dylt.dev  || return
-	sudo nginx -t || return
+	certbot --nginx -n -d "$domain" --agree-tos --email chris@dylt.dev  || return
+	nginx -t || return
 	read -r -p "Ok? "
 
 	# test domain from public internet
