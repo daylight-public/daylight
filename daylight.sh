@@ -1740,7 +1740,7 @@ go-service-install ()
 	incus exec "$vmName" -- mkdir -p "/opt/svc/$name"
 	incus exec "$vmName" -- tar --preserve-permissions -C "/opt/svc/$name" -xzf "/tmp/$tarballName"
 	incus exec "$vmName" -- chown -R ubuntu:ubuntu "/opt/svc/$name"
-	read -r -p "Ok? "
+	# read -r -p "Ok? "
 
 	# enable + start service
 	echo
@@ -1748,14 +1748,14 @@ go-service-install ()
 	echo
 	incus exec "$vmName" -- systemctl enable "/opt/svc/$name/$name.service"
 	incus exec "$vmName" -- systemctl start "$name"
-	read -r -p "Ok? "
+	# read -r -p "Ok? "
 
 	# create unix-to-unix incus proxy
 	echo
 	printf '=== %s ===\n' "create unix-to-unix incus proxy"
 	echo
 	incus config device add "$vmName" uu proxy connect=unix:/run/sock/$name.sock listen=unix:/run/sock/$name.sock mode=777
-	read -r -p "Ok? "
+	# read -r -p "Ok? "
 
 	# gen nginx file + create enabled symlink
 	echo
@@ -1766,7 +1766,7 @@ go-service-install ()
 	local domainFilePath="/tmp/$domain"
 	go-service-gen-nginx-domain-file appInfo >"$domainFilePath"
 	cp "$domainFilePath" "/etc/nginx/sites-available/$domain"
-	ln -s "/etc/nginx/sites-available/$domain" "/etc/nginx/sites-enabled/$domain"
+	sudo ln -s "/etc/nginx/sites-available/$domain" "/etc/nginx/sites-enabled/$domain"
 	read -r -p "Ok? "
 
 	# run certbot & restart nginx
