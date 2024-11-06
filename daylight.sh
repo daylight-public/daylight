@@ -1769,6 +1769,16 @@ go-service-install ()
 	sudo ln -s "/etc/nginx/sites-available/$domain" "/etc/nginx/sites-enabled/$domain"
 	read -r -p "Ok? "
 
+
+	# test endpoint
+	echo
+	printf '=== %s ===\n' "test endpoint"
+	echo
+	local testEndpoint=${appInfo[testEndpoint]}
+	[[ -n "$testEndpoint" ]] || { echo '$testEndpoint is not set' >&2; return 1; }
+	curl --unix-socket "/run/sock/$name.sock" "http:/$testEndpoint"
+	read -r -p "Ok? "
+
 	# run certbot & restart nginx
 	echo
 	printf '=== %s ===\n' "run certbot & restart nginx"
@@ -1777,13 +1787,8 @@ go-service-install ()
 	sudo nginx -t || return
 	read -r -p "Ok? "
 
-	# test endpoint
-	echo
-	printf '=== %s ===\n' "test endpoint"
-	echo
-	local tesEndpoint=${appInfo[testEndpoint]}
-	[[ -n "$testEndpoint" ]] || { echo '$testEndpoint is not set' >&2; return 1; }
-	curl --unix-socket "/run/sock/$name.sock" "http:/$testEndpoint"
+	# test domain from public internet
+	curl "$domain"
 	read -r -p "Ok? "
 }
 
