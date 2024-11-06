@@ -1546,6 +1546,28 @@ github-test-repo-with-auth ()
     || return
 }
 
+go-service-gen-nginx-domain-file ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: go-service-gen-unit-file infovar\n' >&2; return 1; }
+    local -n _appInfo=$1
+    local domain=${_appInfo[domain]}
+    local name=${_appInfo[name]}
+    [[ -n "$domain" ]] || { echo '$domain is not set' >&2; return 1; }
+    [[ -n "$name" ]] || { echo '$name is not set' >&2; return 1; }
+
+    cat <<- EOT
+	server {
+	    server_name $domain;
+	    location / {
+	        include proxy_params;
+	            proxy_pass http://unix:/run/sock/$name.sock:/;
+	    }
+	}
+	EOT
+}
+
+
 go-service-gen-run-script ()
 {
     # shellcheck disable=SC2016
@@ -1621,12 +1643,12 @@ go-service-gen-unit-file ()
 	Description=$description
 
 	[Service]
-	EnvironmentFile="/opt/svc/$name/config.env"
-	ExecStart="/opt/svc/$name/run.sh"
-	ExecStop="/opt/svc/$name/stop.sh"
+	EnvironmentFile=/opt/svc/$name/config.env
+	ExecStart=/opt/svc/$name/run.sh
+	ExecStop=/opt/svc/$name/stop.sh
 	Type=exec
 	User=ubuntu
-	WorkingDirectory="/opt/svc/$name"
+	WorkingDirectory=/opt/svc/$name
 
 	[Install]
 	WantedBy=multi-user.target
@@ -3094,6 +3116,7 @@ main ()
             github-install-latest-release) github-install-latest-release "$@";;
             github-test-repo) github-test-repo "$@";;
             github-test-repo-with-auth) github-test-repo-with-auth "$@";;
+            go-service-gen-nginx-domain-file) go-service-gen-nginx-domain-file "$@";;
             go-service-install) go-service-install "$@";;
             hello) hello "$@";;
             init-lxd)	init-lxd "$@";;
@@ -3125,6 +3148,7 @@ main ()
             list-services)	list-services "$@";;
             list-vms)	list-vms "$@";;
             prep-filesystem) prep-filesystem "$@";;
+            pullAppInfo) pullAppInfo "$@";;
             pull-app)	pull-app "$@";;
             pull-daylight)	pull-daylight "$@";;
             pull-flask-app)	pull-flask-app "$@";;
