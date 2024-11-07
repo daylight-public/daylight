@@ -1793,6 +1793,55 @@ go-service-install ()
 }
 
 
+go-service-uninstall ()
+{
+	# shellcheck disable=SC2016
+	(( $# == 2 )) || { printf 'Usage: go-service-uninstall $user $name\n' >&2; return 1; }
+	# shellcheck disable=SC2016
+	# [[ -n "$GITHUB_ACCESS_TOKEN" ]] || { echo 'Please set $GITHUB_ACCESS_TOKEN' >&2; return 1; }
+	local user=$1
+	local name=$2
+
+	# Pull app info from cluster
+	local -A appInfo
+	pullAppInfo appInfo "$user" "$name" || return
+	declare -p appInfo
+	
+	# Get vm name for app from cluster	
+	echo
+	printf '=== %s ===\n' "Get vm name for app from cluster"
+	local key="/#/$user/app/$name/vm"
+	local vmName; vmName=$(ec get --print-value-only "$key") || return
+	echo
+	read -r -p "Ok? " _
+
+	# Stop+disable service, and remove service folder
+	echo
+	printf '=== %s ===\n' "Stop+disable service, and remove service folder"
+	echo
+	read -r -p "Ok? " _
+
+	# Remove UU proxy
+	echo
+	printf '=== %s ===\n' "Remove UU proxy"
+	echo
+	read -r -p "Ok? " _
+
+	# Remove nginx symlink from sites-enabled and domain file from sites-available
+	echo
+	printf '=== %s ===\n' "Remove nginx stuff"
+	echo
+	read -r -p "Ok? " _
+
+	# Delete certbot certificates
+	echo
+	printf '=== %s ---\n' "Delete certbot certificates"	
+	echo
+	read -r -p "Ok? " _
+
+}
+
+
 hello ()
 {
     printf "Hello!\n"
