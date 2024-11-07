@@ -3239,6 +3239,7 @@ main ()
             github-test-repo-with-auth) github-test-repo-with-auth "$@";;
             go-service-gen-nginx-domain-file) go-service-gen-nginx-domain-file "$@";;
             go-service-install) go-service-install "$@";;
+            go-service-uninstall) go-service-uninstall "$@";;
             hello) hello "$@";;
             init-lxd)	init-lxd "$@";;
             init-nginx)	init-nginx "$@";;
