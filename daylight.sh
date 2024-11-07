@@ -1820,10 +1820,10 @@ go-service-uninstall ()
 	echo
 	printf '=== %s ===\n' "Stop+disable service, and remove service folder"
 	echo
-	if incus "$vmName" exec -- bash -c 'systemctl cat mc15 >/dev/null 2>&1 || echo nope'; then
-		incus "$vmName" exec -- systemctl stop "$name"
-		incus "$vmName" exec -- systemctl disable "$name"
-		incus "$vmName" exec -- rm -r "/opt/svc/$name"
+	if incus exec "$vmName" -- bash -c 'systemctl cat mc15 >/dev/null 2>&1 || echo nope'; then
+		incus exec "$vmName" -- systemctl stop "$name"
+		incus exec "$vmName" -- systemctl disable "$name"
+		incus exec "$vmName" -- rm -r "/opt/svc/$name"
 	fi
 	echo
 	read -r -p "Ok? " _
