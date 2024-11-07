@@ -1810,6 +1810,7 @@ go-service-uninstall ()
 	# Get vm name for app from cluster	
 	echo
 	printf '=== %s ===\n' "Get vm name for app from cluster"
+	echo
 	local key="/#/$user/app/$name/vm"
 	local vmName; vmName=$(ec get --print-value-only "$key") || return
 	echo
@@ -1819,11 +1820,21 @@ go-service-uninstall ()
 	echo
 	printf '=== %s ===\n' "Stop+disable service, and remove service folder"
 	echo
+	if incus "$vmName" exec -- bash -c 'systemctl cat mc15 >/dev/null 2>&1 || echo nope'; then
+		incus "$vmName" exec -- systemctl stop "$name"
+		incus "$vmName" exec -- systemctl disable "$name"
+		incus "$vmName" exec -- rm -r "/opt/svc/$name"
+	fi
+	echo
 	read -r -p "Ok? " _
 
 	# Remove UU proxy
 	echo
 	printf '=== %s ===\n' "Remove UU proxy"
+	echo
+	if [[ incus config device get "$name" uu type >/dev/null 2>&1 ]]; then
+		incus config device delete "$name" uu
+	fi
 	echo
 	read -r -p "Ok? " _
 
@@ -1831,14 +1842,26 @@ go-service-uninstall ()
 	echo
 	printf '=== %s ===\n' "Remove nginx stuff"
 	echo
+	domain=${appInfo[domain]}
+	[[ -n "$domain" ]] || { echo '$domain is not set' >&2; return 1; }
+	if [[ -h "/etc/nginx/sites-enabled/$domain" ]]; then
+		rm "/etc/nginx/sites-enabled/$domain" || return
+	fi
+	if [[ -f "/etc/nginx/sites-available/$domain" ]]; then
+		rm "/etc/nginx/sites-available/$domain" || return
+	fi
+	echo
 	read -r -p "Ok? " _
 
 	# Delete certbot certificates
 	echo
 	printf '=== %s ---\n' "Delete certbot certificates"	
 	echo
+	domain=${appInfo[domain]}
+	[[ -n "$domain" ]] || { echo '$domain is not set' >&2; return 1; }
+	certbot delete --cert-name "$domain"
+	echo
 	read -r -p "Ok? " _
-
 }
 
 
