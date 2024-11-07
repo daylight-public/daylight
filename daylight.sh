@@ -1833,7 +1833,7 @@ go-service-uninstall ()
 	printf '=== %s ===\n' "Remove UU proxy"
 	echo
 	if incus config device get "$name" uu type >/dev/null 2>&1; then
-		incus config device delete "$name" uu
+		incus config device remove "$name" uu
 	fi
 	echo
 	read -r -p "Ok? " _
