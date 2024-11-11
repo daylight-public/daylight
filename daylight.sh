@@ -1419,6 +1419,7 @@ github-get-release-name-list ()
 	>"$tmpJq" \
 	|| return
 
+	# shellcheck disable=SC2034
     read -r -a listVar <"$tmpJq" || return
 }
 
@@ -1553,7 +1554,9 @@ go-service-gen-nginx-domain-file ()
     local -n _appInfo=$1
     local domain=${_appInfo[domain]}
     local name=${_appInfo[name]}
+    # shellcheck disable=SC2016
     [[ -n "$domain" ]] || { echo '$domain is not set' >&2; return 1; }
+    # shellcheck disable=SC2016
     [[ -n "$name" ]] || { echo '$name is not set' >&2; return 1; }
 
     cat <<- EOT
@@ -1576,8 +1579,11 @@ go-service-gen-run-script ()
     local binaryFilename=${_appInfo[binaryFilename]}
     local description=${_appInfo[description]}
     local name=${_appInfo[name]}
+    # shellcheck disable=SC2016
     [[ -n "$binaryFilename" ]] || { echo '$binaryFilename is not set' >&2; return 1; }
+    # shellcheck disable=SC2016
     [[ -n "$description" ]] || { echo '$description is not set' >&2; return 1; }
+    # shellcheck disable=SC2016
     [[ -n "$name" ]] || { echo '$name is not set' >&2; return 1; }
     cat <<- EOT
 	#! /usr/bin/env bash
@@ -1636,7 +1642,9 @@ go-service-gen-unit-file ()
     local -n _appInfo=$1
     local description=${_appInfo[description]}
     local name=${_appInfo[name]}
+    # shellcheck disable=SC2016
     [[ -n "$description" ]] || { echo '$description is not set' >&2; return 1; }
+    # shellcheck disable=SC2016
     [[ -n "$name" ]] || { echo '$name is not set' >&2; return 1; }
     
     cat <<- EOT
@@ -1679,8 +1687,11 @@ go-service-install ()
 	local org=${appInfo[org]}
 	local repo=${appInfo[repo]}
 	local releaseName=${appInfo[releaseName]}
+    # shellcheck disable=SC2016
 	[[ -n "$org" ]] || { echo '$org is not set' >&2; return 1; }
+    # shellcheck disable=SC2016
 	[[ -n "$repo" ]] || { echo '$repo is not set' >&2; return 1; }
+    # shellcheck disable=SC2016
 	[[ -n "$releaseName" ]] || { echo '$releaseName is not set' >&2; return 1; }
 	local -A releaseInfo
 	github-get-release-package-info releaseInfo "$org" "$repo" "$releaseName" || return
@@ -1711,6 +1722,7 @@ go-service-install ()
 	go-service-gen-stop-script appInfo >"$distroFolder/stop.sh"
 	chmod 777 "$distroFolder/stop.sh"
 	envFilePath=${appInfo[envFilePath]}
+    # shellcheck disable=SC2016
 	[[ -n "$envFilePath" ]] || { echo '$envFilePath is not set' >&2; return 1; }
 	cp "$envFilePath" "$distroFolder/config.env" || return
 	tar -C "$distroFolder" -xzvf "$downloadPath" || return
@@ -1755,7 +1767,7 @@ go-service-install ()
 	echo
 	printf '=== %s ===\n' "create unix-to-unix incus proxy"
 	echo
-	incus config device add "$vmName" uu proxy connect=unix:/run/sock/$name.sock listen=unix:/run/sock/$name.sock mode=777
+	incus config device add "$vmName" uu proxy "connect=unix:/run/sock/$name.sock" "listen=unix:/run/sock/$name.sock" mode=777
 	# read -r -p "Ok? "
 
 	# gen nginx file + create enabled symlink
@@ -1763,6 +1775,7 @@ go-service-install ()
 	printf '=== %s ===\n' "gen nginx file + create enabled symlink"
 	echo
 	local domain=${appInfo[domain]}
+    # shellcheck disable=SC2016
 	[[ -n "$domain" ]] || { echo '$domain is not set' >&2; return 1; }
 	local domainFilePath="/tmp/$domain"
 	go-service-gen-nginx-domain-file appInfo >"$domainFilePath"
@@ -1775,6 +1788,7 @@ go-service-install ()
 	printf '=== %s ===\n' "test endpoint"
 	echo
 	local testEndpoint=${appInfo[testEndpoint]}
+    # shellcheck disable=SC2016
 	[[ -n "$testEndpoint" ]] || { echo '$testEndpoint is not set' >&2; return 1; }
 	curl --unix-socket "/run/sock/$name.sock" "http:/$testEndpoint"
 	read -r -p "Ok? "
@@ -1843,6 +1857,7 @@ go-service-uninstall ()
 	printf '=== %s ===\n' "Remove nginx stuff"
 	echo
 	domain=${appInfo[domain]}
+    # shellcheck disable=SC2016
 	[[ -n "$domain" ]] || { echo '$domain is not set' >&2; return 1; }
 	if [[ -h "/etc/nginx/sites-enabled/$domain" ]]; then
 		rm "/etc/nginx/sites-enabled/$domain" || return
@@ -1858,6 +1873,7 @@ go-service-uninstall ()
 	printf '=== %s ---\n' "Delete certbot certificates"	
 	echo
 	domain=${appInfo[domain]}
+    # shellcheck disable=SC2016
 	[[ -n "$domain" ]] || { echo '$domain is not set' >&2; return 1; }
 	certbot delete --cert-name "$domain"
 	echo
@@ -1934,6 +1950,33 @@ incus-create-www-profile ()
     incus profile create www || return
     incus profile device add www http proxy listen"=tcp:0.0.0.0:$httpPort" connect=tcp:127.0.0.1:80 || return
     incus profile device add www https proxy listen="tcp:0.0.0.0:$httpsPort" connect=tcp:127.0.0.1:443 || return
+}
+
+
+incus-push-file ()
+{
+	# shellcheck disable=SC2016
+	(( $# == 3 )) || { printf 'Usage: incus-push-file "$srcPath" "$vm" "$dstPath\n' >&2; return 1; }
+	local srcPath=$1
+	local vm=$2
+	local dstPath=$3
+	
+	local dstPath_q; dstPath_q=$(printf '%s' "%dstPath") || return
+	# incus requries a trailing slash if the destination is a folder
+	if incus exec "$vm" -- bash -c "[[ -d $dstPath_q ]]"; then
+		printf '%s is a folder.\n' "$dstPath"
+	fi
+}
+
+
+incus-remove-file ()
+{
+	# shellcheck disable=SC2016
+	(( $# == 3 )) || { printf 'Usage: incus-push-file "$srcPath" "$vm" "$dstPath\n' >&2; return 1; }
+	local srcPath=$1
+	local vm=$2
+	local dstPath=$3
+	# 
 }
 
 
