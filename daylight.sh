@@ -1964,8 +1964,11 @@ incus-push-file ()
 	local dstPath_q; dstPath_q=$(printf '%s' "$dstPath") || return
 	# incus requries a trailing slash if the destination is a folder
 	if incus exec "$vm" -- bash -c "[[ -d $dstPath_q ]]"; then
-		printf '%s is a folder.\n' "$dstPath"
+		if [[ $dstPath != */ ]]; then
+			dstPath="$dstPath/"
+		fi
 	fi
+	incus file push "$srcPath" "$vm$dstPath"
 }
 
 
