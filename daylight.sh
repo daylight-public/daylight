@@ -1975,10 +1975,9 @@ incus-push-file ()
 incus-remove-file ()
 {
 	# shellcheck disable=SC2016
-	(( $# == 3 )) || { printf 'Usage: incus-push-file "$srcPath" "$vm" "$dstPath\n' >&2; return 1; }
-	local srcPath=$1
-	local vm=$2
-	local dstPath=$3
+	(( $# == 2 )) || { printf 'Usage: incus-push-file "$vm" "$dstPath"\n' >&2; return 1; }
+	local vm=$1
+	local dstPath=$2
 
 	local dstPath_q; dstPath_q=$(printf '%q' "$dstPath") || return
 	if incus exec "$vm" -- bash -c "[[ -e $dstPath_q ]]"; then
