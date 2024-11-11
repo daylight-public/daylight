@@ -1953,6 +1953,24 @@ incus-create-www-profile ()
 }
 
 
+###
+# 
+# Pull a file from a vm to a newly created temp folder
+# Return path of new file
+#
+incus-pull-file ()
+{
+	local vm=$1
+	local srcPath=$2
+
+	local tmpFolder; tmpFolder=$(mktemp --directory --tmpdir incus.pull.file.XXXXXX) || return
+	local dstPath_q; dstPath_q=$(printf '%s' "$dstPath") || return
+	incus file pull "$vm$srcPath" "$tmpFolder/"
+	local filename; filename=$(basename "$srcPath") || return
+	local remotePath="$tmpFolder/$filename"
+	printf '%s' "$remotePath"
+}
+
 incus-push-file ()
 {
 	# shellcheck disable=SC2016
@@ -3313,6 +3331,7 @@ main ()
             go-service-install) go-service-install "$@";;
             go-service-uninstall) go-service-uninstall "$@";;
             hello) hello "$@";;
+            incus-pull-file) incus-pull-file "$@";;
             incus-push-file) incus-push-file "$@";;
             incus-remove-file) incus-remove-file "$@";;
             init-lxd)	init-lxd "$@";;
