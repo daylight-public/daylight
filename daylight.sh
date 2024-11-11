@@ -1956,12 +1956,12 @@ incus-create-www-profile ()
 incus-push-file ()
 {
 	# shellcheck disable=SC2016
-	(( $# == 3 )) || { printf 'Usage: incus-push-file "$srcPath" "$vm" "$dstPath\n' >&2; return 1; }
+	(( $# == 3 )) || { printf 'Usage: incus-push-file "$srcPath" "$vm" "$dstPath"\n' >&2; return 1; }
 	local srcPath=$1
 	local vm=$2
 	local dstPath=$3
 	
-	local dstPath_q; dstPath_q=$(printf '%s' "%dstPath") || return
+	local dstPath_q; dstPath_q=$(printf '%s' "$dstPath") || return
 	# incus requries a trailing slash if the destination is a folder
 	if incus exec "$vm" -- bash -c "[[ -d $dstPath_q ]]"; then
 		printf '%s is a folder.\n' "$dstPath"
