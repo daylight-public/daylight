@@ -3307,6 +3307,7 @@ main ()
             go-service-install) go-service-install "$@";;
             go-service-uninstall) go-service-uninstall "$@";;
             hello) hello "$@";;
+            incus-push-file) incus-push-file "$@";;
             init-lxd)	init-lxd "$@";;
             init-nginx)	init-nginx "$@";;
             install-app)	install-app "$@";;
