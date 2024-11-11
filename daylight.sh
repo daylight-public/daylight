@@ -1965,7 +1965,7 @@ incus-pull-file ()
 
 	local tmpFolder; tmpFolder=$(mktemp --directory --tmpdir incus.pull.file.XXXXXX) || return
 	local dstPath_q; dstPath_q=$(printf '%s' "$dstPath") || return
-	incus file pull "$vm$srcPath" "$tmpFolder/"
+	incus file pull "$vm$srcPath" "$tmpFolder/" || return
 	local filename; filename=$(basename "$srcPath") || return
 	local remotePath="$tmpFolder/$filename"
 	printf '%s' "$remotePath"
