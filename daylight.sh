@@ -1979,7 +1979,11 @@ incus-remove-file ()
 	local srcPath=$1
 	local vm=$2
 	local dstPath=$3
-	# 
+
+	local dstPath_q; dstPath_q=$(printf '%q' "$dstPath") || return
+	if incus exec "$vm" -- bash -c "[[ -e $dstPath_q ]]"; then
+		incus exec "$vm" -- bash -c "rm $dstPath_q" || return
+	fi
 }
 
 
@@ -3311,6 +3315,7 @@ main ()
             go-service-uninstall) go-service-uninstall "$@";;
             hello) hello "$@";;
             incus-push-file) incus-push-file "$@";;
+            incus-remove-file) incus-remove-file "$@";;
             init-lxd)	init-lxd "$@";;
             init-nginx)	init-nginx "$@";;
             install-app)	install-app "$@";;
