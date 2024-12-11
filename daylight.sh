@@ -1997,6 +1997,7 @@ incus-remove-file ()
 	local vm=$1
 	local dstPath=$2
 
+	# @note this possibly fails-to-fail on a missing/unavailable vm
 	local dstPath_q; dstPath_q=$(printf '%q' "$dstPath") || return
 	if incus exec "$vm" -- bash -c "[[ -e $dstPath_q ]]"; then
 		incus exec "$vm" -- bash -c "rm $dstPath_q" || return
