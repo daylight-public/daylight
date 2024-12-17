@@ -952,6 +952,40 @@ etcd-setup-data-dir ()
 }
 
 
+gen-completion-script ()
+{ 
+	# beggining of script
+	cat <<- END
+	_daylight-sh ()
+	{
+	    local curr=\$2
+	    local last=\$3
+
+	    local mainCmds=(\\
+	END
+
+	while read -r func; do
+		printf '        %s \\\n' "$func"
+	done < <(list-funcs)
+
+	# end of script
+	cat <<- END
+	    )
+
+	    # Trim everything up to + including the first slash
+	    local lastCmd=\${last##*/}
+	    case "\$lastCmd" in
+	        daylight.sh)
+	            # Typical mapfile + comgen -W idiom
+	            mapfile -t COMPREPLY < <(compgen -W "\${mainCmds[*]}" -- "\$curr")
+	            ;;
+	    esac
+	}
+	
+	complete -F _daylight-sh daylight.sh
+	END
+}
+
 gen-nginx-flask ()
 {
     # shellcheck disable=SC2016
