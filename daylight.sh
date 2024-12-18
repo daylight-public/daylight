@@ -3346,6 +3346,7 @@ main ()
             etcd-gen-run-script) etcd-gen-run-script "$@";;
             etcd-gen-unit-file) etcd-gen-unit-file "$@";;
             etcd-install-latest) etcd-install-latest "$@";;
+            gen-completion-script) gen-completion-script "$@";;
             gen-nginx-flask)	gen-nginx-flask "$@";;
             gen-nginx-static)	gen-nginx-static "$@";;
             generate-unit-file)	generate-unit-file "$@";;
@@ -3428,9 +3429,11 @@ main ()
             watch-daylight-gen-run-script) watch-daylight-gen-run-script "$@";;
             watch-daylight-gen-unit-file) watch-daylight-gen-unit-file "$@";;
             watch-daylight-install-service) watch-daylight-install-service "$@";;	
-            *) printf 'Unknown command: %s \n' "$cmd";;
+            *) printf 'Unknown command: %s \n' "$cmd" >&2; return 1;;
         esac
     fi
 }
 
 main "$@"
+
+
