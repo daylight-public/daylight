@@ -954,6 +954,17 @@ etcd-setup-data-dir ()
 
 gen-completion-script ()
 { 
+    # @note This function is a filter, ie it reads from stdin and writes to stdout.
+    #       That means it attempts to generalize its input src and output dest.
+    #       However, it currently hardcodes the parameters to 'complete -F', which happen
+    #       to be the name of the target script to be autocompleted (daylight.sh), as well as the
+    #       internal function that implements autocompletion (_daylight-sh ()), which is 
+    #       derived from the target script.
+    #       It would be nice for these values to be parameters.
+    #       It would be nicer to infer the function name from the script name
+    #       It would be nicest for some intelligence to optionally allow a filename arg,
+    #       which would serve as input and also imply the name of the target script.
+
 	# beggining of script
 	cat <<- END
 	_daylight-sh ()
