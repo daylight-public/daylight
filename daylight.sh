@@ -2498,6 +2498,9 @@ list-conf-scripts ()
 
 list-funcs ()
 {
+	# grep for all function declarations
+	# then, grep again to get just the function names from the delcarations
+	# @note this might be possible in one grep, but for now 2 greps is fine
     grep --extended-regexp \
           '^[A-Za-z0-9_-]+ \(\)' \
           /opt/bin/daylight.sh \
