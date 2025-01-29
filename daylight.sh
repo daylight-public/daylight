@@ -954,20 +954,36 @@ etcd-setup-data-dir ()
 
 gen-completion-script ()
 { 
-    # @note This function is a filter, ie it reads from stdin and writes to stdout.
-    #       That means it attempts to generalize its input src and output dest.
-    #       However, it currently hardcodes the parameters to 'complete -F', which happen
-    #       to be the name of the target script to be autocompleted (daylight.sh), as well as the
-    #       internal function that implements autocompletion (_daylight-sh ()), which is 
-    #       derived from the target script.
-    #       It would be nice for these values to be parameters.
-    #       It would be nicer to infer the function name from the script name
-    #       It would be nicest for some intelligence to optionally allow a filename arg,
-    #       which would serve as input and also imply the name of the target script.
+    # This function is a filter. It can operate on a file, or on stdin.
+    # If the caller is piping data in via stdin, the first argument is the name of the script path. The script name will be derived from the path.
+    # If no stdin, the first argument is the name of the script. There is no path to derive a name from, so the name must be explicitly provided.
+    # The second argument is the name of the function. If no function name is provided it will be derived from the script name.
+    # If not provided, the function name will be derived from the name of the file
+    #
+    # The resulting completion script is written to stdout.
+    # To write the output to a file, use redirection.
+    # E.g. gen-completion-script ./daylight.sh >~/.bash_completions.d/daylight.sh
 
-	# beggining of script
+    # shellcheck disable=SC2016
+    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: gen-completion-script $scriptPath [$functionName]\n' >&2
+                                             printf '       gen-completion-script $scriptName [$functionName] < (...script content...)\n' >&2
+                                             return 1; }
+    if [[ -t 0 ]]; then
+        local scriptPath=$1
+        local scriptName=$(basename "$scriptPath")
+    else
+        scriptName=$1
+    fi
+    if (( $# >= 2 )); then
+        functionName=$2
+    else
+        functionName=_${scriptName}
+        functionName=${functionName//./-}
+    fi
+	
+    # beginning of script
 	cat <<- END
-	_daylight-sh ()
+	$functionName ()
 	{
 	    local curr=\$2
 	    local last=\$3
@@ -975,9 +991,15 @@ gen-completion-script ()
 	    local mainCmds=(\\
 	END
 
-	while read -r func; do
-		printf '        %s \\\n' "$func"
-	done < <(list-funcs)
+	if [[ -t 0 ]]; then
+        while read -r func; do
+		    printf  '        %s \\\n' "$func"
+	    done < <(list-funcs)
+    else
+        while read -r func; do
+		    printf  '        %s \\\n' "$func"
+	    done < <(list-funcs <"$scriptPath")
+    fi
 
 	# end of script
 	cat <<- END
@@ -993,7 +1015,7 @@ gen-completion-script ()
 	    esac
 	}
 	
-	complete -F _daylight-sh daylight.sh
+	complete -F $functionName $scriptName
 	END
 }
 
@@ -1281,7 +1303,7 @@ github-create-user-access-token ()
                         || return
     # return the access token
     # shellcheck disable=SC2034
-     tokenvar=${args[0]}
+    tokenvar=${args[0]}
 }
 
 
@@ -2602,6 +2624,27 @@ lxd-share-folder ()
 }
 
 
+parse-github-args ()
+{
+    declare -g _gh_github_token
+    while :; do
+        case $1 in
+            '--token')
+                (( $# >= 2 )) || { printf -- '--token specified but no token provided.\n' >&2; return 1; }
+                _gh_github_token=$2
+                ;;
+            '--')
+                shift
+                break
+                ;;
+            *)
+                break
+                ;;
+        esac
+        shift
+    done
+}
+
 prep-filesystem ()
 {
     mkdir -p /etc/nginx/streams.d/
@@ -3373,6 +3416,7 @@ main ()
             get-service-environment-file)	get-service-environment-file "$@";;
             get-service-exec-start)	get-service-exec-start "$@";;
             get-service-working-directory)	get-service-working-directory "$@";;
+            github-create-user-access-token) github-create-user-access-token "$@";;
             github-download-latest-release)    github-download-latest-release "$@";;
             github-install-latest-release) github-install-latest-release "$@";;
             github-test-repo) github-test-repo "$@";;
