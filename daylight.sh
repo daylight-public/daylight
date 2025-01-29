@@ -1400,6 +1400,19 @@ github-download-latest-release ()
 }
 
 
+github-get-app-client-id ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: github-get-app-id $appSlug\n' >&2; return 1; }
+    local appSlug=$1
+
+    local -A info
+    github-get-app-info info "$appSlug" || return
+    local clientId=${info[client_id]}
+    printf '%s' "$clientId"
+}
+
+
 github-get-app-data ()
 {
     # shellcheck disable=SC2016
@@ -1424,19 +1437,6 @@ github-get-app-info ()
     _info[id]=${args[0]}
     _info[client_id]=${args[1]}
     _info['slug']=${args[2]}
-}
-
-
-github-get-app-client-id ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: github-get-app-id $appSlug\n' >&2; return 1; }
-    local appSlug=$1
-
-    local -A info
-    github-get-app-info info "$appSlug" || return
-    local clientId=${info[client_id]}
-    printf '%s' "$clientId"
 }
 
 
