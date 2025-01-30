@@ -1380,22 +1380,32 @@ github-download-latest-release ()
     local repo=$2
     local name=$3
     local downloadFolder=$4
-    local urlPath; urlPath="$(github-get-releases-url-path "$org" "$repo")" || return
-    read -r -a args < <(github-curl "$urlPath" \
-                        | jq -r --arg name "$name" \
-                          '.assets[] 
-                           | select(.name == $name) 
-                           | [.id, .name, .browser_download_url] | @tsv') \
-                        || return
-    local id=${args[0]}
-    # local releaseName=${args[1]}
-    local urlDownload=${args[2]}
-    local filename=${urlDownload##*/}
-    local releasePath="$downloadFolder/$filename"
-    curl --location --silent \
-         --output "$releasePath" \
-         "$urlDownload" \
-         || return
+
+    # Get release package data as assoc array
+    local -A releaseInfo
+    github-get-release-package-info releaseInfo "$org" "$repo" "$name" || return
+    declare -p releaseInfo
+    local url=${releaseInfo[url]}
+    local releasePath="$downloadFolder/$name"
+    if [[ -n $GITHUB_ACCESS_TOKEN ]]; then
+        curl --fail-with-body \
+             --location \
+             --verbose \
+             --header "Accept: application/octet-stream" \
+             --header "Authorization: Token $GITHUB_ACCESS_TOKEN" \
+             --output "$releasePath" \
+             "$url" \
+        || return
+    else
+        curl --fail-with-body \
+             --location \
+             --verbose \
+             --header "Accept: application/json" \
+             --header "Accept: application/octet-stream" \
+             --output "$releasePath" \
+             "$url" \
+        || return
+    fi
     printf '%s' "$releasePath"
 }
 
