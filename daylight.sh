@@ -1251,6 +1251,20 @@ getVmName ()
 }
 
 
+github-create-url ()
+{
+    local urlPath=$1
+    local urlBase=${2:-'https://api.github.com'}
+
+    # Trim leading slash
+    if [[ $urlPath == /* ]]; then
+        urlPath=${urlPath:1}
+    fi
+    # concatenate urlBase and Path
+    local url="$urlBase/$urlPath"
+    printf '%s' "$url" || return
+}
+
 github-create-user-access-token ()
 {
     # shellcheck disable=SC2016
@@ -1323,7 +1337,7 @@ github-curl ()
         curl --fail-with-body \
              --location \
              --silent \
-             --header "Accept: application/json" \
+             --header "Accept: application/vnd.github+json" \
              --header "Authorization: Token $GITHUB_ACCESS_TOKEN" \
              "$url" \
         || { printf 'curl failed inside github-curl\n'; return 1; }
@@ -1331,7 +1345,7 @@ github-curl ()
         curl --fail-with-body \
              --location \
              --silent \
-             --header "Accept: application/json" \
+             --header "Accept: application/vnd.github.json" \
              "$url" \
         || { printf 'curl failed inside github-curl\n'; return 1; }
     fi
@@ -3502,6 +3516,4 @@ main ()
     fi
 }
 
-main "$@"
-
-
+(return 0 2>/dev/null) || main "$@"
