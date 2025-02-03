@@ -3682,6 +3682,7 @@ main ()
             start-indexed-service)	start-indexed-service "$@";;
             start-service)	start-service "$@";;
             sync-add-service) sync-add-service "$@";;
+            sync-create-unit-name) sync-create-unit-name "$@";;
             sync-follow-service) sync-follow-service "$@";;
             sync-remove-service) sync-remove-service "$@";;
             sync-run-service) sync-run-service "$@";;
