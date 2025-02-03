@@ -3254,17 +3254,152 @@ start-service ()
 }
 
 
+sync-add-service ()
+{
+	key=$1
+	downloadPath=$2
+
+	unitName=$(sync-create-unit-name "$key" "$downloadPath") || return
+	systemctl enable "$unitName" || return
+}
+
+
+sync-create-unit-name () 
+{ 
+    key=$1;
+    downloadPath=$2;
+    systemd-escape --template 'sync-daylight@.service' "$key $downloadPath" || return
+}
+
+
+sync-daylight-gen-run-script ()
+{
+    cat <<- "EOT"
+	#! /usr/bin/env bash
+
+	get-key ()
+	{
+	    # shellcheck disable=SC2016
+	    (( $# == 2 )) || { printf 'Usage: get-key $key $downloadPath\n' >&2; return 1; }
+	    local key=$1
+	    local downloadPath=$2
+
+	    # etcdctl get, redirect to tempfile, and cp to proper location on success
+	    local tmpfile; tmpfile="$(mktemp --tmpdir daylight.sh.XXXXXX)" || return
+	    printf 'Reading %s from cluster & writing to temp file at %s ... ' "$key" "$tmpfile"
+	    if ! /opt/etcd/etcdctl \
+	        --discovery-srv hello.dylt.dev \
+	        get --print-value-only "$key" >"$tmpfile"
+	    then
+	        local rc=$?
+	        printf 'Failed to read %s from cluster\n' "$key" >&2
+	        return $?
+	    else
+	        printf 'OK\n'
+	        printf 'Copying %s to %s... ' "$tmpfile" "$downloadPath"
+	        cp "$tmpfile" "$downloadPath" || return
+	        printf 'OK\n'
+	    fi
+	}
+
+	watch-key ()
+	{
+	    # shellcheck disable=SC2016
+	    (( $# == 2 )) || { printf 'Usage: get-key $key $downloadPath\n' >&2; return 1; }
+	    local key=$1
+	    local downloadPath=$2
+
+	    export -f get-key
+	    printf 'Watching cluster key %s ...\n' "$key"
+	    /opt/etcd/etcdctl \
+	        --discovery-srv hello.dylt.dev \
+	        watch "$key" \
+	        -- bash -c "get-key $key $downloadPath" \
+	        || return
+	}
+
+	main ()
+	{
+	    # shellcheck disable=SC2016
+	    (( $# == 1 )) || { printf 'Usage: run.sh $argstring\n' >&2; return 1; }
+	    local argstring=$1
+
+	    # systemd passes in all the args as one single string, delimited by spaces.
+	    # we read the argstring into an array to split it
+	    local -a args=($argstring)
+	    local key=${args[0]}
+	    local downloadPath=${args[1]}
+
+	    get-key "$key" "$downloadPath" || return
+	    watch-key "$key" "$downloadPath" || return
+	}
+
+	(return 0 2>/dev/null) || main "$@"
+	EOT
+}
+
+
+sync-daylight-gen-unit-file ()
+{
+    cat <<- "EOT"
+	[Unit]
+	Description=Watch cluster for updates to a key and write new value to a file.
+
+	[Service]
+	ExecStart=/opt/svc/sync-daylight/run.sh %I
+	Restart=on-failure
+	RestartMode=normal
+	RestartSec=60
+	Type=exec
+	User=ubuntu
+	WorkingDirectory=/opt/svc/sync-daylight
+
+	[Install]
+	WantedBy=multi-user.target
+	EOT
+}
+
+
 sync-daylight-install-service ()
 {
 	local svc=sync-daylight
 	local svcFolder="/opt/svc/$svc"
 	mkdir -p "$svcFolder"
-    chown -R ubuntu:ubuntu "$svcFolder/"
-    sync-daylight-gen-unit-file >"$svcFolder/$svc.service"
+    sync-daylight-gen-unit-file >"$svcFolder/$svc@.service"
     sync-daylight-gen-run-script >"$svcFolder/run.sh"
+    chown -R ubuntu:ubuntu "$svcFolder/"
     chmod 755 "$svcFolder/run.sh"
-    sudo systemctl enable "$svcFolder/$svc.service"
-    sudo systemctl start "$svc"
+    sudo systemctl enable "$svcFolder/$svc@.service"
+}
+
+
+sync-follow-service ()
+{
+	key=$1
+	downloadPath=$2
+
+	unitName=$(sync-create-unit-name "$key" "$downloadPath") || return
+	journalctl --unit "$unitName" --follow  || return
+}
+
+
+sync-remove-service ()
+{
+	key=$1
+	downloadPath=$2
+
+	unitName=$(sync-create-unit-name "$key" "$downloadPath") || return
+	systemctl disable "$unitName" || return
+}
+
+
+sync-run-service ()
+{
+	key=$1
+	downloadPath=$2
+
+	unitName=$(sync-create-unit-name "$key" "$downloadPath") || return
+	systemctl start "$unitName" || return
 }
 
 
@@ -3543,6 +3678,11 @@ main ()
             source-service-environment-file)	source-service-environment-file "$@";;
             start-indexed-service)	start-indexed-service "$@";;
             start-service)	start-service "$@";;
+            sync-add-service) sync-add-service "$@";;
+            sync-follow-service) sync-follow-service "$@";;
+            sync-remove-service) sync-remove-service "$@";;
+            sync-run-service) sync-run-service "$@";;
+            sync-daylight-install-service) sync-daylight-install-service "$@";;
             sys-start)	sys-start "$@";;
             uninstall-etcd)	uninstall-etcd "$@";;
             untar-to-temp-folder)	untar-to-temp-folder "$@";;
@@ -3556,4 +3696,3 @@ main ()
 }
 
 (return 0 2>/dev/null) || main "$@"
-
