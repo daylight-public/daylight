@@ -3261,6 +3261,9 @@ sync-add-service ()
 
 	unitName=$(sync-create-unit-name "$key" "$downloadPath") || return
 	systemctl enable "$unitName" || return
+	sync-run-service "$key" "$downloadPath" || return
+	sync-follow-service "$key" "$downloadPath" || return
+
 }
 
 
