@@ -971,7 +971,7 @@ gen-completion-script ()
                                              return 1; }
     if [[ -t 0 ]]; then
         local scriptPath=$1
-        local scriptName=$(basename "$scriptPath")
+        local scriptName; scriptName=$(basename "$scriptPath") || return
     else
         scriptName=$1
     fi
@@ -1478,6 +1478,7 @@ github-get-app-info ()
 
     _info[id]=${args[0]}
     _info[client_id]=${args[1]}
+    # shellcheck disable=SC2154
     _info[slug]=${args[2]}
 }
 
@@ -1609,6 +1610,40 @@ github-install-latest-release ()
 }
 
 
+github-parse-args ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 2 )) || { printf 'Usage: github-parse-args infovar [$args]\n' >&2; return 1; }
+    # shellcheck disable=SC2178
+    [[ $1 != argmap ]] && { local -n argmap; argmap=$1; }
+    # Check that argmap is either an assoc array or a nameref to an assoc array
+    [[ $(declare -p argmap 2>/dev/null) == "declare -A"* ]] \
+    || [[ $(declare -p ${!argmap} 2>/dev/null) == "declare -A"* ]] \
+    || { printf "%s is not an associative array, and it's not a nameref to an associative array either\n" "argmap" >&2; return 1; }
+    # shellcheck disable=SC2178
+    [[ $2 != nargs ]] && { local -n nargs; nargs=$2; }
+
+    nargs=0
+    shift 2
+    while :; do
+        case $1 in
+            '--token')
+                (( $# >= 2 )) || { printf -- '--token specified but no token provided.\n' >&2; return 1; }
+                argmap[token]=$2
+                ((nargs+=2))
+                ;;
+            '--')
+                shift
+                ((nargs++))
+                break
+                ;;
+            *)
+                break
+                ;;
+        esac
+        shift
+    done
+}
 # Simple attempt to get info for a repo
 # If it does not succeed, it could mean the org or repo are nonexistent or misspelled
 # But it could also mean that the repo is non-public and requires a token for authentication
@@ -1851,6 +1886,7 @@ go-service-install ()
 	echo
 	printf '=== %s ===\n' "push distro to vm"
 	echo
+    # shellcheck disable=SC2086
 	incus exec "$vmName" -- bash -c "if [[ -f "/tmp/$tarballName" ]]; then rm "/tmp/$tarballName"; fi"
 	incus file push "$tarballPath" "$vmName/tmp/$tarballName"
 	# read -r -p "Ok? "
@@ -2666,32 +2702,6 @@ lxd-share-folder ()
 }
 
 
-parse-github-args ()
-{
-    # shellcheck disable=SC2016
-    (( $# >= 1 )) || { printf 'Usage: parse-github-args infovar [$args]\n' >&2; return 1; }
-    # shellcheck disable=SC2178
-    [[ $1 != github_args ]] && { local -n github_args; github_args=$1; }
-    [[ $(declare -p ${!github_args} 2>/dev/null) == "declare -A"* ]] || { printf '%s is not an associative array\n' "github_args" >&2; return 1; }
-
-    shift
-    while :; do
-        case $1 in
-            '--token')
-                (( $# >= 2 )) || { printf -- '--token specified but no token provided.\n' >&2; return 1; }
-                github_args[token]=$2
-                ;;
-            '--')
-                shift
-                break
-                ;;
-            *)
-                break
-                ;;
-        esac
-        shift
-    done
-}
 
 prep-filesystem ()
 {
@@ -2759,6 +2769,7 @@ pullAppInfo ()
 	_appInfo[releaseName]=${args[4]}
     _appInfo[repo]=${args[5]}
 	_appInfo[testEndpoint]=${args[6]}
+    # shellcheck disable=SC2154
     _appInfo[type]=${args[7]}
     # envFile requires special handling
     local tmpEnvFile; tmpEnvFile=$(create-temp-file "$name.envFile") || return
@@ -3569,7 +3580,7 @@ main ()
     if (( $# >= 1 )); then
         cmd=$1
         shift
-        case "$cmd" in
+        case "$cmd" in 
             activate-flask-app)	activate-flask-app "$@";;
             activate-svc)	activate-svc "$@";;
             activate-vm)	activate-vm "$@";;
@@ -3620,6 +3631,7 @@ main ()
             github-create-user-access-token) github-create-user-access-token "$@";;
             github-download-latest-release)    github-download-latest-release "$@";;
             github-install-latest-release) github-install-latest-release "$@";;
+            github-parse-args) github-parse-args "$@";;
             github-test-repo) github-test-repo "$@";;
             github-test-repo-with-auth) github-test-repo-with-auth "$@";;
             go-service-gen-nginx-domain-file) go-service-gen-nginx-domain-file "$@";;
