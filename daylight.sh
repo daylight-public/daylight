@@ -303,6 +303,7 @@ create-loopback ()
     printf '%s' "$path"
 }
 
+
 #
 # Create a cloud-init MIME including the special shellscript part-handlers (until they are a part of cloud-init!)
 #
@@ -1340,14 +1341,14 @@ github-curl ()
              --header "Accept: application/vnd.github+json" \
              --header "Authorization: Token $GITHUB_ACCESS_TOKEN" \
              "$url" \
-        || { printf 'curl failed inside github-curl\n'; return 1; }
+        || { printf 'curl failed inside github-curl\n' >&2; return 1; }
     else
         curl --fail-with-body \
              --location \
              --silent \
-             --header "Accept: application/vnd.github.json" \
+             --header "Accept: application/vnd.github+json" \
              "$url" \
-        || { printf 'curl failed inside github-curl\n'; return 1; }
+        || { printf 'curl failed inside github-curl\n' >&2; return 1; }
     fi
 }
 
@@ -1447,6 +1448,19 @@ github-get-app-data ()
 }
 
 
+github-get-app-id ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: github-get-app-id $appSlug\n' >&2; return 1; }
+    local appSlug=$1
+
+    local -A info
+    github-get-app-info info "$appSlug" || return
+    local id=${info[id]}
+    printf '%s' "$id"
+}
+
+
 github-get-app-info ()
 {
     # shellcheck disable=SC2016
@@ -1455,12 +1469,16 @@ github-get-app-info ()
     local appSlug=$2
 
     declare -a args
-    read -r -a args < <(github-curl "http://api.github.com/apps/$appSlug" \
-                        | jq -r '[.id, .client_id, .slug] | @tsv') \
-        || return
+    
+    local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.XXXXXX) || return
+    github-get-app-data "$appSlug" >"$tmpCurl" || return
+    local tmpJq; tmpJq=$(mktemp --tmpdir jq.XXXXXX) || return
+    jq -r '[.id, .client_id, .slug] | @tsv' <"$tmpCurl" >"$tmpJq" || return
+    read -r -a args < "$tmpJq" || return
+
     _info[id]=${args[0]}
     _info[client_id]=${args[1]}
-    _info['slug']=${args[2]}
+    _info[slug]=${args[2]}
 }
 
 
@@ -2650,12 +2668,18 @@ lxd-share-folder ()
 
 parse-github-args ()
 {
-    declare -g _gh_github_token
+    # shellcheck disable=SC2016
+    (( $# >= 1 )) || { printf 'Usage: parse-github-args infovar [$args]\n' >&2; return 1; }
+    # shellcheck disable=SC2178
+    [[ $1 != github_args ]] && { local -n github_args; github_args=$1; }
+    [[ $(declare -p ${!github_args} 2>/dev/null) == "declare -A"* ]] || { printf '%s is not an associative array\n' "github_args" >&2; return 1; }
+
+    shift
     while :; do
         case $1 in
             '--token')
                 (( $# >= 2 )) || { printf -- '--token specified but no token provided.\n' >&2; return 1; }
-                _gh_github_token=$2
+                github_args[token]=$2
                 ;;
             '--')
                 shift
@@ -3230,6 +3254,20 @@ start-service ()
 }
 
 
+sync-daylight-install-service ()
+{
+	local svc=sync-daylight
+	local svcFolder="/opt/svc/$svc"
+	mkdir -p "$svcFolder"
+    chown -R ubuntu:ubuntu "$svcFolder/"
+    sync-daylight-gen-unit-file >"$svcFolder/$svc.service"
+    sync-daylight-gen-run-script >"$svcFolder/run.sh"
+    chmod 755 "$svcFolder/run.sh"
+    sudo systemctl enable "$svcFolder/$svc.service"
+    sudo systemctl start "$svc"
+}
+
+
 sys-start ()
 {
     # shellcheck disable=SC2016
@@ -3415,6 +3453,7 @@ main ()
             create-static-website)	create-static-website "$@";;
             delete-lxd-instance)	delete-lxd-instance "$@";;
             download-app)	download-app "$@";;
+            download-daylight)	download-daylight "$@";;
             download-dist)	download-dist "$@";;
             download-flask-app)	download-flask-app "$@";;
             download-flask-service)	download-flask-service "$@";;
@@ -3517,3 +3556,4 @@ main ()
 }
 
 (return 0 2>/dev/null) || main "$@"
+
