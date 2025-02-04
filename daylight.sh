@@ -1325,28 +1325,40 @@ github-create-user-access-token ()
 github-curl ()
 {
     # shellcheck disable=SC2016
-    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: github-curl $urlPath [$urlBase]\n' >&2; return 1; }
+    (( $# >= 1 )) || { printf 'Usage: github-curl [flags] $urlPath [$urlBase]\n' >&2; return 1; }
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@"
+    shift "$nargs"
     local urlPath=$1
     local urlBase=${2:-'https://api.github.com'}
 
+    local acceptDefault='application/vnd.github+json'
+    local accept=${argmap[accept]:-$acceptDefault}
+    local outputDefault='-'
+    local output=${argmap[output]:-$outputDefault}
     # Trim leading slash
     if [[ $urlPath == /* ]]; then
         urlPath=${urlPath:1}
     fi
     local url="$urlBase/$urlPath"
-    if [[ -n $GITHUB_ACCESS_TOKEN ]]; then
+    local token=${argmap[token]}
+    if [[ -n $token ]]; then
         curl --fail-with-body \
              --location \
              --silent \
-             --header "Accept: application/vnd.github+json" \
-             --header "Authorization: Token $GITHUB_ACCESS_TOKEN" \
+             --header "Accept: $accept" \
+             --header "Authorization: Token $token" \
+             --output "$output" \
              "$url" \
         || { printf 'curl failed inside github-curl\n' >&2; return 1; }
     else
         curl --fail-with-body \
              --location \
              --silent \
-             --header "Accept: application/vnd.github+json" \
+             --header "Accept: $accept" \
+             --output "$output" \
              "$url" \
         || { printf 'curl failed inside github-curl\n' >&2; return 1; }
     fi
@@ -1487,13 +1499,23 @@ github-get-app-info ()
 #
 github-get-latest-release-tag ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@"
+    shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-get-latest-version $org $repo\n' >&2; return 1; }
+    (( $# == 2 )) || { printf 'Usage: github-get-latest-version [flags] $org $repo\n' >&2; return 1; }
     local org=$1
     local repo=$2
+    
     releasesUrlPath=$(github-get-releases-url-path "$org" "$repo")
     command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq"; return 1; }
-    local VER; VER=$(github-curl "$releasesUrlPath" \
+    # build argstring for github-curl
+    local argstring=''
+    [[ -n ${argmap[token]} ]] && argstring+="--token ${argmap[token]}"
+    # github-curl -- note $argstring is unquoted
+    local VER; VER=$(github-curl $argstring "$releasesUrlPath" \
                      | jq -r .tag_name)
     printf '%s' "$VER"
 }
@@ -1502,15 +1524,24 @@ github-get-latest-release-tag ()
 
 github-get-release-data ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@"
+    shift "$nargs"
     # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-data $org $repo [$releaseTag [$platform]]\n' >&2; return 1; }
+    { (( $# >= 2 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-data [flags] $org $repo [$releaseTag [$platform]]\n' >&2; return 1; }
     local org=$1
     local repo=$2
     local tag=${3:-""}
     
-    local urlPath; urlPath="$(github-get-releases-url-path "${@:1}")" || return
+    local urlPath; urlPath="$(github-get-releases-url-path "$org" "$repo" "$tag")" || return
 	local tmpCurl; tmpCurl=$(create-temp-file github.get.release.data.json) || return
-    github-curl "$urlPath" >"$tmpCurl" || return
+    # build argstring for github-curl
+    local argstring=''
+    [[ -n ${argmap[token]} ]] && argstring+="--token ${argmap[token]}"
+    # github-curl -- note $argstring is unquoted
+    github-curl $argstring "$urlPath" >"$tmpCurl" || return
 	printf '%s' "$tmpCurl"
 }
 
@@ -1613,12 +1644,12 @@ github-install-latest-release ()
 github-parse-args ()
 {
     # shellcheck disable=SC2016
-    (( $# >= 2 )) || { printf 'Usage: github-parse-args infovar [$args]\n' >&2; return 1; }
+    (( $# >= 2 )) || { printf 'Usage: github-parse-args infovar nargs [$args]\n' >&2; return 1; }
     # shellcheck disable=SC2178
     [[ $1 != argmap ]] && { local -n argmap; argmap=$1; }
     # Check that argmap is either an assoc array or a nameref to an assoc array
     [[ $(declare -p argmap 2>/dev/null) == "declare -A"* ]] \
-    || [[ $(declare -p ${!argmap} 2>/dev/null) == "declare -A"* ]] \
+    || [[ $(declare -p "${!argmap}" 2>/dev/null) == "declare -A"* ]] \
     || { printf "%s is not an associative array, and it's not a nameref to an associative array either\n" "argmap" >&2; return 1; }
     # shellcheck disable=SC2178
     [[ $2 != nargs ]] && { local -n nargs; nargs=$2; }
@@ -1627,10 +1658,23 @@ github-parse-args ()
     shift 2
     while :; do
         case $1 in
+            '--accept')
+                (( $# >= 2 )) || { printf -- '--accept specified but no accept provided.\n' >&2; return 1; }
+                argmap[accept]=$2
+                ((nargs+=2))
+                shift 2
+                ;;
+            '--output')
+                (( $# >= 2 )) || { printf -- '--output specified but no output provided.\n' >&2; return 1; }
+                argmap[output]=$2
+                ((nargs+=2))
+                shift 2
+                ;;
             '--token')
                 (( $# >= 2 )) || { printf -- '--token specified but no token provided.\n' >&2; return 1; }
                 argmap[token]=$2
                 ((nargs+=2))
+                shift 2
                 ;;
             '--')
                 shift
@@ -1641,7 +1685,6 @@ github-parse-args ()
                 break
                 ;;
         esac
-        shift
     done
 }
 # Simple attempt to get info for a repo
