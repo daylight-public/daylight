@@ -1324,13 +1324,13 @@ github-create-user-access-token ()
 
 github-curl ()
 {
-    # shellcheck disable=SC2016
-    (( $# >= 1 )) || { printf 'Usage: github-curl [flags] $urlPath [$urlBase]\n' >&2; return 1; }
     # parse github args
     local -A argmap=()
     local nargs=0
     github-parse-args argmap nargs "$@"
     shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# >= 1 && $# <= 2 )) || { printf 'Usage: github-curl [flags] $urlPath [$urlBase]\n' >&2; return 1; }
     local urlPath=${1##/} # Trim leading slash if necessary
     local urlBase=${2:-'https://api.github.com'}
 
@@ -1339,7 +1339,7 @@ github-curl ()
     local accept=${argmap[accept]:-$acceptDefault}
     local outputDefault='-'
     local output=${argmap[output]:-$outputDefault}
-    # Set urlPath and token, if present
+    # Set url and token, if present
     local url="$urlBase/$urlPath"
     local token=${argmap[token]}
     # Can't really parameterize on token -- we need separate curl calls for with token, and without
@@ -1366,24 +1366,33 @@ github-curl ()
 
 github-curl-post ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@"
+    shift "$nargs"
     # shellcheck disable=SC2016
     { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-curl $urlPath $postData [$urlBase]\n' >&2; return 1; }
-    local urlPath=$1
+    local urlPath=${1##/} # Trim leading slash if necessary
     local postData=$2
     local urlBase=${3:-'https://api.github.com'}
 
-    # Trim leading slash
-    if [[ $urlPath == /* ]]; then
-        urlPath=${urlPath:1}
-    fi
+    local acceptDefault='application/vnd.github+json'
+    local accept=${argmap[accept]:-$acceptDefault}
+    local outputDefault='-'
+    local output=${argmap[output]:-$outputDefault}
+    # Set url and token, if present
     local url="$urlBase/$urlPath"
-    if [[ -n $GITHUB_ACCESS_TOKEN ]]; then
+    local token=${argmap[token]}
+    # Can't really parameterize on token -- we need separate curl calls for with token, and without
+    if [[ -n $token ]]; then
         curl --fail-with-body \
              --location \
              --silent \
              --data "'$postData'" \
-             --header "Accept: application/json" \
-             --header "Authorization: Token $GITHUB_ACCESS_TOKEN" \
+             --header "Accept: $accept" \
+             --header "Authorization: Token $token" \
+             --output "$output" \
              "$url" \
         || return
     else
@@ -1391,7 +1400,8 @@ github-curl-post ()
              --location \
              --silent \
              --data "'$postData'" \
-             --header "Accept: application/json" \
+             --header "Accept: $accept" \
+             --output "$output" \
              "$url" \
         || return
     fi
@@ -1400,6 +1410,11 @@ github-curl-post ()
 
 github-download-latest-release ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@"
+    shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 4 )) || { printf 'Usage: download-latest-release $org $repo $name $downloadFolder\n' >&2; return 1; }
     local org=$1
@@ -1412,25 +1427,13 @@ github-download-latest-release ()
     github-get-release-package-info releaseInfo "$org" "$repo" "$name" || return
     declare -p releaseInfo
     local url=${releaseInfo[url]}
-    local releasePath="$downloadFolder/$name"
-    if [[ -n $GITHUB_ACCESS_TOKEN ]]; then
-        curl --fail-with-body \
-             --location \
-             --verbose \
-             --header "Accept: application/octet-stream" \
-             --header "Authorization: Token $GITHUB_ACCESS_TOKEN" \
-             --output "$releasePath" \
-             "$url" \
-        || return
+    local accept='Accept: application/octet-stream'
+    local output="$downloadFolder/$name"
+    local token=${argmap[token]}
+    if [[ -n $token ]]; then
+        github-curl --token "$token" --accept "$accept" --output "$output"
     else
-        curl --fail-with-body \
-             --location \
-             --verbose \
-             --header "Accept: application/json" \
-             --header "Accept: application/octet-stream" \
-             --output "$releasePath" \
-             "$url" \
-        || return
+        github-curl --accept "$accept" --output "$output"
     fi
     printf '%s' "$releasePath"
 }
@@ -1555,9 +1558,9 @@ github-get-release-name-list ()
     # shellcheck disable=SC2034
 	local tmpJq; tmpJq=$(create-temp-file jq.get.release.name.list.txt) || return
 	jq -r '[.assets[].name] | sort | @tsv' \
-	<"$tmpCurl" \
-	>"$tmpJq" \
-	|| return
+        <"$tmpCurl" \
+        >"$tmpJq" \
+        || return
 
 	# shellcheck disable=SC2034
     read -r -a listVar <"$tmpJq" || return
@@ -1697,15 +1700,9 @@ github-test-repo ()
     local org=$1
     local repo=$2
 
+    local urlPath="/repos/$org/$repo"
     # We don't care about the info, just if we can successfully call the endpoint
-    # --output /dev/null and --fail suppress any output
-    # Because the flags are different we can't use github-curl()
-    curl --location \
-         --silent \
-         --output /dev/null \
-         --fail \
-         "https://api.github.com/repos/$org/$repo" \
-    || return
+    github-curl --output /dev/null "$urlPath" || return
 }
 
 
@@ -1721,17 +1718,11 @@ github-test-repo-with-auth ()
     local repo=$2
     local token=$3
 
+    local urlPath="/repos/$org/$repo"
     # We don't care about the info, just if we can successfully call the endpoint
-    # --output /dev/null and --fail suppress any output
-    # Because the flags are different we can't use github-curl()
-    curl --location \
-         --silent \
-         --output /dev/null \
-         --header "Authorization: Token $token" \
-         --fail \
-         "https://api.github.com/repos/$org/$repo" \
-    || return
+    github-curl --output /dev/null --token "$token" "$urlPath" || return
 }
+
 
 go-service-gen-nginx-domain-file ()
 {
