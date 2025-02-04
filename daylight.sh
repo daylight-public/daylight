@@ -1331,19 +1331,18 @@ github-curl ()
     local nargs=0
     github-parse-args argmap nargs "$@"
     shift "$nargs"
-    local urlPath=$1
+    local urlPath=${1##/} # Trim leading slash if necessary
     local urlBase=${2:-'https://api.github.com'}
 
+    # Set headers to flag values or default
     local acceptDefault='application/vnd.github+json'
     local accept=${argmap[accept]:-$acceptDefault}
     local outputDefault='-'
     local output=${argmap[output]:-$outputDefault}
-    # Trim leading slash
-    if [[ $urlPath == /* ]]; then
-        urlPath=${urlPath:1}
-    fi
+    # Set urlPath and token, if present
     local url="$urlBase/$urlPath"
     local token=${argmap[token]}
+    # Can't really parameterize on token -- we need separate curl calls for with token, and without
     if [[ -n $token ]]; then
         curl --fail-with-body \
              --location \
