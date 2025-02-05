@@ -233,6 +233,10 @@ create-flask-app ()
 }
 
 
+###
+# @deprecated
+# use github-create-user-access-token instead
+###
 create-github-user-access-token ()
 {
     client_id=Iv1.f69b43d6e5f4ea24
@@ -1272,8 +1276,8 @@ github-create-user-access-token ()
     (( $# == 2 )) || { printf 'Usage: github-create-user-access-token tokenvar $appslug\n' >&2; return 1; }
     local -n tokenvar=$1
     local appSlug=$2
+
     # Get the clientId for the dylt-cli GitHub App CLI, which must be installed 
-    
     local urlPath="/apps/$appSlug"
     tmpCurl=$(create-temp-file 'curl.apps')
     github-curl "$urlPath" >"$tmpCurl" || return
@@ -1658,11 +1662,17 @@ github-parse-args ()
 
     nargs=0
     shift 2
-    while :; do
+    while (( $# > 0 )); do
         case $1 in
             '--accept')
                 (( $# >= 2 )) || { printf -- '--accept specified but no accept provided.\n' >&2; return 1; }
                 argmap[accept]=$2
+                ((nargs+=2))
+                shift 2
+                ;;
+            '--data')
+                (( $# >= 2 )) || { printf -- '--data specified but no accept provided.\n' >&2; return 1; }
+                argmap[data]=$2
                 ((nargs+=2))
                 shift 2
                 ;;
