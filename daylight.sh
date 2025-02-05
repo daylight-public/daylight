@@ -1376,7 +1376,7 @@ github-curl-post ()
     github-parse-args argmap nargs "$@"
     shift "$nargs"
     # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-curl $urlPath $postData [$urlBase]\n' >&2; return 1; }
+    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-curl-post $urlPath $postData [$urlBase]\n' >&2; return 1; }
     local urlPath=${1##/} # Trim leading slash if necessary
     local postData=$2
     local urlBase=${3:-'https://api.github.com'}
