@@ -1345,27 +1345,16 @@ github-curl ()
     local output=${argmap[output]:-$outputDefault}
     # Set url and token, if present
     local url="$urlBase/$urlPath"
-    local token=${argmap[token]}
     # Can't really parameterize on token -- we need separate curl calls for with token, and without
-    if [[ -n $token ]]; then
-        curl --fail-with-body \
-             --location \
-             --silent \
-             --header "Accept: $accept" \
-             --header "Authorization: Token $token" \
-             --output "$output" \
-             "$url" \
+    local -a flags=(--fail-with-body --location --silent)
+    flags+=(--header "Accept: $accept")
+    flags+=(--output "$output")
+    [[ -v argmap[data] ]] && flags+=(--data "$(printf "'%s'" "${argmap[data]}")")
+    [[ -v argmap[token] ]] && flags+=(--header "Authorization: Token ${argmap[token]}")
+    curl "${flags[@]}" "$url" \
         || { printf 'curl failed inside github-curl\n' >&2; return 1; }
-    else
-        curl --fail-with-body \
-             --location \
-             --silent \
-             --header "Accept: $accept" \
-             --output "$output" \
-             "$url" \
-        || { printf 'curl failed inside github-curl\n' >&2; return 1; }
-    fi
 }
+
 
 
 github-curl-post ()
