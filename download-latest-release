@@ -30,45 +30,6 @@ github-curl ()
         || { printf 'curl failed inside github-curl\n' >&2; return 1; }
 }
 
-github-get-release-data ()
-{
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-parse-args argmap nargs "$@"
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-data [flags] $org $repo [$releaseTag [$platform]]\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local tag=${3:-""}
-    
-    local urlPath; urlPath="$(github-get-releases-url-path "$org" "$repo" "$tag")" || return
-    # build argstring for github-curl
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    github-curl "${flags[@]}" "$urlPath" || return
-}
-
-
-github-get-releases-url-path ()
-{
-    # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-get-releases-url $org $repo [$releaseTag]\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local tag=${3:-""}
-    
-    local url
-    if (( $# == 3 )) && [[ -n "$tag" ]]; then
-        local url="/repos/$org/$repo/releases/tags/$tag"
-    else
-        local url="/repos/$org/$repo/releases/latest"
-    fi
-    printf '%s' "$url"
-}
-
-
 github-parse-args ()
 {
     # shellcheck disable=SC2016
@@ -118,110 +79,23 @@ github-parse-args ()
 }
 
 
-github-list-releases ()
+github-release-create-url-path ()
 {
-	# parse github args
-	local -A argmap=()
-	local nargs=0
-	github-parse-args argmap nargs "$@"
-	shift "$nargs"
-	# shellcheck disable=SC2016
-	(( $# == 2 )) || { printf 'Usage: github-list-releases [flags] $org $repo\n' >&2; return 1; }
-	local org=$1
-	local repo=$2
-
-	# get release name list, using token if provided
-    local -a flags=()
-	[[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-	github-get-release-data "${flags[@]}" "$org" "$repo" \
-	| jq -r '[.assets[].name] | sort | @tsv' \
-	|| return
-
-}
-
-
-github-release-get-package-data ()
-{
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-parse-args argmap nargs "$@" || return
-    shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: github-release-get-package-data $org $repo $name\n' >&2; return 1; }
+    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-release-create-url-path $org $repo [$releaseTag]\n' >&2; return 1; }
     local org=$1
     local repo=$2
-    local name=$3
-
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    local urlPath; urlPath="$(github-get-releases-url-path "$org" "$repo")" || return
-    local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.release.XXXXXX) || return
-    github-curl "${flags[@]}" "$urlPath" >"$tmpCurl" || return
-    jq -r --arg name "$name" \
-       '.assets[]
-        | select(.name == $name)' \
-      </"$tmpCurl" \
-      || return 
+    local tag=${3:-""}
+    
+    local urlPath
+    if (( $# == 3 )) && [[ -n "$tag" ]]; then
+        local urlPath="/repos/$org/$repo/releases/tags/$tag"
+    else
+        local urlPath="/repos/$org/$repo/releases/latest"
+    fi
+    printf '%s' "$urlPath"
 }
 
-
-github-release-get-package-info ()
-{
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: github-get-release-package-info infovar $org $repo $name\n' >&2; return 1; }
-    # shellcheck disable=SC2178
-    [[ $1 != info ]] && { local -n info; info=$1; }
-    local org=$2
-    local repo=$3
-    local name=$4
-
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    local -a packageFields=()
-    read -r -a packageFields < <(github-release-get-package-data "${flags[@]}" "$org" "$repo" "$releaseName" \
-    | jq -r '
-        [.browser_download_url,
-         .content_type,
-         (.browser_download_url | match(".*/(.*)").captures[0].string),
-         .id,
-         .name,
-         .url,
-         (.url | match("https://api.github.com/(.*)").captures[0].string)
-        ] | @tsv' \
-      || return)
-    info[browser_download_url]=${packageFields[0]}
-    info[content_type]=${packageFields[1]}
-    info[filename]=${packageFields[2]}
-    info[id]=${packageFields[3]}
-    info[name]=${packageFields[4]}
-    info[url]=${packageFields[5]}
-    info[urlPath]=${packageFields[6]}
-}
-
-github-release-select ()
-{
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-	# shellcheck disable=SC2016
-	(( $# == 3 )) || { printf 'Usage: github-list-releases [flags] name $org $repo\n' >&2; return 1; }
-	[[ $1 != 'name' ]] && local -n name=$1
-	local org=$2
-	local repo=$3
-
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-	IFS=$'\t' read -r -a names < <(github-list-releases "${flags[@]}" "$org" "$repo") || return
-	select name in "${names[@]}"; do break; done
-}
 
 github-release-download-latest ()
 {
@@ -251,6 +125,136 @@ github-release-download-latest ()
     flags+=(--accept "$accept" --output "$output")
     github-curl "${flags[@]}" "$urlPath" || return
     printf '%s' "$output"
+}
+
+
+github-release-get-data ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@"
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    { (( $# >= 2 )) && (( $# <= 4 )); } || { printf 'Usage: github-release-get-data [flags] $org $repo [$releaseTag [$platform]]\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local tag=${3:-""}
+    
+    local urlPath; urlPath="$(github-release-create-url-path "$org" "$repo" "$tag")" || return
+    # build argstring for github-curl
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    github-curl "${flags[@]}" "$urlPath" || return
+}
+
+
+github-release-get-package-data ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: github-release-get-package-data $org $repo $name\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local name=$3
+
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    local urlPath; urlPath="$(github-release-create-url-path "$org" "$repo")" || return
+    local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.release.XXXXXX) || return
+    github-curl "${flags[@]}" "$urlPath" >"$tmpCurl" || return
+    jq -r --arg name "$name" \
+       '.assets[]
+        | select(.name == $name)' \
+      </"$tmpCurl" \
+      || return 
+}
+
+
+github-release-get-package-info ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: github-get-release-package-info infovar $org $repo $name\n' >&2; return 1; }
+    # shellcheck disable=SC2178
+    [[ $1 != info ]] && { local -n info; info=$1; }
+    local org=$2
+    local repo=$3
+    local name=$4
+
+    # Call github-release-get-package-data and create/parse the necesary fields
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    local -a fields=()
+    read -r -a fields < <(github-release-get-package-data "${flags[@]}" "$org" "$repo" "$releaseName" \
+    | jq -r '
+        [.browser_download_url,
+         .content_type,
+         (.browser_download_url | match(".*/(.*)").captures[0].string),
+         .id,
+         .name,
+         .url,
+         (.url | match("https://api.github.com/(.*)").captures[0].string)
+        ] | @tsv' \
+      || return)
+    # Package fields into the info assoc array
+    info[browser_download_url]=${fields[0]}
+    info[content_type]=${fields[1]}
+    info[filename]=${fields[2]}
+    info[id]=${fields[3]}
+    info[name]=${fields[4]}
+    info[url]=${fields[5]}
+    info[urlPath]=${fields[6]}
+}
+
+
+github-release-list ()
+{
+	# parse github args
+	local -A argmap=()
+	local nargs=0
+	github-parse-args argmap nargs "$@"
+	shift "$nargs"
+	# shellcheck disable=SC2016
+	(( $# == 2 )) || { printf 'Usage: github-release-list [flags] $org $repo\n' >&2; return 1; }
+	local org=$1
+	local repo=$2
+
+	# get release name list, using token if provided
+    local -a flags=()
+	[[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+	github-release-get-data "${flags[@]}" "$org" "$repo" \
+	| jq -r '[.assets[].name] | sort | @tsv' \
+	|| return
+
+}
+
+
+github-release-select ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+	# shellcheck disable=SC2016
+	(( $# == 3 )) || { printf 'Usage: github-release-select [flags] name $org $repo\n' >&2; return 1; }
+	[[ $1 != 'name' ]] && local -n name=$1
+	local org=$2
+	local repo=$3
+
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+	IFS=$'\t' read -r -a names < <(github-release-list "${flags[@]}" "$org" "$repo") || return
+	select name in "${names[@]}"; do break; done
 }
 
 main ()
