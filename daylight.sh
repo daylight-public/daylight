@@ -566,19 +566,6 @@ download-daylight ()
 }
 
 #
-# Download latest dylt release
-#
-download-dylt ()
-{
-    # shellcheck disable=SC2016
-    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: download-dylt [$dstFolder]\n' >&2; return 1; }
-    local dstFolder=${1:-/opt/bin/}
-    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
-    github-download-latest-release dylt-dev dylt linux_amd64 "$dstFolder"
-}
-
-
-#
 # Download the entire dist folder from S3 to /tmp/dist
 #
 download-dist ()
@@ -590,6 +577,28 @@ download-dist ()
     mkdir -p /tmp/dist || return
     aws s3 cp --recursive "s3://$bucket/dist" /tmp/dist || return
     find /tmp/dist -type f -name "*.sh" -exec chmod 777 {} \; || return
+}
+
+
+#
+# Download latest dylt release
+#
+download-dylt ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: download-dylt [$dstFolder]\n' >&2; return 1; }
+    local dstFolder=${1:-/opt/bin/}
+    
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}") 
+    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
+    github-release-download-latest "${flags[@]}" dylt-dev dylt linux_amd64 "$dstFolder"
 }
 
 
@@ -3862,6 +3871,7 @@ main ()
             create-static-website)	create-static-website "$@";;
             delete-lxd-instance)	delete-lxd-instance "$@";;
             download-app)	download-app "$@";;
+            download-dylt)	download-dylt "$@";;
             download-daylight)	download-daylight "$@";;
             download-dist)	download-dist "$@";;
             download-flask-app)	download-flask-app "$@";;
