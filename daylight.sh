@@ -1702,17 +1702,26 @@ github-release-get-latest-tag ()
 # The Github API returns 404s for all of the above, so the error status doesn't tell us anything
 github-test-repo ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: github-test-repo $org $repo\n' >&2; return 1; }
     local org=$1
     local repo=$2
 
     local urlPath="/repos/$org/$repo"
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
     # We don't care about the info, just if we can successfully call the endpoint
-    github-curl --output /dev/null "$urlPath" || return
+    github-curl "${flags[@]}" --output /dev/null "$urlPath" || return
 }
 
 
+# @deprecated - use github-test-repo and pass a token
+#
 # Simple attempt to get info for a repo
 # If it does not succeed, it could mean the org or repo are nonexistent or misspelled
 # But it could also mean that the repo is non-public and requires a token for authentication
