@@ -1,0 +1,28 @@
+#! /usr/bin/env bash
+
+set -ux
+
+github-list-releases ()
+{
+	# shellcheck disable=SC2016
+	[[ -f "./daylight.sh" ]] || { echo "Non-existent path: ./daylight.sh" >&2; return 1; }
+	source ./daylight.sh || return
+	# parse github args
+	local -A argmap=()
+	local nargs=0
+	github-parse-args argmap nargs "$@"
+	shift "$nargs"
+	# shellcheck disable=SC2016
+	(( $# == 2 )) || { printf 'Usage: github-list-releases [flags] $org $repo\n' >&2; return 1; }
+
+	# check if token was provided
+	[[ -v argmap[token] ]] && printf 'token=%s\n' "${argmap[token]}" || echo notoken
+
+	# get release name list, using token if provided
+
+	echo hiii
+}
+
+(return 0 2>/dev/null) || github-list-releases "$@"
+
+

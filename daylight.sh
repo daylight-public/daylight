@@ -233,6 +233,10 @@ create-flask-app ()
 }
 
 
+###
+# @deprecated
+# use github-create-user-access-token instead
+###
 create-github-user-access-token ()
 {
     client_id=Iv1.f69b43d6e5f4ea24
@@ -562,19 +566,6 @@ download-daylight ()
 }
 
 #
-# Download latest dylt release
-#
-download-dylt ()
-{
-    # shellcheck disable=SC2016
-    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: download-dylt [$dstFolder]\n' >&2; return 1; }
-    local dstFolder=${1:-/opt/bin/}
-    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
-    github-download-latest-release dylt-dev dylt linux_amd64 "$dstFolder"
-}
-
-
-#
 # Download the entire dist folder from S3 to /tmp/dist
 #
 download-dist ()
@@ -586,6 +577,28 @@ download-dist ()
     mkdir -p /tmp/dist || return
     aws s3 cp --recursive "s3://$bucket/dist" /tmp/dist || return
     find /tmp/dist -type f -name "*.sh" -exec chmod 777 {} \; || return
+}
+
+
+#
+# Download latest dylt release
+#
+download-dylt ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: download-dylt [$dstFolder]\n' >&2; return 1; }
+    local dstFolder=${1:-/opt/bin/}
+    
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}") 
+    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
+    github-release-download-latest "${flags[@]}" dylt-dev dylt linux_amd64 "$dstFolder"
 }
 
 
@@ -971,7 +984,7 @@ gen-completion-script ()
                                              return 1; }
     if [[ -t 0 ]]; then
         local scriptPath=$1
-        local scriptName=$(basename "$scriptPath")
+        local scriptName; scriptName=$(basename "$scriptPath") || return
     else
         scriptName=$1
     fi
@@ -1252,6 +1265,90 @@ getVmName ()
 }
 
 
+github-app-get-client-id ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: github-app-get-id $appSlug\n' >&2; return 1; }
+    local appSlug=$1
+
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    local -A info
+    github-app-get-info "${flags[@]}" info "$appSlug" || return
+    local clientId=${info[client_id]}
+    printf '%s' "$clientId"
+}
+
+
+github-app-get-data ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: github-app-get-data $appSlug\n' >&2; return 1; }
+    local appSlug=$1
+
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    github-curl "${flags[@]}" "/apps/$appSlug" || return
+}
+
+
+github-app-get-id ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: github-app-get-id $appSlug\n' >&2; return 1; }
+    local appSlug=$1
+
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    local -A info
+    github-app-get-info "${flags[@]}" info "$appSlug" || return
+    local id=${info[id]}
+    printf '%s' "$id"
+}
+
+
+github-app-get-info ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: github-app-get-data $infovar $appSlug\n' >&2; return 1; }
+    local -n _info=$1
+    local appSlug=$2
+
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.XXXXXX) || return
+    github-app-get-data "${flags[@]}" "$appSlug" >"$tmpCurl" || return
+    local tmpJq; tmpJq=$(mktemp --tmpdir jq.XXXXXX) || return
+    jq -r '[.id, .client_id, .slug] | @tsv' <"$tmpCurl" >"$tmpJq" || return
+    read -r -a args < "$tmpJq" || return
+
+    _info[id]=${args[0]}
+    _info[client_id]=${args[1]}
+    # shellcheck disable=SC2154
+    _info[slug]=${args[2]}
+}
+
+
 github-create-url ()
 {
     local urlPath=$1
@@ -1268,27 +1365,31 @@ github-create-url ()
 
 github-create-user-access-token ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: github-create-user-access-token tokenvar $appslug\n' >&2; return 1; }
-    local -n tokenvar=$1
+    # shellcheck disable=SC2178
+    [[ $1 != tokenvar ]] && { local -n tokenvar; tokenvar=$1; }
     local appSlug=$2
-    # Get the clientId for the dylt-cli GitHub App CLI, which must be installed 
+
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
     
-    local urlPath="/apps/$appSlug"
-    tmpCurl=$(create-temp-file 'curl.apps')
-    github-curl "$urlPath" >"$tmpCurl" || return
-    tmpJq=$(create-temp-file 'jq.apps')
-    jq -r '.client_id' <"$tmpCurl" >"$tmpJq" || return
-    read -r clientId <"$tmpJq" || return
-    [[ -n $clientId ]] || return 1
+    # Get the clientId for the dylt-cli GitHub App CLI, which must be installed 
+    local clientId; clientId=$(github-app-get-client-id "${flags[@]}" "$appSlug") || return
 
     # Use client id to invoke device code flow
+    flags+=(--data '')
     urlPath="/login/device/code?client_id=$clientId"
     urlBase="https://github.com"
     local -a args
-    read -r -a args < <(github-curl-post "$urlPath" "" "$urlBase" \
+    read -r -a args < <(github-curl "${flags[@]}" "$urlPath" "$urlBase" \
                         | jq -r '[.device_code, .user_code, .verification_uri] | @tsv') \
-                        || { printf 'Call failed: github-curl-post()\n'; return; }
+                        || { printf 'Call failed: github-curl()\n'; return; }
     local deviceCode=${args[0]}
     local userCode=${args[1]}
     local verificationUri=${args[2]}
@@ -1313,7 +1414,7 @@ github-create-user-access-token ()
     local grantType='urn:ietf:params:oauth:grant-type:device_code'
     urlPath="$(printf '/login/oauth/access_token?client_id=%s&device_code=%s&grant_type=%s' "$clientId" "$deviceCode" "$grantType")"
     urlBase="https://github.com"
-    read -r -a args < <(github-curl-post "$urlPath" "" "$urlBase" \
+    read -r -a args < <(github-curl "${flags[@]}" "$urlPath" "$urlBase" \
                         | jq -r '[.access_token] | @tsv') \
                         || return
     # return the access token
@@ -1324,55 +1425,68 @@ github-create-user-access-token ()
 
 github-curl ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@"
+    shift "$nargs"
     # shellcheck disable=SC2016
-    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: github-curl $urlPath [$urlBase]\n' >&2; return 1; }
-    local urlPath=$1
+    (( $# >= 1 && $# <= 2 )) || { printf 'Usage: github-curl [flags] $urlPath [$urlBase]\n' >&2; return 1; }
+    local urlPath=${1##/} # Trim leading slash if necessary
     local urlBase=${2:-'https://api.github.com'}
 
-    # Trim leading slash
-    if [[ $urlPath == /* ]]; then
-        urlPath=${urlPath:1}
-    fi
+    # Set headers to flag values or default
+    local acceptDefault='application/vnd.github+json'
+    local accept=${argmap[accept]:-$acceptDefault}
+    local outputDefault='-'
+    local output=${argmap[output]:-$outputDefault}
+    # Set url and token, if present
     local url="$urlBase/$urlPath"
-    if [[ -n $GITHUB_ACCESS_TOKEN ]]; then
-        curl --fail-with-body \
-             --location \
-             --silent \
-             --header "Accept: application/vnd.github+json" \
-             --header "Authorization: Token $GITHUB_ACCESS_TOKEN" \
-             "$url" \
+    # Can't really parameterize on token -- we need separate curl calls for with token, and without
+    local -a flags=(--fail-with-body --location --silent)
+    flags+=(--header "Accept: $accept")
+    flags+=(--output "$output")
+    [[ -v argmap[data] ]] && flags+=(--data "$(printf "'%s'" "${argmap[data]}")")
+    [[ -v argmap[token] ]] && flags+=(--header "Authorization: Token ${argmap[token]}")
+    curl "${flags[@]}" "$url" \
         || { printf 'curl failed inside github-curl\n' >&2; return 1; }
-    else
-        curl --fail-with-body \
-             --location \
-             --silent \
-             --header "Accept: application/vnd.github+json" \
-             "$url" \
-        || { printf 'curl failed inside github-curl\n' >&2; return 1; }
-    fi
 }
 
 
+
+###
+# @deprecated
+# use github-curl with --data 'your-data'
+###
 github-curl-post ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@"
+    shift "$nargs"
     # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-curl $urlPath $postData [$urlBase]\n' >&2; return 1; }
-    local urlPath=$1
+    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-curl-post $urlPath $postData [$urlBase]\n' >&2; return 1; }
+    local urlPath=${1##/} # Trim leading slash if necessary
     local postData=$2
     local urlBase=${3:-'https://api.github.com'}
 
-    # Trim leading slash
-    if [[ $urlPath == /* ]]; then
-        urlPath=${urlPath:1}
-    fi
+    local acceptDefault='application/vnd.github+json'
+    local accept=${argmap[accept]:-$acceptDefault}
+    local outputDefault='-'
+    local output=${argmap[output]:-$outputDefault}
+    # Set url and token, if present
     local url="$urlBase/$urlPath"
-    if [[ -n $GITHUB_ACCESS_TOKEN ]]; then
+    local token=${argmap[token]}
+    # Can't really parameterize on token -- we need separate curl calls for with token, and without
+    if [[ -n $token ]]; then
         curl --fail-with-body \
              --location \
              --silent \
              --data "'$postData'" \
-             --header "Accept: application/json" \
-             --header "Authorization: Token $GITHUB_ACCESS_TOKEN" \
+             --header "Accept: $accept" \
+             --header "Authorization: Token $token" \
+             --output "$output" \
              "$url" \
         || return
     else
@@ -1380,7 +1494,8 @@ github-curl-post ()
              --location \
              --silent \
              --data "'$postData'" \
-             --header "Accept: application/json" \
+             --header "Accept: $accept" \
+             --output "$output" \
              "$url" \
         || return
     fi
@@ -1389,6 +1504,11 @@ github-curl-post ()
 
 github-download-latest-release ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@"
+    shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 4 )) || { printf 'Usage: download-latest-release $org $repo $name $downloadFolder\n' >&2; return 1; }
     local org=$1
@@ -1401,119 +1521,50 @@ github-download-latest-release ()
     github-get-release-package-info releaseInfo "$org" "$repo" "$name" || return
     declare -p releaseInfo
     local url=${releaseInfo[url]}
-    local releasePath="$downloadFolder/$name"
-    if [[ -n $GITHUB_ACCESS_TOKEN ]]; then
-        curl --fail-with-body \
-             --location \
-             --verbose \
-             --header "Accept: application/octet-stream" \
-             --header "Authorization: Token $GITHUB_ACCESS_TOKEN" \
-             --output "$releasePath" \
-             "$url" \
-        || return
+    local accept='Accept: application/octet-stream'
+    local output="$downloadFolder/$name"
+    local token=${argmap[token]}
+    if [[ -n $token ]]; then
+        github-curl --token "$token" --accept "$accept" --output "$output"
     else
-        curl --fail-with-body \
-             --location \
-             --verbose \
-             --header "Accept: application/json" \
-             --header "Accept: application/octet-stream" \
-             --output "$releasePath" \
-             "$url" \
-        || return
+        github-curl --accept "$accept" --output "$output"
     fi
     printf '%s' "$releasePath"
 }
 
 
-github-get-app-client-id ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: github-get-app-id $appSlug\n' >&2; return 1; }
-    local appSlug=$1
-
-    local -A info
-    github-get-app-info info "$appSlug" || return
-    local clientId=${info[client_id]}
-    printf '%s' "$clientId"
-}
-
-
-github-get-app-data ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: github-get-app-data $appSlug\n' >&2; return 1; }
-    local appSlug=$1
-
-    github-curl "/apps/$appSlug" || return
-}
-
-
-github-get-app-id ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: github-get-app-id $appSlug\n' >&2; return 1; }
-    local appSlug=$1
-
-    local -A info
-    github-get-app-info info "$appSlug" || return
-    local id=${info[id]}
-    printf '%s' "$id"
-}
-
-
-github-get-app-info ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-get-app-data $infovar $appSlug\n' >&2; return 1; }
-    local -n _info=$1
-    local appSlug=$2
-
-    declare -a args
-    
-    local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.XXXXXX) || return
-    github-get-app-data "$appSlug" >"$tmpCurl" || return
-    local tmpJq; tmpJq=$(mktemp --tmpdir jq.XXXXXX) || return
-    jq -r '[.id, .client_id, .slug] | @tsv' <"$tmpCurl" >"$tmpJq" || return
-    read -r -a args < "$tmpJq" || return
-
-    _info[id]=${args[0]}
-    _info[client_id]=${args[1]}
-    _info[slug]=${args[2]}
-}
-
-
-# Dynamically get the latest release version tag of a repo
-#
-github-get-latest-release-tag ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-get-latest-version $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    releasesUrlPath=$(github-get-releases-url-path "$org" "$repo")
-    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq"; return 1; }
-    local VER; VER=$(github-curl "$releasesUrlPath" \
-                     | jq -r .tag_name)
-    printf '%s' "$VER"
-}
-
-
-
+###
+# @deprecated
+# use github-release-get-data
+###
 github-get-release-data ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@"
+    shift "$nargs"
     # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-data $org $repo [$releaseTag [$platform]]\n' >&2; return 1; }
+    { (( $# >= 2 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-data [flags] $org $repo [$releaseTag [$platform]]\n' >&2; return 1; }
     local org=$1
     local repo=$2
     local tag=${3:-""}
     
-    local urlPath; urlPath="$(github-get-releases-url-path "${@:1}")" || return
+    local urlPath; urlPath="$(github-get-releases-url-path "$org" "$repo" "$tag")" || return
 	local tmpCurl; tmpCurl=$(create-temp-file github.get.release.data.json) || return
-    github-curl "$urlPath" >"$tmpCurl" || return
+    # build argstring for github-curl
+    local argstring=''
+    [[ -n ${argmap[token]} ]] && argstring+="--token ${argmap[token]}"
+    # github-curl -- note $argstring is unquoted
+    github-curl $argstring "$urlPath" >"$tmpCurl" || return
 	printf '%s' "$tmpCurl"
 }
 
 
+###
+# @deprecated
+# use github-release-get-name-list
+###
 github-get-release-name-list ()
 {
     # shellcheck disable=SC2016
@@ -1524,15 +1575,19 @@ github-get-release-name-list ()
     # shellcheck disable=SC2034
 	local tmpJq; tmpJq=$(create-temp-file jq.get.release.name.list.txt) || return
 	jq -r '[.assets[].name] | sort | @tsv' \
-	<"$tmpCurl" \
-	>"$tmpJq" \
-	|| return
+        <"$tmpCurl" \
+        >"$tmpJq" \
+        || return
 
 	# shellcheck disable=SC2034
     read -r -a listVar <"$tmpJq" || return
 }
 
 
+###
+# @deprecated
+# use github-release-get-package-data
+###
 github-get-release-package-data ()
 {
     # shellcheck disable=SC2016
@@ -1554,6 +1609,10 @@ github-get-release-package-data ()
 }
 
 
+###
+# @deprecated
+# use github-release-get-package-info
+###
 github-get-release-package-info ()
 {
     # shellcheck disable=SC2016
@@ -1576,36 +1635,284 @@ github-get-release-package-info ()
 }
 
 
-github-get-releases-url-path ()
+github-parse-args ()
 {
     # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-get-releases-url $org $repo [$releaseTag]\n' >&2; return 1; }
+    (( $# >= 2 )) || { printf 'Usage: github-parse-args infovar nargs [$args]\n' >&2; return 1; }
+    # shellcheck disable=SC2178
+    [[ $1 != argmap ]] && { local -n argmap; argmap=$1; }
+    # Check that argmap is either an assoc array or a nameref to an assoc array
+    [[ $(declare -p argmap 2>/dev/null) == "declare -A"* ]] \
+    || [[ $(declare -p "${!argmap}" 2>/dev/null) == "declare -A"* ]] \
+    || { printf "%s is not an associative array, and it's not a nameref to an associative array either\n" "argmap" >&2; return 1; }
+    # shellcheck disable=SC2178
+    [[ $2 != nargs ]] && { local -n nargs; nargs=$2; }
+
+    nargs=0
+    shift 2
+    while (( $# > 0 )); do
+        case $1 in
+            '--accept')
+                (( $# >= 2 )) || { printf -- '--accept specified but no accept provided.\n' >&2; return 1; }
+                argmap[accept]=$2
+                ((nargs+=2))
+                shift 2
+                ;;
+            '--data')
+                (( $# >= 2 )) || { printf -- '--data specified but no accept provided.\n' >&2; return 1; }
+                argmap[data]=$2
+                ((nargs+=2))
+                shift 2
+                ;;
+            '--output')
+                (( $# >= 2 )) || { printf -- '--output specified but no output provided.\n' >&2; return 1; }
+                argmap[output]=$2
+                ((nargs+=2))
+                shift 2
+                ;;
+            '--token')
+                (( $# >= 2 )) || { printf -- '--token specified but no token provided.\n' >&2; return 1; }
+                argmap[token]=$2
+                ((nargs+=2))
+                shift 2
+                ;;
+            '--')
+                shift
+                ((nargs++))
+                break
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+}
+
+
+github-release-create-url-path ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-release-create-url-path $org $repo [$releaseTag]\n' >&2; return 1; }
     local org=$1
     local repo=$2
     local tag=${3:-""}
     
-    local url
+    local urlPath
     if (( $# == 3 )) && [[ -n "$tag" ]]; then
-        local url="/repos/$org/$repo/releases/tags/$tag"
+        local urlPath="/repos/$org/$repo/releases/tags/$tag"
     else
-        local url="/repos/$org/$repo/releases/latest"
+        local urlPath="/repos/$org/$repo/releases/latest"
     fi
-    printf '%s' "$url"
+    printf '%s' "$urlPath"
 }
 
 
-github-install-latest-release ()
+github-release-download-latest ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: github-install-latest-release $org $repo $platform $installFolder $downloadFolder\n' >&2; return 1; }
+    (( $# == 4 )) || { printf 'Usage: download-latest-release $org $repo $name $downloadFolder\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local name=$3
+    local downloadFolder=${4%%/}
+
+    # Get release info
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    local -A releaseInfo
+    github-release-get-package-info "${flags[@]}" releaseInfo "$org" "$repo" "$name" || return
+    declare -p releaseInfo
+    # download release file using releaseInfo data
+    local urlPath=${releaseInfo[urlPath]}
+    local filename=${releaseInfo[filename]}
+    local accept='Accept: application/octet-stream'
+    local output="$downloadFolder/$filename"
+    flags+=(--accept "$accept" --output "$output")
+    github-curl "${flags[@]}" "$urlPath" || return
+    printf '%s' "$output"
+}
+
+
+github-release-get-data ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@"
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    { (( $# >= 2 )) && (( $# <= 4 )); } || { printf 'Usage: github-release-get-data [flags] $org $repo [$releaseTag [$platform]]\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local tag=${3:-""}
+    
+    local urlPath; urlPath="$(github-release-create-url-path "$org" "$repo" "$tag")" || return
+    # build argstring for github-curl
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    github-curl "${flags[@]}" "$urlPath" || return
+}
+
+
+# Dynamically get the latest release version tag of a repo
+#
+github-release-get-latest-tag ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: github-get-latest-version [flags] $org $repo\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    
+    releasesUrlPath=$(github-release-create-url-path "$org" "$repo")
+    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq"; return 1; }
+    # build flags for github-curl
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    local VER; VER=$(github-curl "${flags[@]}" "$releasesUrlPath" \
+                     | jq -r .tag_name)
+    printf '%s' "$VER"
+}
+
+
+github-release-get-package-data ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: github-release-get-package-data $org $repo $name\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local name=$3
+
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    local urlPath; urlPath="$(github-release-create-url-path "$org" "$repo")" || return
+    local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.release.XXXXXX) || return
+    github-curl "${flags[@]}" "$urlPath" >"$tmpCurl" || return
+    jq -r --arg name "$name" \
+       '.assets[]
+        | select(.name == $name)' \
+      </"$tmpCurl" \
+      || return 
+}
+
+
+github-release-get-package-info ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: github-get-release-package-info infovar $org $repo $name\n' >&2; return 1; }
+    # shellcheck disable=SC2178
+    [[ $1 != info ]] && { local -n info; info=$1; }
+    local org=$2
+    local repo=$3
+    local name=$4
+
+    # Call github-release-get-package-data and create/parse the necesary fields
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    local -a fields=()
+    read -r -a fields < <(github-release-get-package-data "${flags[@]}" "$org" "$repo" "$releaseName" \
+    | jq -r '
+        [.browser_download_url,
+         .content_type,
+         (.browser_download_url | match(".*/(.*)").captures[0].string),
+         .id,
+         .name,
+         .url,
+         (.url | match("https://api.github.com/(.*)").captures[0].string)
+        ] | @tsv' \
+      || return)
+    # Package fields into the info assoc array
+    info[browser_download_url]=${fields[0]}
+    info[content_type]=${fields[1]}
+    info[filename]=${fields[2]}
+    info[id]=${fields[3]}
+    info[name]=${fields[4]}
+    info[url]=${fields[5]}
+    info[urlPath]=${fields[6]}
+}
+
+
+github-release-install-latest ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-install-latest-release $org $repo $platform $installFolder [$downloadFolder]\n' >&2; return 1; }
     local org=$1
     local repo=$2
     local platform=$3
     local installFolder=$4
 	local downloadFolder=${5:-$(create-temp-folder)}
-    local releasePath; releasePath=$(github-download-latest-release "$org" "$repo" "$platform" "$downloadFolder") || return
+
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    local releasePath; releasePath=$(github-download-latest-release "${flags}" "$org" "$repo" "$platform" "$downloadFolder") || return
     tar --strip-components=1 -C "$installFolder" -xzf "$releasePath"
 	printf '%s' "$installFolder"
+}
+
+
+github-release-list ()
+{
+	# parse github args
+	local -A argmap=()
+	local nargs=0
+	github-parse-args argmap nargs "$@"
+	shift "$nargs"
+	# shellcheck disable=SC2016
+	(( $# == 2 )) || { printf 'Usage: github-release-list [flags] $org $repo\n' >&2; return 1; }
+	local org=$1
+	local repo=$2
+
+	# get release name list, using token if provided
+    local -a flags=()
+	[[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+	github-release-get-data "${flags[@]}" "$org" "$repo" \
+	| jq -r '[.assets[].name] | sort | @tsv' \
+	|| return
+
+}
+
+
+github-release-select ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+	# shellcheck disable=SC2016
+	(( $# == 3 )) || { printf 'Usage: github-release-select [flags] name $org $repo\n' >&2; return 1; }
+	[[ $1 != 'name' ]] && local -n name=$1
+	local org=$2
+	local repo=$3
+
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+	IFS=$'\t' read -r -a names < <(github-release-list "${flags[@]}" "$org" "$repo") || return
+	select name in "${names[@]}"; do break; done
 }
 
 
@@ -1615,23 +1922,26 @@ github-install-latest-release ()
 # The Github API returns 404s for all of the above, so the error status doesn't tell us anything
 github-test-repo ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: github-test-repo $org $repo\n' >&2; return 1; }
     local org=$1
     local repo=$2
 
+    local urlPath="/repos/$org/$repo"
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
     # We don't care about the info, just if we can successfully call the endpoint
-    # --output /dev/null and --fail suppress any output
-    # Because the flags are different we can't use github-curl()
-    curl --location \
-         --silent \
-         --output /dev/null \
-         --fail \
-         "https://api.github.com/repos/$org/$repo" \
-    || return
+    github-curl "${flags[@]}" --output /dev/null "$urlPath" || return
 }
 
 
+# @deprecated - use github-test-repo and pass a token
+#
 # Simple attempt to get info for a repo
 # If it does not succeed, it could mean the org or repo are nonexistent or misspelled
 # But it could also mean that the repo is non-public and requires a token for authentication
@@ -1644,17 +1954,11 @@ github-test-repo-with-auth ()
     local repo=$2
     local token=$3
 
+    local urlPath="/repos/$org/$repo"
     # We don't care about the info, just if we can successfully call the endpoint
-    # --output /dev/null and --fail suppress any output
-    # Because the flags are different we can't use github-curl()
-    curl --location \
-         --silent \
-         --output /dev/null \
-         --header "Authorization: Token $token" \
-         --fail \
-         "https://api.github.com/repos/$org/$repo" \
-    || return
+    github-curl --output /dev/null --token "$token" "$urlPath" || return
 }
+
 
 go-service-gen-nginx-domain-file ()
 {
@@ -1851,6 +2155,7 @@ go-service-install ()
 	echo
 	printf '=== %s ===\n' "push distro to vm"
 	echo
+    # shellcheck disable=SC2086
 	incus exec "$vmName" -- bash -c "if [[ -f "/tmp/$tarballName" ]]; then rm "/tmp/$tarballName"; fi"
 	incus file push "$tarballPath" "$vmName/tmp/$tarballName"
 	# read -r -p "Ok? "
@@ -2666,32 +2971,6 @@ lxd-share-folder ()
 }
 
 
-parse-github-args ()
-{
-    # shellcheck disable=SC2016
-    (( $# >= 1 )) || { printf 'Usage: parse-github-args infovar [$args]\n' >&2; return 1; }
-    # shellcheck disable=SC2178
-    [[ $1 != github_args ]] && { local -n github_args; github_args=$1; }
-    [[ $(declare -p ${!github_args} 2>/dev/null) == "declare -A"* ]] || { printf '%s is not an associative array\n' "github_args" >&2; return 1; }
-
-    shift
-    while :; do
-        case $1 in
-            '--token')
-                (( $# >= 2 )) || { printf -- '--token specified but no token provided.\n' >&2; return 1; }
-                github_args[token]=$2
-                ;;
-            '--')
-                shift
-                break
-                ;;
-            *)
-                break
-                ;;
-        esac
-        shift
-    done
-}
 
 prep-filesystem ()
 {
@@ -2759,6 +3038,7 @@ pullAppInfo ()
 	_appInfo[releaseName]=${args[4]}
     _appInfo[repo]=${args[5]}
 	_appInfo[testEndpoint]=${args[6]}
+    # shellcheck disable=SC2154
     _appInfo[type]=${args[7]}
     # envFile requires special handling
     local tmpEnvFile; tmpEnvFile=$(create-temp-file "$name.envFile") || return
@@ -3569,7 +3849,7 @@ main ()
     if (( $# >= 1 )); then
         cmd=$1
         shift
-        case "$cmd" in
+        case "$cmd" in 
             activate-flask-app)	activate-flask-app "$@";;
             activate-svc)	activate-svc "$@";;
             activate-vm)	activate-vm "$@";;
@@ -3591,6 +3871,7 @@ main ()
             create-static-website)	create-static-website "$@";;
             delete-lxd-instance)	delete-lxd-instance "$@";;
             download-app)	download-app "$@";;
+            download-dylt)	download-dylt "$@";;
             download-daylight)	download-daylight "$@";;
             download-dist)	download-dist "$@";;
             download-flask-app)	download-flask-app "$@";;
@@ -3610,6 +3891,8 @@ main ()
             generate-unit-file)	generate-unit-file "$@";;
             get-bucket)	get-bucket "$@";;
             get-container-ip)	get-container-ip "$@";;
+            github-app-get-client-id) github-app-get-client-id "$@";;
+            github-app-get-id) github-app-get-id "$@";;
             get-image-base)	get-image-base "$@";;
             get-image-name)	get-image-name "$@";;
             get-image-repo)	get-image-repo "$@";;
@@ -3620,6 +3903,8 @@ main ()
             github-create-user-access-token) github-create-user-access-token "$@";;
             github-download-latest-release)    github-download-latest-release "$@";;
             github-install-latest-release) github-install-latest-release "$@";;
+            github-parse-args) github-parse-args "$@";;
+            github-release-get-latest-tag) github-release-get-latest-tag "$@";;
             github-test-repo) github-test-repo "$@";;
             github-test-repo-with-auth) github-test-repo-with-auth "$@";;
             go-service-gen-nginx-domain-file) go-service-gen-nginx-domain-file "$@";;
