@@ -1256,6 +1256,23 @@ getVmName ()
 }
 
 
+github-app-get-data ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: github-app-get-data $appSlug\n' >&2; return 1; }
+    local appSlug=$1
+
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    github-curl "${flags[@]}" "/apps/$appSlug" || return
+}
+
+
 github-create-url ()
 {
     local urlPath=$1
@@ -1445,16 +1462,6 @@ github-get-app-client-id ()
 }
 
 
-github-get-app-data ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: github-get-app-data $appSlug\n' >&2; return 1; }
-    local appSlug=$1
-
-    github-curl "/apps/$appSlug" || return
-}
-
-
 github-get-app-id ()
 {
     # shellcheck disable=SC2016
@@ -1488,33 +1495,6 @@ github-get-app-info ()
     # shellcheck disable=SC2154
     _info[slug]=${args[2]}
 }
-
-
-# Dynamically get the latest release version tag of a repo
-#
-github-get-latest-release-tag ()
-{
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-parse-args argmap nargs "$@"
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-get-latest-version [flags] $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    
-    releasesUrlPath=$(github-get-releases-url-path "$org" "$repo")
-    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq"; return 1; }
-    # build argstring for github-curl
-    local argstring=''
-    [[ -n ${argmap[token]} ]] && argstring+="--token ${argmap[token]}"
-    # github-curl -- note $argstring is unquoted
-    local VER; VER=$(github-curl $argstring "$releasesUrlPath" \
-                     | jq -r .tag_name)
-    printf '%s' "$VER"
-}
-
 
 
 github-get-release-data ()
@@ -1603,24 +1583,6 @@ github-get-release-package-info ()
 }
 
 
-github-get-releases-url-path ()
-{
-    # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-get-releases-url $org $repo [$releaseTag]\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local tag=${3:-""}
-    
-    local url
-    if (( $# == 3 )) && [[ -n "$tag" ]]; then
-        local url="/repos/$org/$repo/releases/tags/$tag"
-    else
-        local url="/repos/$org/$repo/releases/latest"
-    fi
-    printf '%s' "$url"
-}
-
-
 github-install-latest-release ()
 {
     # shellcheck disable=SC2016
@@ -1688,6 +1650,52 @@ github-parse-args ()
         esac
     done
 }
+
+
+github-release-create-url-path ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-release-create-url-path $org $repo [$releaseTag]\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local tag=${3:-""}
+    
+    local urlPath
+    if (( $# == 3 )) && [[ -n "$tag" ]]; then
+        local urlPath="/repos/$org/$repo/releases/tags/$tag"
+    else
+        local urlPath="/repos/$org/$repo/releases/latest"
+    fi
+    printf '%s' "$urlPath"
+}
+
+
+# Dynamically get the latest release version tag of a repo
+#
+github-release-get-latest-tag ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: github-get-latest-version [flags] $org $repo\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    
+    releasesUrlPath=$(github-release-create-url-path "$org" "$repo")
+    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq"; return 1; }
+    # build flags for github-curl
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    local VER; VER=$(github-curl "${flags[@]}" "$releasesUrlPath" \
+                     | jq -r .tag_name)
+    printf '%s' "$VER"
+}
+
+
+
 # Simple attempt to get info for a repo
 # If it does not succeed, it could mean the org or repo are nonexistent or misspelled
 # But it could also mean that the repo is non-public and requires a token for authentication
@@ -3664,6 +3672,7 @@ main ()
             github-download-latest-release)    github-download-latest-release "$@";;
             github-install-latest-release) github-install-latest-release "$@";;
             github-parse-args) github-parse-args "$@";;
+            github-release-get-latest-tag) github-release-get-latest-tag "$@";;
             github-test-repo) github-test-repo "$@";;
             github-test-repo-with-auth) github-test-repo-with-auth "$@";;
             go-service-gen-nginx-domain-file) go-service-gen-nginx-domain-file "$@";;

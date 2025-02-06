@@ -79,24 +79,6 @@ github-parse-args ()
 }
 
 
-github-release-create-url-path ()
-{
-    # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-release-create-url-path $org $repo [$releaseTag]\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local tag=${3:-""}
-    
-    local urlPath
-    if (( $# == 3 )) && [[ -n "$tag" ]]; then
-        local urlPath="/repos/$org/$repo/releases/tags/$tag"
-    else
-        local urlPath="/repos/$org/$repo/releases/latest"
-    fi
-    printf '%s' "$urlPath"
-}
-
-
 github-release-download-latest ()
 {
     # parse github args
