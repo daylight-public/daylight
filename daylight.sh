@@ -591,14 +591,19 @@ download-dylt ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
+    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
+    local dstFolder=$1
+    local platform=${2:-'lkinux_amd64'}
+    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
     
-    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: download-dylt [$dstFolder]\n' >&2; return 1; }
-    local dstFolder=${1:-/opt/bin/}
-    
+    # create flags (--token)
     local -a flags=()
     [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}") 
-    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
-    github-release-download-latest "${flags[@]}" dylt-dev dylt linux_amd64 "$dstFolder"
+    # get the latest version
+    local version; version=$(github-release-get-latest-tag "${flags[@]}" dylt-dev dylt) || return
+    # create the release name (goreleaser trims the leading 'v' from the release tag)
+    local releaseName="dylt_${version##v}_${platform}.tar.gz"
+    github-release-download-latest "${flags[@]}" dylt-dev dylt "$releaseName" "$dstFolder"
 }
 
 
