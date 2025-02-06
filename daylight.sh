@@ -593,7 +593,7 @@ download-dylt ()
     # shellcheck disable=SC2016
     { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
     local dstFolder=$1
-    local platform=${2:-'lkinux_amd64'}
+    local platform=${2:-'linux_amd64'}
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
     
     # create flags (--token)
