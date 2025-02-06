@@ -1264,7 +1264,7 @@ github-app-get-client-id ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: github-get-app-id $appSlug\n' >&2; return 1; }
+    (( $# == 1 )) || { printf 'Usage: github-app-get-id $appSlug\n' >&2; return 1; }
     local appSlug=$1
 
     local -a flags=()
@@ -1295,12 +1295,19 @@ github-app-get-data ()
 
 github-app-get-id ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: github-get-app-id $appSlug\n' >&2; return 1; }
+    (( $# == 1 )) || { printf 'Usage: github-app-get-id $appSlug\n' >&2; return 1; }
     local appSlug=$1
 
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
     local -A info
-    github-get-app-info info "$appSlug" || return
+    github-app-get-info "${flags[@]}" info "$appSlug" || return
     local id=${info[id]}
     printf '%s' "$id"
 }
@@ -1314,7 +1321,7 @@ github-app-get-info ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-get-app-data $infovar $appSlug\n' >&2; return 1; }
+    (( $# == 2 )) || { printf 'Usage: github-app-get-data $infovar $appSlug\n' >&2; return 1; }
     local -n _info=$1
     local appSlug=$2
 
@@ -1438,6 +1445,10 @@ github-curl ()
 
 
 
+###
+# @deprecated
+# use github-curl with --data 'your-data'
+###
 github-curl-post ()
 {
     # parse github args
@@ -1513,6 +1524,10 @@ github-download-latest-release ()
 }
 
 
+###
+# @deprecated
+# use github-release-get-data
+###
 github-get-release-data ()
 {
     # parse github args
@@ -1537,6 +1552,10 @@ github-get-release-data ()
 }
 
 
+###
+# @deprecated
+# use github-release-get-name-list
+###
 github-get-release-name-list ()
 {
     # shellcheck disable=SC2016
@@ -1556,6 +1575,10 @@ github-get-release-name-list ()
 }
 
 
+###
+# @deprecated
+# use github-release-get-package-data
+###
 github-get-release-package-data ()
 {
     # shellcheck disable=SC2016
@@ -1577,6 +1600,10 @@ github-get-release-package-data ()
 }
 
 
+###
+# @deprecated
+# use github-release-get-package-info
+###
 github-get-release-package-info ()
 {
     # shellcheck disable=SC2016
@@ -1596,21 +1623,6 @@ github-get-release-package-info ()
     local filename=${browser_download_url##*/}
     info[browser_download_url]=$browser_download_url
     info[filename]=$filename
-}
-
-
-github-install-latest-release ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: github-install-latest-release $org $repo $platform $installFolder $downloadFolder\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local platform=$3
-    local installFolder=$4
-	local downloadFolder=${5:-$(create-temp-folder)}
-    local releasePath; releasePath=$(github-download-latest-release "$org" "$repo" "$platform" "$downloadFolder") || return
-    tar --strip-components=1 -C "$installFolder" -xzf "$releasePath"
-	printf '%s' "$installFolder"
 }
 
 
@@ -1827,6 +1839,71 @@ github-release-get-package-info ()
     info[name]=${fields[4]}
     info[url]=${fields[5]}
     info[urlPath]=${fields[6]}
+}
+
+
+github-release-install-latest ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-install-latest-release $org $repo $platform $installFolder [$downloadFolder]\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local platform=$3
+    local installFolder=$4
+	local downloadFolder=${5:-$(create-temp-folder)}
+
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    local releasePath; releasePath=$(github-download-latest-release "${flags}" "$org" "$repo" "$platform" "$downloadFolder") || return
+    tar --strip-components=1 -C "$installFolder" -xzf "$releasePath"
+	printf '%s' "$installFolder"
+}
+
+
+github-release-list ()
+{
+	# parse github args
+	local -A argmap=()
+	local nargs=0
+	github-parse-args argmap nargs "$@"
+	shift "$nargs"
+	# shellcheck disable=SC2016
+	(( $# == 2 )) || { printf 'Usage: github-release-list [flags] $org $repo\n' >&2; return 1; }
+	local org=$1
+	local repo=$2
+
+	# get release name list, using token if provided
+    local -a flags=()
+	[[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+	github-release-get-data "${flags[@]}" "$org" "$repo" \
+	| jq -r '[.assets[].name] | sort | @tsv' \
+	|| return
+
+}
+
+
+github-release-select ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+	# shellcheck disable=SC2016
+	(( $# == 3 )) || { printf 'Usage: github-release-select [flags] name $org $repo\n' >&2; return 1; }
+	[[ $1 != 'name' ]] && local -n name=$1
+	local org=$2
+	local repo=$3
+
+    local -a flags=()
+    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+	IFS=$'\t' read -r -a names < <(github-release-list "${flags[@]}" "$org" "$repo") || return
+	select name in "${names[@]}"; do break; done
 }
 
 
@@ -3805,6 +3882,7 @@ main ()
             get-bucket)	get-bucket "$@";;
             get-container-ip)	get-container-ip "$@";;
             github-app-get-client-id) github-app-get-client-id "$@";;
+            github-app-get-id) github-app-get-id "$@";;
             get-image-base)	get-image-base "$@";;
             get-image-name)	get-image-name "$@";;
             get-image-repo)	get-image-repo "$@";;
