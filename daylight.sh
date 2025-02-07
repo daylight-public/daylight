@@ -593,7 +593,7 @@ download-dylt ()
     # shellcheck disable=SC2016
     { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
     local dstFolder=$1
-    local platform=${2:-'linux_amd64'}
+
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
     
     # create flags (--token)
@@ -732,17 +732,63 @@ edit-daylight ()
     fi
 }
 
+# Statically create the URL from which to download a specific version of etcd.
+#
+# An optional $platform argument is supported as well. If omitted it defaults to
+# linux-amd64.
+# 
+etcd-create-download-url ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    
+    # get arg values from flags, if present (if not fall back to defaults
+    local version=${argmap[version]:-''}
+    [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
+    local platform=${argmap[platform]:-'linux-amd64'}
+    local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform")
 
-# Download latest release
+    local -A info
+    github-release-get-package-info info etcd-io etcd "$releaseName" || return
+    local downloadUrl=${info[url]}
+    printf '%s' "$downloadUrl"
+}
+
+
+###
+#
+# Create an etcd release name based on version on platform
+#
+###
+etcd-create-release-name ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: etcd-create-release-name "$version" "$platform"\n' >&2; return 1; }
+    local version=$1
+    local platform=$2
+
+    # All releases are tarballs except Windows which is a zipfile
+    local releaseName
+    if [[ $platform == 'windows' ]]; then
+        releaseName="etcd-$version-$platform.zip"
+    else
+        releaseName="etcd-$version-$platform.tar.gz"
+    fi
+    printf '%s' "$releaseName" || return
+}
+
+
+# Download the latest etcd release
 etcd-download-latest ()
 {
     # shellcheck disable=SC2016
-    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-download-latest [$downloadFolder]\n' >&2; return 1; }
-    local downloadFolder=${1:-/tmp}
-    local org=etcd-io
-    local repo=etcd
-    local releasePath; releasePath=$(github-download-latest-release "$org" "$repo" "$downloadFolder")
-    printf '%s' "$releasePath"
+    (( $# == 1 )) || { printf 'Usage: etcd-download-latest $downloadFolder\n' >&2; return 1; }
+
+    local version; version=$(etcd-get-latest-version) || return
+    etcd-download --version "$version" "$@"
 }
 
 
@@ -751,16 +797,25 @@ etcd-download-latest ()
 # @Note this function changes the name of the release file to 
 # etcd-release.tar.gz. This guarantees a consistent file name,
 # but losing the version might not be a good tradeoff.
-etcd-download-release ()
+etcd-download ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: etcd-download-release $downloadUrl\n' >&2; return 1; }
-    local downloadUrl=$1
-    local releaseFolder=/tmp
-    local releaseFile=etcd-release.tar.gz
-    curl --location --silent "$downloadUrl" --output-dir "$releaseFolder" --output "$releaseFile"
-    local releasePath="$releaseFolder/$releaseFile"
-    printf '%s' "$releasePath"
+    (( $# == 1 )) || { printf 'Usage: etcd-download $downloadFolder\n' >&2; return 1; }
+    local downloadFolder=$1
+
+    local version=${argmap[version]:-''}
+    [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
+    local platform=${argmap[platform]:-'linux-amd64'}
+    local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
+    local -a flags
+    github-create-flags argmap flags token
+    flags+=(--version "$version")
+    github-release-download "${flags[@]}" etcd-io etcd "$releaseName" "$downloadFolder"
 }
 
 
@@ -872,39 +927,14 @@ etcd-gen-unit-file ()
 	EOT
 }
 
-# Statically create the URL from which to download a specific version of etcd.
-#
-# An optional $platform argument is supported as well. If omitted it defaults to
-# linux-amd64.
-# 
-# @Note this seems like it could be further parameterized on org+repo and used
-# generally
-etcd-get-download-url ()
-{
-    # shellcheck disable=SC2016
-    # shellcheck disable=SC2016
-    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: etcd-get-download-url $version [platform]\n' >&2; return 1; }
-    local version=$1
-    local platform=${2:-'linux-amd64'}
-
-    local GITHUB_URL=https://github.com/etcd-io/etcd/releases/download
-    local downloadUrl=${GITHUB_URL}/${version}/etcd-${version}-${platform}.tar.gz
-    printf '%s' "$downloadUrl"
-}
-
 # Dynamically get the version number for the latest etcd release.
-#
-# @Note this seems like it could be further parameterized on org+repo and used
-# generally
 etcd-get-latest-version ()
 {
-    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq"; return 255; }
-    local VER; VER=$(curl -L -s https://api.github.com/repos/etcd-io/etcd/releases/latest | jq -r .tag_name)
-    printf '%s' "$VER"
+    github-release-get-latest-tag etcd-io etcd
 }
 
 
-# @Note this logic is elsewhere in this script. Maybe it can be extracted and
+# @Note this logic is elsewhere in this script. Maybe it can be extracted 
 # to build this function
 etcd-install-service ()
 {
@@ -923,6 +953,7 @@ etcd-install-service ()
 
 
 # Install an etcd release tarball into the specified folder
+# @note am I really wrapping a simple tar --extract?
 etcd-install-release ()
 {
     # shellcheck disable=SC2016
@@ -1353,6 +1384,41 @@ github-app-get-info ()
     _info[slug]=${args[2]}
 }
 
+github-create-flags ()
+{
+    # shellcheck disable=SC2016
+    (( $# >=2 )) || { printf 'Usage: github-create-flags argmap flags [$flag1 $flag2 ... $flagn]\n' >&2; return 1; }
+    # Check that argmap is either an assoc array or a nameref to an assoc array
+    [[ $1 != argmap ]] && { local -n argmap; argmap=$1; }
+    [[ $(declare -p argmap 2>/dev/null) == "declare -A"* ]] \
+    || [[ $(declare -p "${!argmap}" 2>/dev/null) == "declare -A"* ]] \
+    || { printf "%s is not an associative array, and it's not a nameref to an associative array either\n" "argmap" >&2; return 1; }
+    # Check that flags is either an array or a nameref to an array
+    [[ $2 != flags ]] && { local -n flags; argmap=$2; }
+    [[ $(declare -p flags 2>/dev/null) == "declare -a"* ]] \
+    || [[ $(declare -p "${!flags}" 2>/dev/null) == "declare -a"* ]] \
+    || { printf "%s is not an array, and it's not a nameref to an array either\n" "flags" >&2; return 1; }
+
+    flags=()
+    local argname arg
+    shift 2
+    if (( $# == 0 )); then
+        for argname in "${!argmap[@]}"; do
+            arg=${argmap["$argname"]}
+            flags+=("$argname" "$arg")
+        done
+    else
+        while (( $# > 0 )); do
+            argname=$1
+            if [[ -v argmap["$argname"] ]]; then
+                arg=${argmap["$argname"]}
+                flags+=("--${argname}" "$arg")
+            fi
+            shift
+        done
+    fi
+}
+
 
 github-create-url ()
 {
@@ -1524,7 +1590,6 @@ github-download-latest-release ()
     # Get release package data as assoc array
     local -A releaseInfo
     github-get-release-package-info releaseInfo "$org" "$repo" "$name" || return
-    declare -p releaseInfo
     local url=${releaseInfo[url]}
     local accept='Accept: application/octet-stream'
     local output="$downloadFolder/$name"
@@ -1657,27 +1722,15 @@ github-parse-args ()
     shift 2
     while (( $# > 0 )); do
         case $1 in
-            '--accept')
-                (( $# >= 2 )) || { printf -- '--accept specified but no accept provided.\n' >&2; return 1; }
-                argmap[accept]=$2
-                ((nargs+=2))
-                shift 2
-                ;;
-            '--data')
-                (( $# >= 2 )) || { printf -- '--data specified but no accept provided.\n' >&2; return 1; }
-                argmap[data]=$2
-                ((nargs+=2))
-                shift 2
-                ;;
-            '--output')
-                (( $# >= 2 )) || { printf -- '--output specified but no output provided.\n' >&2; return 1; }
-                argmap[output]=$2
-                ((nargs+=2))
-                shift 2
-                ;;
-            '--token')
-                (( $# >= 2 )) || { printf -- '--token specified but no token provided.\n' >&2; return 1; }
-                argmap[token]=$2
+            '--accept'   |\
+            '--data'     |\
+            '--output'   |\
+            '--token'    |\
+            '--platform' |\
+            '--version' \
+            )
+                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
+                argmap["${1##--}"]=$2
                 ((nargs+=2))
                 shift 2
                 ;;
@@ -1696,14 +1749,19 @@ github-parse-args ()
 
 github-release-create-url-path ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
     # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-release-create-url-path $org $repo [$releaseTag]\n' >&2; return 1; }
+    (( $# >= 2 )) || { printf 'Usage: github-release-create-url-path $org $repo\n' >&2; return 1; }
     local org=$1
     local repo=$2
-    local tag=${3:-""}
-    
+
+    local tag=${argmap[version]:-''}
     local urlPath
-    if (( $# == 3 )) && [[ -n "$tag" ]]; then
+    if [[ -n "$tag" ]]; then
         local urlPath="/repos/$org/$repo/releases/tags/$tag"
     else
         local urlPath="/repos/$org/$repo/releases/latest"
@@ -1712,7 +1770,7 @@ github-release-create-url-path ()
 }
 
 
-github-release-download-latest ()
+github-release-download ()
 {
     # parse github args
     local -A argmap=()
@@ -1720,7 +1778,7 @@ github-release-download-latest ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: download-latest-release $org $repo $name $downloadFolder\n' >&2; return 1; }
+    (( $# == 4 )) || { printf 'Usage: github-release-download-latest $org $repo $name $downloadFolder\n' >&2; return 1; }
     local org=$1
     local repo=$2
     local name=$3
@@ -1728,10 +1786,9 @@ github-release-download-latest ()
 
     # Get release info
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    github-create-flags argmap flags token version
     local -A releaseInfo
     github-release-get-package-info "${flags[@]}" releaseInfo "$org" "$repo" "$name" || return
-    declare -p releaseInfo
     # download release file using releaseInfo data
     local urlPath=${releaseInfo[urlPath]}
     local filename=${releaseInfo[filename]}
@@ -1743,6 +1800,28 @@ github-release-download-latest ()
 }
 
 
+github-release-download-latest ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: github-release-download-latest $org $repo $name $downloadFolder\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local name=$3
+    local downloadFolder=${4%%/}
+
+    local version; version=$(github-release-get-latest-tag "$org" "$repo") || return
+    local -a flags
+    github-create-args argmap flags token
+    flags+=(--version "$version")
+    github-release-download "${flags[@]}" "$org" "$repo" "$name" "$downloadFolder"
+}
+
+
 github-release-get-data ()
 {
     # parse github args
@@ -1751,15 +1830,15 @@ github-release-get-data ()
     github-parse-args argmap nargs "$@"
     shift "$nargs"
     # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 4 )); } || { printf 'Usage: github-release-get-data [flags] $org $repo [$releaseTag [$platform]]\n' >&2; return 1; }
+    { (( $# >= 2 )) } || { printf 'Usage: github-release-get-data [flags] $org $repo\n' >&2; return 1; }
     local org=$1
     local repo=$2
-    local tag=${3:-""}
     
-    local urlPath; urlPath="$(github-release-create-url-path "$org" "$repo" "$tag")" || return
+    local -a flags
+    github-create-flags argmap flags version || return
+    local urlPath; urlPath=$(github-release-create-url-path "${flags[@]}" "$org" "$repo") || return
     # build argstring for github-curl
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    github-create-flags argmap flags token || return
     github-curl "${flags[@]}" "$urlPath" || return
 }
 
@@ -1802,15 +1881,16 @@ github-release-get-package-data ()
     local repo=$2
     local name=$3
 
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    local urlPath; urlPath="$(github-release-create-url-path "$org" "$repo")" || return
+    local -a flags
+    github-create-flags argmap flags version token || return
+    local urlPath; urlPath=$(github-release-create-url-path "${flags[@]}" "$org" "$repo") || return
+    github-create-flags argmap flags token || return
     local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.release.XXXXXX) || return
     github-curl "${flags[@]}" "$urlPath" >"$tmpCurl" || return
     jq -r --arg name "$name" \
        '.assets[]
         | select(.name == $name)' \
-      </"$tmpCurl" \
+      <"$tmpCurl" \
       || return 
 }
 
@@ -1832,9 +1912,9 @@ github-release-get-package-info ()
 
     # Call github-release-get-package-data and create/parse the necesary fields
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    github-create-flags argmap flags token version
     local -a fields=()
-    read -r -a fields < <(github-release-get-package-data "${flags[@]}" "$org" "$repo" "$releaseName" \
+    read -r -a fields < <(github-release-get-package-data "${flags[@]}" "$org" "$repo" "$name" \
     | jq -r '
         [.browser_download_url,
          .content_type,
@@ -1856,6 +1936,38 @@ github-release-get-package-info ()
 }
 
 
+github-release-install ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-install-latest-release $org $repo $releaseName $installFolder [$downloadFolder]\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local name=$3
+    local installFolder=$4
+	local downloadFolder=${5:-$(create-temp-folder)}
+
+    local -a flags=()
+    github-create-flags argmap flags token version
+    local releasePath; releasePath=$(github-release-download-latest "${flags}" "$org" "$repo" "$releaseName" "$downloadFolder") || return
+    case "$releasePath" in
+        *.tgz|*.tar.gz)
+            tar --strip-components=1 -C "$installFolder" -xzf "$releasePath";;
+        *)
+            printf "Unsupported file type - can't install (%s)\n" "$releasePath" >&2
+            return 1;;
+    esac
+	printf '%s' "$installFolder"
+}
+
+
+###
+# @note - github-release-install will install the latest by default, if you don't specify a version
+###
 github-release-install-latest ()
 {
     # parse github args
@@ -1864,18 +1976,18 @@ github-release-install-latest ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-install-latest-release $org $repo $platform $installFolder [$downloadFolder]\n' >&2; return 1; }
+    (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-release-install-latest $org $repo $releaseName $installFolder [$downloadFolder]\n' >&2; return 1; }
     local org=$1
     local repo=$2
-    local platform=$3
+    local name=$3
     local installFolder=$4
-	local downloadFolder=${5:-$(create-temp-folder)}
+	local downloadFolder=${5:-''}
 
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    local releasePath; releasePath=$(github-download-latest-release "${flags}" "$org" "$repo" "$platform" "$downloadFolder") || return
-    tar --strip-components=1 -C "$installFolder" -xzf "$releasePath"
-	printf '%s' "$installFolder"
+    local -a flags
+    github-create-flags argmap flags token
+    local version; version=$(github-release-get-latest-tag "${flags[@]}" "$org" "$repo") || return    
+    flags+=(--version "$version")
+    github-release-install "${flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" "$downloadFolder"
 }
 
 
@@ -3886,7 +3998,10 @@ main ()
             download-svc)	download-svc "$@";;
             download-to-temp-dir)	download-to-temp-dir "$@";;
             download-vm)	download-vm "$@";;
+            etcd-create-download-url) etcd-create-download-url "$@";;
             edit-daylight)	edit-daylight "$@";;
+            etcd-download) etcd-download "$@";;
+            etcd-download-latest) etcd-download-latest "$@";;
             etcd-gen-run-script) etcd-gen-run-script "$@";;
             etcd-gen-unit-file) etcd-gen-unit-file "$@";;
             etcd-install-latest) etcd-install-latest "$@";;
