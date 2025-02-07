@@ -593,7 +593,7 @@ download-dylt ()
     # shellcheck disable=SC2016
     { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
     local dstFolder=$1
-    local platform=${2:-'linux_amd64'}
+
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
     
     # create flags (--token)
@@ -877,34 +877,40 @@ etcd-gen-unit-file ()
 # An optional $platform argument is supported as well. If omitted it defaults to
 # linux-amd64.
 # 
-# @Note this seems like it could be further parameterized on org+repo and used
-# generally
 etcd-get-download-url ()
 {
-    # shellcheck disable=SC2016
-    # shellcheck disable=SC2016
-    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: etcd-get-download-url $version [platform]\n' >&2; return 1; }
-    local version=$1
-    local platform=${2:-'linux-amd64'}
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    
+    # get arg values from flags, if present (if not fall back to defaults
+    local version=${argmap[version]:-''}
+    [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
+    local platform=${argmap[platform]:-'linux-amd64'}
+    local releaseName
+    if [[ $platform == 'windows' ]]; then
+        local releaseName="etcd-$version-$platform.zip"
+    else
+        local releaseName="etcd-$version-$platform.tar.gz"
+    fi
 
-    local GITHUB_URL=https://github.com/etcd-io/etcd/releases/download
-    local downloadUrl=${GITHUB_URL}/${version}/etcd-${version}-${platform}.tar.gz
+    local -A info
+    github-release-get-package-info info etcd-io etcd "$releaseName" || return
+    declare -p info
+    local downloadUrl=${info[url]}
     printf '%s' "$downloadUrl"
 }
 
 # Dynamically get the version number for the latest etcd release.
-#
-# @Note this seems like it could be further parameterized on org+repo and used
-# generally
 etcd-get-latest-version ()
 {
-    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq"; return 255; }
-    local VER; VER=$(curl -L -s https://api.github.com/repos/etcd-io/etcd/releases/latest | jq -r .tag_name)
-    printf '%s' "$VER"
+    github-release-get-latest-tag etcd-io etcd
 }
 
 
-# @Note this logic is elsewhere in this script. Maybe it can be extracted and
+# @Note this logic is elsewhere in this script. Maybe it can be extracted 
 # to build this function
 etcd-install-service ()
 {
@@ -1353,6 +1359,45 @@ github-app-get-info ()
     _info[slug]=${args[2]}
 }
 
+github-create-flags ()
+{
+    # shellcheck disable=SC2016
+    (( $# >=2 )) || { printf 'Usage: github-create-flags argmap flags [$flag1 $flag2 ... $flagn]\n' >&2; return 1; }
+    # Check that argmap is either an assoc array or a nameref to an assoc array
+    [[ $1 != argmap ]] && { local -n argmap; argmap=$1; }
+    [[ $(declare -p argmap 2>/dev/null) == "declare -A"* ]] \
+    || [[ $(declare -p "${!argmap}" 2>/dev/null) == "declare -A"* ]] \
+    || { printf "%s is not an associative array, and it's not a nameref to an associative array either\n" "argmap" >&2; return 1; }
+    # Check that flags is either an array or a nameref to an array
+    [[ $2 != flags ]] && { local -n flags; argmap=$2; }
+    [[ $(declare -p flags 2>/dev/null) == "declare -a"* ]] \
+    || [[ $(declare -p "${!flags}" 2>/dev/null) == "declare -a"* ]] \
+    || { printf "%s is not an array, and it's not a nameref to an array either\n" "flags" >&2; return 1; }
+
+    flags=()
+    local argname arg
+    shift 2
+    if (( $# == 0 )); then
+        for argname in "${!argmap[@]}"; do
+            arg=${argmap["$argname"]}
+            printf 'adding flag: argname=%s arg=%s\n' "$argname" "$arg"
+            flags+=("$argname" "$arg")
+        done
+    else
+        while (( $# > 0 )); do
+            argname=$1
+            if [[ -v argmap["$argname"] ]]; then
+                arg=${argmap["$argname"]}
+                printf 'adding flag: argname=%s arg=%s\n' "$argname" "$arg"
+                flags+=("--${argname}" "$arg")
+            fi
+            shift
+        done
+    fi
+    declare -p argmap
+    declare -p flags 
+}
+
 
 github-create-url ()
 {
@@ -1657,27 +1702,15 @@ github-parse-args ()
     shift 2
     while (( $# > 0 )); do
         case $1 in
-            '--accept')
-                (( $# >= 2 )) || { printf -- '--accept specified but no accept provided.\n' >&2; return 1; }
-                argmap[accept]=$2
-                ((nargs+=2))
-                shift 2
-                ;;
-            '--data')
-                (( $# >= 2 )) || { printf -- '--data specified but no accept provided.\n' >&2; return 1; }
-                argmap[data]=$2
-                ((nargs+=2))
-                shift 2
-                ;;
-            '--output')
-                (( $# >= 2 )) || { printf -- '--output specified but no output provided.\n' >&2; return 1; }
-                argmap[output]=$2
-                ((nargs+=2))
-                shift 2
-                ;;
-            '--token')
-                (( $# >= 2 )) || { printf -- '--token specified but no token provided.\n' >&2; return 1; }
-                argmap[token]=$2
+            '--accept'   |\
+            '--data'     |\
+            '--output'   |\
+            '--token'    |\
+            '--platform' |\
+            '--version' \
+            )
+                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
+                argmap["${1##--}"]=$2
                 ((nargs+=2))
                 shift 2
                 ;;
@@ -1751,11 +1784,12 @@ github-release-get-data ()
     github-parse-args argmap nargs "$@"
     shift "$nargs"
     # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 4 )); } || { printf 'Usage: github-release-get-data [flags] $org $repo [$releaseTag [$platform]]\n' >&2; return 1; }
+    { (( $# >= 2 )) } || { printf 'Usage: github-release-get-data [flags] $org $repo\n' >&2; return 1; }
     local org=$1
     local repo=$2
-    local tag=${3:-""}
     
+    local tag
+    [[ -v argmap[version] ]] && tag="${argmap[version]}"
     local urlPath; urlPath="$(github-release-create-url-path "$org" "$repo" "$tag")" || return
     # build argstring for github-curl
     local -a flags=()
@@ -3889,6 +3923,7 @@ main ()
             edit-daylight)	edit-daylight "$@";;
             etcd-gen-run-script) etcd-gen-run-script "$@";;
             etcd-gen-unit-file) etcd-gen-unit-file "$@";;
+            etcd-get-download-url) etcd-get-download-url "$@";;
             etcd-install-latest) etcd-install-latest "$@";;
             gen-completion-script) gen-completion-script "$@";;
             gen-nginx-flask)	gen-nginx-flask "$@";;
