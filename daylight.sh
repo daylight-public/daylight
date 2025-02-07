@@ -733,16 +733,28 @@ edit-daylight ()
 }
 
 
+etcd-create-release-name ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: etcd-create-release-name "$version" "$platform"\n' >&2; return 1; }
+    local version=$1
+    local platform=$2
+
+    local releaseName
+    if [[ $platform == 'windows' ]]; then
+        releaseName="etcd-$version-$platform.zip"
+    else
+        releaseName="etcd-$version-$platform.tar.gz"
+    fi
+    printf '%s' "$releaseName" || return
+}
+
+
 # Download latest release
 etcd-download-latest ()
 {
-    # shellcheck disable=SC2016
-    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-download-latest [$downloadFolder]\n' >&2; return 1; }
-    local downloadFolder=${1:-/tmp}
-    local org=etcd-io
-    local repo=etcd
-    local releasePath; releasePath=$(github-download-latest-release "$org" "$repo" "$downloadFolder")
-    printf '%s' "$releasePath"
+    local version; version=$(etcd-get-latest-version) || return
+    etcd-download-release --version "$version"
 }
 
 
@@ -753,14 +765,23 @@ etcd-download-latest ()
 # but losing the version might not be a good tradeoff.
 etcd-download-release ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: etcd-download-release $downloadUrl\n' >&2; return 1; }
-    local downloadUrl=$1
-    local releaseFolder=/tmp
-    local releaseFile=etcd-release.tar.gz
-    curl --location --silent "$downloadUrl" --output-dir "$releaseFolder" --output "$releaseFile"
-    local releasePath="$releaseFolder/$releaseFile"
-    printf '%s' "$releasePath"
+    (( $# == 1 )) || { printf 'Usage: etcd-download-release $downloadFolder\n' >&2; return 1; }
+    local downloadFolder=$1
+
+    local version=${argmap[version]:-''}
+    [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
+    local platform=${argmap[platform]:-'linux-amd64'}
+    local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
+    local flags -a
+    github-create-args argmap flags token
+    flags+=(--version "$version")
+    github-release-download "${flags[@]}" etcd-io etcd "$releaseName" "$downloadFolder"
 }
 
 
@@ -889,16 +910,11 @@ etcd-get-download-url ()
     local version=${argmap[version]:-''}
     [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
     local platform=${argmap[platform]:-'linux-amd64'}
-    local releaseName
-    if [[ $platform == 'windows' ]]; then
-        local releaseName="etcd-$version-$platform.zip"
-    else
-        local releaseName="etcd-$version-$platform.tar.gz"
-    fi
+    local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform")
 
     local -A info
     github-release-get-package-info info etcd-io etcd "$releaseName" || return
-    declare -p info
+    declare -p info 
     local downloadUrl=${info[url]}
     printf '%s' "$downloadUrl"
 }
@@ -1380,7 +1396,6 @@ github-create-flags ()
     if (( $# == 0 )); then
         for argname in "${!argmap[@]}"; do
             arg=${argmap["$argname"]}
-            printf 'adding flag: argname=%s arg=%s\n' "$argname" "$arg"
             flags+=("$argname" "$arg")
         done
     else
@@ -1388,14 +1403,11 @@ github-create-flags ()
             argname=$1
             if [[ -v argmap["$argname"] ]]; then
                 arg=${argmap["$argname"]}
-                printf 'adding flag: argname=%s arg=%s\n' "$argname" "$arg"
                 flags+=("--${argname}" "$arg")
             fi
             shift
         done
     fi
-    declare -p argmap
-    declare -p flags 
 }
 
 
@@ -1569,7 +1581,6 @@ github-download-latest-release ()
     # Get release package data as assoc array
     local -A releaseInfo
     github-get-release-package-info releaseInfo "$org" "$repo" "$name" || return
-    declare -p releaseInfo
     local url=${releaseInfo[url]}
     local accept='Accept: application/octet-stream'
     local output="$downloadFolder/$name"
@@ -1729,19 +1740,54 @@ github-parse-args ()
 
 github-release-create-url-path ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
     # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-release-create-url-path $org $repo [$releaseTag]\n' >&2; return 1; }
+    (( $# >= 2 )) || { printf 'Usage: github-release-create-url-path $org $repo\n' >&2; return 1; }
     local org=$1
     local repo=$2
-    local tag=${3:-""}
-    
+
+    local tag=${argmap[version]:-''}
     local urlPath
-    if (( $# == 3 )) && [[ -n "$tag" ]]; then
+    if [[ -n "$tag" ]]; then
         local urlPath="/repos/$org/$repo/releases/tags/$tag"
     else
         local urlPath="/repos/$org/$repo/releases/latest"
     fi
     printf '%s' "$urlPath"
+}
+
+
+github-release-download ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: github-release-download-latest $org $repo $name $downloadFolder\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local name=$3
+    local downloadFolder=${4%%/}
+
+    # Get release info
+    local -a flags=()
+    github-create-flags argmap flags token version
+    local -A releaseInfo
+    github-release-get-package-info "${flags[@]}" releaseInfo "$org" "$repo" "$name" || return
+    # download release file using releaseInfo data
+    local urlPath=${releaseInfo[urlPath]}
+    local filename=${releaseInfo[filename]}
+    local accept='Accept: application/octet-stream'
+    local output="$downloadFolder/$filename"
+    flags+=(--accept "$accept" --output "$output")
+    github-curl "${flags[@]}" "$urlPath" || return
+    printf '%s' "$output"
 }
 
 
@@ -1753,26 +1799,17 @@ github-release-download-latest ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: download-latest-release $org $repo $name $downloadFolder\n' >&2; return 1; }
+    (( $# == 4 )) || { printf 'Usage: github-release-download-latest $org $repo $name $downloadFolder\n' >&2; return 1; }
     local org=$1
     local repo=$2
     local name=$3
     local downloadFolder=${4%%/}
 
-    # Get release info
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    local -A releaseInfo
-    github-release-get-package-info "${flags[@]}" releaseInfo "$org" "$repo" "$name" || return
-    declare -p releaseInfo
-    # download release file using releaseInfo data
-    local urlPath=${releaseInfo[urlPath]}
-    local filename=${releaseInfo[filename]}
-    local accept='Accept: application/octet-stream'
-    local output="$downloadFolder/$filename"
-    flags+=(--accept "$accept" --output "$output")
-    github-curl "${flags[@]}" "$urlPath" || return
-    printf '%s' "$output"
+    local version; version=$(github-release-get-latest-tag "$org" "$repo") || return
+    local -a flags
+    github-create-args argmap flags token
+    flags+=(--version "$version")
+    github-release-download "${flags[@]}" "$org" "$repo" "$name" "$downloadFolder"
 }
 
 
@@ -1788,12 +1825,11 @@ github-release-get-data ()
     local org=$1
     local repo=$2
     
-    local tag
-    [[ -v argmap[version] ]] && tag="${argmap[version]}"
-    local urlPath; urlPath="$(github-release-create-url-path "$org" "$repo" "$tag")" || return
+    local -a flags
+    github-create-flags argmap flags version || return
+    local urlPath; urlPath=$(github-release-create-url-path "${flags[@]}" "$org" "$repo") || return
     # build argstring for github-curl
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    github-create-flags argmap flags token || return
     github-curl "${flags[@]}" "$urlPath" || return
 }
 
@@ -1836,15 +1872,16 @@ github-release-get-package-data ()
     local repo=$2
     local name=$3
 
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    local urlPath; urlPath="$(github-release-create-url-path "$org" "$repo")" || return
+    local -a flags
+    github-create-flags argmap flags version token || return
+    local urlPath; urlPath=$(github-release-create-url-path "${flags[@]}" "$org" "$repo") || return
+    github-create-flags argmap flags token || return
     local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.release.XXXXXX) || return
     github-curl "${flags[@]}" "$urlPath" >"$tmpCurl" || return
     jq -r --arg name "$name" \
        '.assets[]
         | select(.name == $name)' \
-      </"$tmpCurl" \
+      <"$tmpCurl" \
       || return 
 }
 
@@ -1866,9 +1903,9 @@ github-release-get-package-info ()
 
     # Call github-release-get-package-data and create/parse the necesary fields
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    github-create-flags argmap flags token version
     local -a fields=()
-    read -r -a fields < <(github-release-get-package-data "${flags[@]}" "$org" "$repo" "$releaseName" \
+    read -r -a fields < <(github-release-get-package-data "${flags[@]}" "$org" "$repo" "$name" \
     | jq -r '
         [.browser_download_url,
          .content_type,
@@ -1879,6 +1916,7 @@ github-release-get-package-info ()
          (.url | match("https://api.github.com/(.*)").captures[0].string)
         ] | @tsv' \
       || return)
+    declare -p fields
     # Package fields into the info assoc array
     info[browser_download_url]=${fields[0]}
     info[content_type]=${fields[1]}
@@ -1890,6 +1928,38 @@ github-release-get-package-info ()
 }
 
 
+github-release-install ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-install-latest-release $org $repo $releaseName $installFolder [$downloadFolder]\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local name=$3
+    local installFolder=$4
+	local downloadFolder=${5:-$(create-temp-folder)}
+
+    local -a flags=()
+    github-create-flags argmap flags token version
+    local releasePath; releasePath=$(github-release-download-latest "${flags}" "$org" "$repo" "$releaseName" "$downloadFolder") || return
+    case "$releasePath" in
+        *.tgz|*.tar.gz)
+            tar --strip-components=1 -C "$installFolder" -xzf "$releasePath";;
+        *)
+            printf "Unsupported file type - can't install (%s)\n" "$releasePath" >&2
+            return 1;;
+    esac
+	printf '%s' "$installFolder"
+}
+
+
+###
+# @note - github-release-install will install the latest by default, if you don't specify a version
+###
 github-release-install-latest ()
 {
     # parse github args
@@ -1898,18 +1968,18 @@ github-release-install-latest ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-install-latest-release $org $repo $platform $installFolder [$downloadFolder]\n' >&2; return 1; }
+    (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-release-install-latest $org $repo $releaseName $installFolder [$downloadFolder]\n' >&2; return 1; }
     local org=$1
     local repo=$2
-    local platform=$3
+    local name=$3
     local installFolder=$4
-	local downloadFolder=${5:-$(create-temp-folder)}
+	local downloadFolder=${5:-''}
 
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    local releasePath; releasePath=$(github-download-latest-release "${flags}" "$org" "$repo" "$platform" "$downloadFolder") || return
-    tar --strip-components=1 -C "$installFolder" -xzf "$releasePath"
-	printf '%s' "$installFolder"
+    local -a flags
+    github-create-flags argmap flags token
+    local version; version=$(github-release-get-latest-tag "${flags[@]}" "$org" "$repo") || return    
+    flags+=(--version "$version")
+    github-release-install "${flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" "$downloadFolder"
 }
 
 
