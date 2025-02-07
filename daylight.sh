@@ -732,7 +732,37 @@ edit-daylight ()
     fi
 }
 
+# Statically create the URL from which to download a specific version of etcd.
+#
+# An optional $platform argument is supported as well. If omitted it defaults to
+# linux-amd64.
+# 
+etcd-create-download-url ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    
+    # get arg values from flags, if present (if not fall back to defaults
+    local version=${argmap[version]:-''}
+    [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
+    local platform=${argmap[platform]:-'linux-amd64'}
+    local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform")
 
+    local -A info
+    github-release-get-package-info info etcd-io etcd "$releaseName" || return
+    local downloadUrl=${info[url]}
+    printf '%s' "$downloadUrl"
+}
+
+
+###
+#
+# Create an etcd release name based on version on platform
+#
+###
 etcd-create-release-name ()
 {
     # shellcheck disable=SC2016
@@ -740,6 +770,7 @@ etcd-create-release-name ()
     local version=$1
     local platform=$2
 
+    # All releases are tarballs except Windows which is a zipfile
     local releaseName
     if [[ $platform == 'windows' ]]; then
         releaseName="etcd-$version-$platform.zip"
@@ -750,11 +781,14 @@ etcd-create-release-name ()
 }
 
 
-# Download latest release
+# Download the latest etcd release
 etcd-download-latest ()
 {
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: etcd-download-latest $downloadFolder\n' >&2; return 1; }
+
     local version; version=$(etcd-get-latest-version) || return
-    etcd-download-release --version "$version"
+    etcd-download --version "$version" "$@"
 }
 
 
@@ -763,7 +797,7 @@ etcd-download-latest ()
 # @Note this function changes the name of the release file to 
 # etcd-release.tar.gz. This guarantees a consistent file name,
 # but losing the version might not be a good tradeoff.
-etcd-download-release ()
+etcd-download ()
 {
     # parse github args
     local -A argmap=()
@@ -771,15 +805,15 @@ etcd-download-release ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: etcd-download-release $downloadFolder\n' >&2; return 1; }
+    (( $# == 1 )) || { printf 'Usage: etcd-download $downloadFolder\n' >&2; return 1; }
     local downloadFolder=$1
 
     local version=${argmap[version]:-''}
     [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
     local platform=${argmap[platform]:-'linux-amd64'}
     local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
-    local flags -a
-    github-create-args argmap flags token
+    local -a flags
+    github-create-flags argmap flags token
     flags+=(--version "$version")
     github-release-download "${flags[@]}" etcd-io etcd "$releaseName" "$downloadFolder"
 }
@@ -893,32 +927,6 @@ etcd-gen-unit-file ()
 	EOT
 }
 
-# Statically create the URL from which to download a specific version of etcd.
-#
-# An optional $platform argument is supported as well. If omitted it defaults to
-# linux-amd64.
-# 
-etcd-get-download-url ()
-{
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    
-    # get arg values from flags, if present (if not fall back to defaults
-    local version=${argmap[version]:-''}
-    [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
-    local platform=${argmap[platform]:-'linux-amd64'}
-    local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform")
-
-    local -A info
-    github-release-get-package-info info etcd-io etcd "$releaseName" || return
-    declare -p info 
-    local downloadUrl=${info[url]}
-    printf '%s' "$downloadUrl"
-}
-
 # Dynamically get the version number for the latest etcd release.
 etcd-get-latest-version ()
 {
@@ -945,6 +953,7 @@ etcd-install-service ()
 
 
 # Install an etcd release tarball into the specified folder
+# @note am I really wrapping a simple tar --extract?
 etcd-install-release ()
 {
     # shellcheck disable=SC2016
@@ -1916,7 +1925,6 @@ github-release-get-package-info ()
          (.url | match("https://api.github.com/(.*)").captures[0].string)
         ] | @tsv' \
       || return)
-    declare -p fields
     # Package fields into the info assoc array
     info[browser_download_url]=${fields[0]}
     info[content_type]=${fields[1]}
@@ -3990,10 +3998,12 @@ main ()
             download-svc)	download-svc "$@";;
             download-to-temp-dir)	download-to-temp-dir "$@";;
             download-vm)	download-vm "$@";;
+            etcd-create-download-url) etcd-create-download-url "$@";;
             edit-daylight)	edit-daylight "$@";;
+            etcd-download) etcd-download "$@";;
+            etcd-download-latest) etcd-download-latest "$@";;
             etcd-gen-run-script) etcd-gen-run-script "$@";;
             etcd-gen-unit-file) etcd-gen-unit-file "$@";;
-            etcd-get-download-url) etcd-get-download-url "$@";;
             etcd-install-latest) etcd-install-latest "$@";;
             gen-completion-script) gen-completion-script "$@";;
             gen-nginx-flask)	gen-nginx-flask "$@";;
