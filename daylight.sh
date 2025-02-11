@@ -1015,58 +1015,71 @@ gen-completion-script ()
     # E.g. gen-completion-script ./daylight.sh >~/.bash_completions.d/daylight.sh
 
     # shellcheck disable=SC2016
-    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: gen-completion-script $scriptPath [$functionName]\n' >&2
+    (( $# >= 0 )) && (( $# <= 2 )) || { printf 'Usage: gen-completion-script [$scriptPath [$functionName]]\n' >&2
                                              printf '       gen-completion-script $scriptName [$functionName] < (...script content...)\n' >&2
                                              return 1; }
-    if [[ -t 0 ]]; then
-        local scriptPath=$1
-        local scriptName; scriptName=$(basename "$scriptPath") || return
-    else
-        scriptName=$1
-    fi
-    if (( $# >= 2 )); then
-        functionName=$2
-    else
-        functionName=_${scriptName}
-        functionName=${functionName//./-}
-    fi
-	
-    # beginning of script
-	cat <<- END
-	$functionName ()
-	{
-	    local curr=\$2
-	    local last=\$3
+    if (( $# == 0 )); then
+        scriptPath=${BASH_SOURCE[0]:-'/opt/bin/daylight.sh'}
+        compScriptFolder=$HOME/bash-completion.d
+		printf 'Creating %s (if necessasry) ...\n' "$compScriptFolder"
+        mkdir -p "$compScriptFolder/" || return
+        compScriptPath="$compScriptFolder/daylight.sh"
+		printf 'Writing completion script for %s to %s ...\n' "$scriptPath" "$compScriptPath"
+        gen-completion-script "$scriptPath" >"$compScriptPath" || return
+		printf 'Sourcing %s ...\n' "$compScriptPath"
+		source "$compScriptPath" || return
+		printf 'Done - bash completions for %s have been updated.\n' "$compScriptPath"
+    # If stdin is a terminal, a $scriptPath arg is required. $scritpName is optional and will default to the basename of $scriptPath
+	else
+		if [[ -t 0 ]]; then
+			local scriptPath=$1
+			local scriptName; scriptName=$(basename "$scriptPath") || return
+		else
+			scriptName=$1
+		fi
+		if (( $# >= 2 )); then
+			functionName=$2
+		else
+			# The function name is the script name, prepended with _, and with . => -
+			functionName=_${scriptName//./-}
+		fi
+	    # beginning of script
+		cat <<- END
+		$functionName ()
+		{
+		    local curr=\$2
+		    local last=\$3
 
-	    local mainCmds=(\\
-	END
+		    local mainCmds=(\\
+		END
 
-	if [[ -t 0 ]]; then
-        while read -r func; do
-		    printf  '        %s \\\n' "$func"
-	    done < <(list-funcs)
-    else
-        while read -r func; do
-		    printf  '        %s \\\n' "$func"
-	    done < <(list-funcs <"$scriptPath")
-    fi
+		if [[ -t 0 ]]; then
+			while read -r func; do
+				printf  '        %s \\\n' "$func"
+			done < <(list-funcs)
+		else
+			while read -r func; do
+				printf  '        %s \\\n' "$func"
+			done < <(list-funcs <"$scriptPath")
+		fi
 
-	# end of script
-	cat <<- END
-	    )
+		# end of script
+		cat <<- END
+		    )
 
-	    # Trim everything up to + including the first slash
-	    local lastCmd=\${last##*/}
-	    case "\$lastCmd" in
-	        daylight.sh)
-	            # Typical mapfile + comgen -W idiom
-	            mapfile -t COMPREPLY < <(compgen -W "\${mainCmds[*]}" -- "\$curr")
-	            ;;
-	    esac
-	}
-	
-	complete -F $functionName $scriptName
-	END
+		    # Trim everything up to + including the first slash
+		    local lastCmd=\${last##*/}
+		    case "\$lastCmd" in
+		        daylight.sh)
+		            # Typical mapfile + comgen -W idiom
+		            mapfile -t COMPREPLY < <(compgen -W "\${mainCmds[*]}" -- "\$curr")
+		            ;;
+		    esac
+		}
+
+		complete -F $functionName $scriptName
+		END
+	fi
 }
 
 gen-nginx-flask ()
