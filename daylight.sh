@@ -107,6 +107,33 @@ add-container-user ()
 }
 
 
+###
+# rayray is the admin user for all ubuntu hosts
+# adding rayray is part of configuring a new host
+###
+add-rayray ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: add-rayray $publicKeyPath\n' >&2; return 1; }
+    # shellcheck disable=SC2016
+    [[ -f "$1" ]] || { echo "Non-existent path: $1" >&2; return 1; }
+    local publicKeyPath=$1
+
+    # Create rayray group
+    adduser --group --gid 2000 rayray || return
+    # Create rayray user
+    adduser --disabled-password --gecos '' --uid 2000 --ingroup rayray rayray || return
+    # Add rayray to sudo
+    adduser rayray sudo || return
+    # Add /etc/sudoers.d/rayray to setup passwordless sudo
+    printf '%s\n' "rayray ALL=(ALL:ALL) NOPASSWD:ALL" >/etc/sudoers.d/rayray || return
+    # Create ~/.ssh and add public key to ~/.ssh/authorized keys
+    mkdir -p /home/rayray/.ssh/ || return
+    cat "$publicKeyPath" >> /home/rayray/.ssh/authorized_keys || return
+
+}
+
+
 add-ssh-to-container ()
 {
     # shellcheck disable=SC2016
