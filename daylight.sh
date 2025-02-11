@@ -1010,9 +1010,9 @@ etcd-install-latest ()
     local org=etcd-io
     local repo=etcd
     local platform=linux-amd64
-    sudo mkdir -p "$installFolder" || return
-    sudo chown -R rayray:rayray "$installFolder" || return
+    mkdir -p "$installFolder" || return
     github-install-latest-release "$org" "$repo" "$platform" "$installFolder"
+    chown -R rayray:rayray "$installFolder" || return
 }
 
 
@@ -2637,10 +2637,12 @@ install-dylt ()
 install-etcd ()
 {
     # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: install-etcd $discSvr $ip $name\n' >&2; return 1; }
+    (( $# >= 3 || $# <= 4)) || { printf 'Usage: install-etcd $discSvr $ip $name [$installFolder]\n' >&2; return 1; }
     local discSvr=$1
     local ip=$2
     local name=$3
+    local installFolder=${4:-/opt/etcd/}
+
     # Download and install the latest binary
     etcd-install-latest "$installFolder"
     # Handle the data directory
