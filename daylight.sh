@@ -120,7 +120,7 @@ add-rayray ()
     local publicKeyPath=$1
 
     # Create rayray group
-    adduser --group --gid 2000 rayray || return
+    addgroup --gid 2000 rayray || return
     # Create rayray user
     adduser --disabled-password --gecos '' --uid 2000 --ingroup rayray rayray || return
     # Add rayray to sudo
@@ -220,6 +220,14 @@ add-user-to-shadow-ids ()
     printf 'lxd:%d:1\n' "$uid" | sudo tee --append 2>/dev/null /etc/subuid
     printf 'lxd:%d:1\n' "$gid" | sudo tee --append 2>/dev/null /etc/subgid
     sudo systemctl restart snap.lxd.daemon
+}
+
+
+bounce ()
+{
+    apt update -y || return
+    apt upgrade -y || return
+    reboot
 }
 
 
@@ -996,14 +1004,14 @@ etcd-install-release ()
 etcd-install-latest ()
 {
     # shellcheck disable=SC2016
-    # shellcheck disable=SC2016
-    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-install-latest [$installFolder]\n' >&2; return 1; }
-    local installFolder=${1:-/opt/etcd/}
+    (( $# == 1 )) || { printf 'Usage: etcd-install-latest $installFolder\n' >&2; return 1; }
+    local installFolder=$1
+
     local org=etcd-io
     local repo=etcd
     local platform=linux-amd64
-    sudo mkdir -p "$installFolder"
-    sudo chown -R ubuntu:ubuntu "$installFolder"
+    sudo mkdir -p "$installFolder" || return
+    sudo chown -R rayray:rayray "$installFolder" || return
     github-install-latest-release "$org" "$repo" "$platform" "$installFolder"
 }
 
@@ -3868,8 +3876,8 @@ untar-to-temp-folder ()
 
 update-and-restart ()
 {
-    apt update -y
-    apt upgrade -y
+    apt update -y || return
+    apt upgrade -y || return
     reboot
 }
 
@@ -3999,9 +4007,11 @@ main ()
             add-container-user)	add-container-user "$@";;
             add-ssh-to-container)	add-ssh-to-container "$@";;
             add-superuser)	add-superuser "$@";;
+            add-rayray)	add-rayray "$@";;
             add-user)	add-user "$@";;
             add-user-to-idmap)	add-user-to-idmap "$@";;
             add-user-to-shadow-ids)	add-user-to-shadow-ids "$@";;
+            bounce)	bounce "$@";;
             cat-conf-script)	cat-conf-script "$@";;
             create-flask-app)	create-flask-app "$@";;
             create-github-user-access-token)	create-github-user-access-token "$@";;
