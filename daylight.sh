@@ -130,7 +130,6 @@ add-rayray ()
     # Create ~/.ssh and add public key to ~/.ssh/authorized keys
     mkdir -p /home/rayray/.ssh/ || return
     cat "$publicKeyPath" >> /home/rayray/.ssh/authorized_keys || return
-
 }
 
 
