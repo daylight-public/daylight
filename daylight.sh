@@ -910,8 +910,7 @@ etcd-gen-run-script ()
 #
 etcd-gen-unit-file ()
 {
-    local unitFilePath; unitFilePath=$(mktemp --tmpdir=/tmp/ etcd.service.XXXXXX) || return
-    cat >"$unitFilePath" <<- 'EOT'
+    cat <<- 'EOT'
     [Unit]
     Description=etcd service
     Documentation=https://github.com/coreos/etcd
