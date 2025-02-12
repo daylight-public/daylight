@@ -1837,15 +1837,15 @@ github-release-download-latest ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: github-release-download-latest $org $repo $name $downloadFolder\n' >&2; return 1; }
+    (( $# == 4 )) || { printf 'Usage: github-release-download-latest [$flags] $org $repo $name $downloadFolder\n' >&2; return 1; }
     local org=$1
     local repo=$2
     local name=$3
     local downloadFolder=${4%%/}
 
-    local version; version=$(github-release-get-latest-tag "$org" "$repo") || return
     local -a flags
-    github-create-args argmap flags token
+    github-create-flags argmap flags token || return
+    local version; version=$(github-release-get-latest-tag "${flags[@]}" "$org" "$repo") || return
     flags+=(--version "$version")
     github-release-download "${flags[@]}" "$org" "$repo" "$name" "$downloadFolder"
 }
@@ -1893,7 +1893,14 @@ github-release-get-latest-tag ()
     [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
     local VER; VER=$(github-curl "${flags[@]}" "$releasesUrlPath" \
                      | jq -r .tag_name)
-    printf '%s' "$VER"
+
+    local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.latest.tag.XXXXXX) || return
+    github-curl "${flags[@]}" "$releasesUrlPath" >"$tmpCurl" || return
+    local tmpJq; tmpJq=$(mktemp --tmpdir jq.latest.tag.XXXXXX) || return
+    jq -r '.tag_name' <"$tmpCurl" >"$tmpJq" || return
+    read -r tag < "$tmpJq" || return    
+    
+    printf '%s' "$tag"
 }
 
 
@@ -4048,6 +4055,8 @@ main ()
             get-container-ip)	get-container-ip "$@";;
             github-app-get-client-id) github-app-get-client-id "$@";;
             github-app-get-id) github-app-get-id "$@";;
+            github-release-download) github-release-download "$@";;
+            github-release-download-latest) github-release-download-latest "$@";;
             get-image-base)	get-image-base "$@";;
             get-image-name)	get-image-name "$@";;
             get-image-repo)	get-image-repo "$@";;
