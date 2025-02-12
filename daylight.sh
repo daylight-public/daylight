@@ -3914,6 +3914,9 @@ watch-daylight-gen-unit-file ()
 
 	[Service]
 	ExecStart=/opt/svc/watch-daylight/run.sh
+	Restart=on-failure
+	RestartMode=normal
+	RestartSec=60
 	Type=exec
 	User=rayray
 	WorkingDirectory=/opt/svc/watch-daylight
