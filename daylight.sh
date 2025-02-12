@@ -983,12 +983,12 @@ etcd-install-latest ()
     local platform=${argmap[platform]}
 	[[ -n "$platform" ]] || platform=linux-amd64
 
-    sudo mkdir -p "$installFolder"
-    sudo chown -R ubuntu:ubuntu "$installFolder"
+    sudo mkdir -p "$installFolder" || rerurn
+    sudo chown -R rayray:rayray "$installFolder" || return
 	local version; version=$(etcd-get-latest-version) || return
 	local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
 	local -a flags=(--version "$version")
-    github-release-install "$org" "$repo" "$platform" "$installFolder"
+    github-release-install "${flags[@]}" "$org" "$repo" "$releaseName" "$installFolder"
 }
 
 
