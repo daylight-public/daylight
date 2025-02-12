@@ -866,16 +866,16 @@ etcd-gen-run-script ()
     cat <<- EOT
 	#! /usr/bin/env bash
 	/opt/etcd/etcd \\
-		--name "$name" \\
-		--discovery-srv "$discSvr" \\
-		--initial-advertise-peer-urls http://$ip:2380 \\
-		--initial-cluster-token hello \\
-		--initial-cluster-state $initialState \\
-		--advertise-client-urls http://$ip:2379 \\
-		--listen-client-urls http://$ip:2379,http://127.0.0.1:2379 \\
-		--listen-peer-urls http://$ip:2380 \\
-		--data-dir "$dataDir"
-		EOT
+	    --name "$name" \\
+	    --discovery-srv "$discSvr" \\
+	    --initial-advertise-peer-urls http://$ip:2380 \\
+	    --initial-cluster-token hello \\
+	    --initial-cluster-state $initialState \\
+	    --advertise-client-urls http://$ip:2379 \\
+	    --listen-client-urls http://$ip:2379,http://127.0.0.1:2379 \\
+	    --listen-peer-urls http://$ip:2380 \\
+	    --data-dir "$dataDir"
+	EOT
 }
 
     # (( $# == 4 )) || { printf 'Usage: etcd-gen-run-script $etcd_disc_svr $etcd_ip $etcd_name $initialState\n' >&2; return 1; }
