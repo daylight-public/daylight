@@ -984,7 +984,7 @@ etcd-install-latest ()
     sudo mkdir -p "$installFolder"
     sudo chown -R ubuntu:ubuntu "$installFolder"
 	local version; version=$(etcd-get-latest-version) || return
-	local releaseName; releaseName=$(etcd-create-release-name) || return
+	local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
 	local -a flags=(--version "$version")
     github-release-install "$org" "$repo" "$platform" "$installFolder"
 }
@@ -1971,7 +1971,7 @@ github-release-install ()
     local name=$3
     local installFolder=$4
 	local downloadFolder=${5:-$(create-temp-folder)}
-
+	[[ -d "$downloadFolder" ]] || { echo "Non-existent folder: $downloadFolder" >&2; return 1; }
     local -a flags=()
     github-create-flags argmap flags token version
     local releasePath; releasePath=$(github-release-download "${flags[@]}" "$org" "$repo" "$name" "$downloadFolder") || return
