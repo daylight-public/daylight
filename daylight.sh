@@ -855,12 +855,14 @@ etcd-gen-join-script ()
 etcd-gen-run-script ()
 {
     # shellcheck disable=SC2016
-    (( $# == 5 )) || { printf 'Usage: etcd-gen-run-script $etcd_disc_svr $etcd_ip $etcd_name $initialState $dataDir\n' >&2; return 1; }
+    (( $# == 5 )) || { printf 'Usage: etcd-gen-run-script $etcd_disc_svr $etcd_name $etcd_ip $initialState $dataDir\n' >&2; return 1; }
     local discSvr=$1
-    local ip=$2
-    local name=$3
+    local name=$2
+    local ip=$3
     local initialState=$4
     local dataDir=$5
+    [[ -d "$dataDir" ]] || { echo "Non-existent folder: $dataDir" >&2; return 1; }
+
     cat <<- EOT
 	#! /usr/bin/env bash
 	/opt/etcd/etcd \\
@@ -939,16 +941,20 @@ etcd-get-latest-version ()
 etcd-install-service ()
 {
     # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: etcd-install-service $discSvr $name $ip\n' >&2; return 1; }
+    (( $# == 4 )) || { printf 'Usage: etcd-install-service $discSvr $name $ip $dataDir\n' >&2; return 1; }
     local discSvr=$1
     local name=$2
     local ip=$3
-    chown -R rayray:rayray /opt/svc/etcd/
-    etcd-gen-unit-file >/opt/svc/etcd/etcd.service
-    etcd-gen-run-script "$discSvr" "$ip" "$name" "existing" >/opt/svc/etcd/run.sh
-    chmod 755 /opt/svc/etcd/run.sh
-    sudo systemctl enable /opt/svc/etcd/etcd.service
-    sudo systemctl start etcd
+    local dataDir=$4
+    [[ -d "$dataDir" ]] || { echo "Non-existent folder: $dataDir" >&2; return 1; }
+    
+    mkdir -p /opt/svc/etcd/ || return
+    etcd-gen-unit-file >/opt/svc/etcd/etcd.service || return
+    etcd-gen-run-script "$discSvr" "$name" "$ip" "existing" "$dataDir" >/opt/svc/etcd/run.sh || return
+    chmod 755 /opt/svc/etcd/run.sh || return
+    systemctl enable /opt/svc/etcd/etcd.service || return
+    systemctl start etcd || return
+    chown -R rayray:rayray /opt/svc/etcd/ || return
 }
 
 
