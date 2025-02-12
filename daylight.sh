@@ -4034,6 +4034,7 @@ main ()
             etcd-gen-run-script) etcd-gen-run-script "$@";;
             etcd-gen-unit-file) etcd-gen-unit-file "$@";;
             etcd-install-latest) etcd-install-latest "$@";;
+            etcd-setup-data-dir) etcd-setup-data-dir "$@";;
             gen-completion-script) gen-completion-script "$@";;
             gen-nginx-flask)	gen-nginx-flask "$@";;
             gen-nginx-static)	gen-nginx-static "$@";;
