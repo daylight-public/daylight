@@ -3906,6 +3906,7 @@ watch-daylight-gen-run-script ()
 	EOT
 }
 
+
 watch-daylight-gen-unit-file ()
 {
     cat <<- "EOT"
@@ -3926,17 +3927,18 @@ watch-daylight-gen-unit-file ()
 	EOT
 }
 
+
 watch-daylight-install-service ()
 {
 	local svc=watch-daylight
 	local svcFolder="/opt/svc/$svc"
 	mkdir -p "$svcFolder"
-    chown -R rayray:rayray "$svcFolder/"
     watch-daylight-gen-unit-file >"$svcFolder/$svc.service"
     watch-daylight-gen-run-script >"$svcFolder/run.sh"
     chmod 755 "$svcFolder/run.sh"
     sudo systemctl enable "$svcFolder/$svc.service"
     sudo systemctl start "$svc"
+    chown -R rayray:rayray "$svcFolder/"
 }
 
 
