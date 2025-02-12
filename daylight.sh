@@ -107,32 +107,6 @@ add-container-user ()
 }
 
 
-###
-# rayray is the admin user for all ubuntu hosts
-# adding rayray is part of configuring a new host
-###
-add-rayray ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: add-rayray $publicKeyPath\n' >&2; return 1; }
-    # shellcheck disable=SC2016
-    [[ -f "$1" ]] || { echo "Non-existent path: $1" >&2; return 1; }
-    local publicKeyPath=$1
-
-    # Create rayray group
-    addgroup --gid 2000 rayray || return
-    # Create rayray user
-    adduser --disabled-password --gecos '' --uid 2000 --ingroup rayray rayray || return
-    # Add rayray to sudo
-    adduser rayray sudo || return
-    # Add /etc/sudoers.d/rayray to setup passwordless sudo
-    printf '%s\n' "rayray ALL=(ALL:ALL) NOPASSWD:ALL" >/etc/sudoers.d/rayray || return
-    # Create ~/.ssh and add public key to ~/.ssh/authorized keys
-    mkdir -p /home/rayray/.ssh/ || return
-    cat "$publicKeyPath" >> /home/rayray/.ssh/authorized_keys || return
-}
-
-
 add-ssh-to-container ()
 {
     # shellcheck disable=SC2016
@@ -220,14 +194,6 @@ add-user-to-shadow-ids ()
     printf 'lxd:%d:1\n' "$uid" | sudo tee --append 2>/dev/null /etc/subuid
     printf 'lxd:%d:1\n' "$gid" | sudo tee --append 2>/dev/null /etc/subgid
     sudo systemctl restart snap.lxd.daemon
-}
-
-
-bounce ()
-{
-    apt update -y || return
-    apt upgrade -y || return
-    reboot
 }
 
 
@@ -1003,16 +969,22 @@ etcd-install-release ()
 # Install an etcd release tarball into the specified folder
 etcd-install-latest ()
 {
+	# parse github args
+	local -A argmap=()
+	local nargs=0
+	github-parse-args argmap nargs "$@" || return
+	shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: etcd-install-latest $installFolder\n' >&2; return 1; }
-    local installFolder=$1
-
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-install-latest [$installFolder]\n' >&2; return 1; }
+    local installFolder=${1:-/opt/etcd/}
     local org=etcd-io
     local repo=etcd
-    local platform=linux-amd64
-    mkdir -p "$installFolder" || return
-    github-install-latest-release "$org" "$repo" "$platform" "$installFolder"
-    chown -R rayray:rayray "$installFolder" || return
+    local platform=${argmap[platform]=-'linux-amd64'}
+    sudo mkdir -p "$installFolder"
+    sudo chown -R ubuntu:ubuntu "$installFolder"
+	local version; version=$(etcd-get-latest-version) || return
+	local releaseNamer; releaseNamer=$(etcd-create-release-name) || return
+    github-release-install "$org" "$repo" "$platform" "$installFolder"
 }
 
 
@@ -2000,7 +1972,7 @@ github-release-install ()
 
     local -a flags=()
     github-create-flags argmap flags token version
-    local releasePath; releasePath=$(github-release-download-latest "${flags}" "$org" "$repo" "$releaseName" "$downloadFolder") || return
+    local releasePath; releasePath=$(github-release-download "${flags}" "$org" "$repo" "$name" "$downloadFolder") || return
     case "$releasePath" in
         *.tgz|*.tar.gz)
             tar --strip-components=1 -C "$installFolder" -xzf "$releasePath";;
@@ -2650,12 +2622,10 @@ install-dylt ()
 install-etcd ()
 {
     # shellcheck disable=SC2016
-    (( $# >= 3 || $# <= 4)) || { printf 'Usage: install-etcd $discSvr $ip $name [$installFolder]\n' >&2; return 1; }
+    (( $# == 3 )) || { printf 'Usage: install-etcd $discSvr $ip $name\n' >&2; return 1; }
     local discSvr=$1
     local ip=$2
     local name=$3
-    local installFolder=${4:-/opt/etcd/}
-
     # Download and install the latest binary
     etcd-install-latest "$installFolder"
     # Handle the data directory
@@ -3891,8 +3861,8 @@ untar-to-temp-folder ()
 
 update-and-restart ()
 {
-    apt update -y || return
-    apt upgrade -y || return
+    apt update -y
+    apt upgrade -y
     reboot
 }
 
@@ -4022,11 +3992,9 @@ main ()
             add-container-user)	add-container-user "$@";;
             add-ssh-to-container)	add-ssh-to-container "$@";;
             add-superuser)	add-superuser "$@";;
-            add-rayray)	add-rayray "$@";;
             add-user)	add-user "$@";;
             add-user-to-idmap)	add-user-to-idmap "$@";;
             add-user-to-shadow-ids)	add-user-to-shadow-ids "$@";;
-            bounce)	bounce "$@";;
             cat-conf-script)	cat-conf-script "$@";;
             create-flask-app)	create-flask-app "$@";;
             create-github-user-access-token)	create-github-user-access-token "$@";;
