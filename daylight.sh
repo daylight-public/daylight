@@ -855,25 +855,27 @@ etcd-gen-join-script ()
 etcd-gen-run-script ()
 {
     # shellcheck disable=SC2016
-    (( $# == 5 )) || { printf 'Usage: etcd-gen-run-script $etcd_disc_svr $etcd_ip $etcd_name $initialState $dataDir\n' >&2; return 1; }
+    (( $# == 5 )) || { printf 'Usage: etcd-gen-run-script $etcd_disc_svr $etcd_name $etcd_ip $initialState $dataDir\n' >&2; return 1; }
     local discSvr=$1
-    local ip=$2
-    local name=$3
+    local name=$2
+    local ip=$3
     local initialState=$4
     local dataDir=$5
+    [[ -d "$dataDir" ]] || { echo "Non-existent folder: $dataDir" >&2; return 1; }
+
     cat <<- EOT
 	#! /usr/bin/env bash
 	/opt/etcd/etcd \\
-		--name "$name" \\
-		--discovery-srv "$discSvr" \\
-		--initial-advertise-peer-urls http://$ip:2380 \\
-		--initial-cluster-token hello \\
-		--initial-cluster-state $initialState \\
-		--advertise-client-urls http://$ip:2379 \\
-		--listen-client-urls http://$ip:2379,http://127.0.0.1:2379 \\
-		--listen-peer-urls http://$ip:2380 \\
-		--data-dir "$dataDir"
-		EOT
+	    --name "$name" \\
+	    --discovery-srv "$discSvr" \\
+	    --initial-advertise-peer-urls http://$ip:2380 \\
+	    --initial-cluster-token hello \\
+	    --initial-cluster-state $initialState \\
+	    --advertise-client-urls http://$ip:2379 \\
+	    --listen-client-urls http://$ip:2379,http://127.0.0.1:2379 \\
+	    --listen-peer-urls http://$ip:2380 \\
+	    --data-dir "$dataDir"
+	EOT
 }
 
     # (( $# == 4 )) || { printf 'Usage: etcd-gen-run-script $etcd_disc_svr $etcd_ip $etcd_name $initialState\n' >&2; return 1; }
@@ -908,22 +910,21 @@ etcd-gen-run-script ()
 #
 etcd-gen-unit-file ()
 {
-    local unitFilePath; unitFilePath=$(mktemp --tmpdir=/tmp/ etcd.service.XXXXXX) || return
-    cat >"$unitFilePath" <<- 'EOT'
-    [Unit]
-    Description=etcd service
-    Documentation=https://github.com/coreos/etcd
-    
-    [Service]
-    ExecStart=/opt/svc/etcd/run.sh		
-    User=ubuntu
-    Type=simple
-    Restart=on-failure
-    RestartSec=5
-    WorkingDirectory=/opt/etcd/
-    
-    [Install]
-    WantedBy=multi-user.target
+    cat <<- 'EOT'
+	[Unit]
+	Description=etcd service
+	Documentation=https://github.com/coreos/etcd
+
+	[Service]
+	ExecStart=/opt/svc/etcd/run.sh		
+	User=rayray
+	Type=simple
+	Restart=on-failure
+	RestartSec=5
+	WorkingDirectory=/opt/etcd/
+
+	[Install]
+	WantedBy=multi-user.target
 	EOT
 }
 
@@ -939,16 +940,20 @@ etcd-get-latest-version ()
 etcd-install-service ()
 {
     # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: etcd-install-service $discSvr $name $ip\n' >&2; return 1; }
+    (( $# == 4 )) || { printf 'Usage: etcd-install-service $discSvr $name $ip $dataDir\n' >&2; return 1; }
     local discSvr=$1
     local name=$2
     local ip=$3
-    chown -R ubuntu:ubuntu /opt/svc/etcd/
-    etcd-gen-unit-file >/opt/svc/etcd/etcd.service
-    etcd-gen-run-script "$discSvr" "$ip" "$name" "existing" >/opt/svc/etcd/run.sh
-    chmod 755 /opt/svc/etcd/run.sh
-    sudo systemctl enable /opt/svc/etcd/etcd.service
-    sudo systemctl start etcd
+    local dataDir=$4
+    [[ -d "$dataDir" ]] || { echo "Non-existent folder: $dataDir" >&2; return 1; }
+    
+    mkdir -p /opt/svc/etcd/ || return
+    etcd-gen-unit-file >/opt/svc/etcd/etcd.service || return
+    etcd-gen-run-script "$discSvr" "$name" "$ip" "existing" "$dataDir" >/opt/svc/etcd/run.sh || return
+    chmod 755 /opt/svc/etcd/run.sh || return
+    systemctl enable /opt/svc/etcd/etcd.service || return
+    systemctl start etcd || return
+    chown -R rayray:rayray /opt/svc/etcd/ || return
 }
 
 
@@ -969,20 +974,29 @@ etcd-install-release ()
 # Install an etcd release tarball into the specified folder
 etcd-install-latest ()
 {
+	# parse github args
+	local -A argmap=()
+	local nargs=0
+	github-parse-args argmap nargs "$@" || return
+	shift "$nargs"
     # shellcheck disable=SC2016
-    # shellcheck disable=SC2016
-    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-install-latest [$installFolder]\n' >&2; return 1; }
-    local installFolder=${1:-/opt/etcd/}
+    (( $# == 1 )) || { printf 'Usage: etcd-install-latest $installFolder\n' >&2; return 1; }
+	[[ -d "$1" ]] || { echo "Non-existent folder: $1" >&2; return 1; }
+    local installFolder=$1
     local org=etcd-io
     local repo=etcd
-    local platform=linux-amd64
-    sudo mkdir -p "$installFolder"
-    sudo chown -R ubuntu:ubuntu "$installFolder"
-    github-install-latest-release "$org" "$repo" "$platform" "$installFolder"
+    local platform=${argmap[platform]}
+	[[ -n "$platform" ]] || platform=linux-amd64
+
+	local version; version=$(etcd-get-latest-version) || return
+	local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
+	local -a flags=(--version "$version")
+    github-release-install "${flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" || return
+    chown -R rayray:rayray "$installFolder" || return
 }
 
 
-# etcd needs a data directory set up, and chown'd to ubuntu. Otherwise it 
+# etcd needs a data directory set up, and chown'd to the sysuser. Otherwise it 
 # would be owned by root which is problematic.
 #
 # @Note etcd has a standard folder it uses by default. It might be good to
@@ -994,11 +1008,13 @@ etcd-setup-data-dir ()
     { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-setup-data-dir [$folder]\n' >&2; return 1; }
     local dataDir=${1:-/var/lib/data/}
     if [[ -d "$dataDir" ]]; then
+		read -r -p "Are you sure you want to delete the contents of $dataDir? (Ctrl-C to cancel)"
         find "$dataDir" -type f -delete
+		find "$dataDir" -mindepth 1 -maxdepth 1 -type d -exec rm -r {} \;
     else
         mkdir -p "$dataDir"
     fi
-    chown -R ubuntu:ubuntu "$dataDir"
+    chown -R rayray:rayray "$dataDir"
 }
 
 
@@ -1181,7 +1197,7 @@ generate-unit-file ()
 Description=$description
 
 [Service]
-User=ubuntu
+User=rayray
 Type=oneshot
 ExecStart=$cmd $@
 
@@ -1791,7 +1807,7 @@ github-release-download ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: github-release-download-latest $org $repo $name $downloadFolder\n' >&2; return 1; }
+    (( $# == 4 )) || { printf 'Usage: github-release-download $org $repo $releaseName $downloadFolder\n' >&2; return 1; }
     local org=$1
     local repo=$2
     local name=$3
@@ -1963,10 +1979,10 @@ github-release-install ()
     local name=$3
     local installFolder=$4
 	local downloadFolder=${5:-$(create-temp-folder)}
-
+	[[ -d "$downloadFolder" ]] || { echo "Non-existent folder: $downloadFolder" >&2; return 1; }
     local -a flags=()
     github-create-flags argmap flags token version
-    local releasePath; releasePath=$(github-release-download-latest "${flags}" "$org" "$repo" "$releaseName" "$downloadFolder") || return
+    local releasePath; releasePath=$(github-release-download "${flags[@]}" "$org" "$repo" "$name" "$downloadFolder") || return
     case "$releasePath" in
         *.tgz|*.tar.gz)
             tar --strip-components=1 -C "$installFolder" -xzf "$releasePath";;
@@ -2199,7 +2215,7 @@ go-service-gen-unit-file ()
 	ExecStart=/opt/svc/$name/run.sh
 	ExecStop=/opt/svc/$name/stop.sh
 	Type=exec
-	User=ubuntu
+	User=rayray
 	WorkingDirectory=/opt/svc/$name
 
 	[Install]
@@ -2296,7 +2312,7 @@ go-service-install ()
 	echo
 	incus exec "$vmName" -- mkdir -p "/opt/svc/$name"
 	incus exec "$vmName" -- tar --preserve-permissions -C "/opt/svc/$name" -xzf "/tmp/$tarballName"
-	incus exec "$vmName" -- chown -R ubuntu:ubuntu "/opt/svc/$name"
+	incus exec "$vmName" -- chown -R rayray:rayray "/opt/svc/$name"
 	# read -r -p "Ok? "
 
 	# enable + start service
@@ -2588,8 +2604,8 @@ install-awscli ()
     apt-get install -y awscli || return
     # Setup AWS, download bootstrap.sh, and source it
     aws configure set default.region "$defaultRegion" || return
-    # This command needs to be run as ubuntu, since we want to set the ubuntu user's default region
-    su ubuntu --login --command "aws configure set default.region $defaultRegion" || return
+    # This command needs to be run as rayray, since we want to set the rayray user's default region
+    su rayray --login --command "aws configure set default.region $defaultRegion" || return
 }
 
 
@@ -2654,7 +2670,7 @@ install-fresh-daylight-svc ()
 {
     repo=https://raw.githubusercontent.com/daylight-public/daylight/main
     sudo mkdir -p /opt/svc/fresh-daylight/bin 
-    sudo chown -R ubuntu:ubuntu /opt/svc/fresh-daylight
+    sudo chown -R rayray:rayray /opt/svc/fresh-daylight
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.service"
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.timer"
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight/bin "$repo/svc/fresh-daylight/bin/run.sh"
@@ -2773,7 +2789,7 @@ install-service-from-script ()
     # 'Install' the service - Create a service folder, copy the script to $serviceFolder/run.sh, and gen a .service file
     local serviceFolder="/app/svc/$service"
     sudo mkdir -p /app || return
-    sudo chown -R ubuntu:ubuntu /app || return
+    sudo chown -R rayray:rayray /app || return
     mkdir -p "$serviceFolder" "$serviceFolder/bin" || return
     cp "$serviceScriptPath" "$serviceFolder/bin/$serviceScriptFile" || return
     chmod 777 "$serviceFolder/bin/$serviceScriptFile" || return
@@ -2810,7 +2826,7 @@ install-service-from-command ()
     local cmd="$*"
     local description="One-off service for command"
     generate-unit-file "$cmd" "$description" >"$serviceFolder/$service.service"
-    chown -R ubuntu:ubuntu "$serviceFolder"|| return
+    chown -R rayray:rayray "$serviceFolder"|| return
 
     # Create a symlink in /etc/sysd/sys to the new service in its new home
     sudo ln --force --symbolic "$serviceFolder/$service.service" "/etc/systemd/system/$service.service"
@@ -2828,7 +2844,7 @@ install-shellscript-part-handlers ()
     download-dist || return
     srcFolder=$(untar-to-temp-folder /tmp/dist/conf.tgz)
     cp "$srcFolder"/scripts/shell_script_per_*.py /usr/bin
-    # chown ubuntu:ubuntu /usr/bin/shell_script_per_*.py
+    # chown rayray:rayray /usr/bin/shell_script_per_*.py
 }
 
 
@@ -2851,10 +2867,10 @@ install-shr-token ()
     apiUrl="https://api.github.com/repos/$org/$repoName/actions/runners/registration-token"
     shrToken=$(http post "$apiUrl" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
     cd "$shrFolder" || return
-    chown -R ubuntu:ubuntu "$shrHome"
+    chown -R rayray:rayray "$shrHome"
     if [[ -f ./svc.sh ]] && ./svc.sh status >/dev/null; then
         ./svc.sh uninstall
-        su -c "./config.sh remove --token $shrToken" ubuntu
+        su -c "./config.sh remove --token $shrToken" rayray
     fi
     su -c "./config.sh --unattended \
           --url $repoUrl \
@@ -2862,7 +2878,7 @@ install-shr-token ()
           --replace \
           --name ubuntu-dev \
           --labels $labels" \
-          ubuntu
+          rayray
     # Install the SHR as a service
     ./svc.sh install
     ./svc.sh start
@@ -3764,7 +3780,7 @@ sync-daylight-gen-unit-file ()
 	RestartMode=normal
 	RestartSec=60
 	Type=exec
-	User=ubuntu
+	User=rayray
 	WorkingDirectory=/opt/svc/sync-daylight
 
 	[Install]
@@ -3780,7 +3796,7 @@ sync-daylight-install-service ()
 	mkdir -p "$svcFolder"
     sync-daylight-gen-unit-file >"$svcFolder/$svc@.service"
     sync-daylight-gen-run-script >"$svcFolder/run.sh"
-    chown -R ubuntu:ubuntu "$svcFolder/"
+    chown -R rayray:rayray "$svcFolder/"
     chmod 755 "$svcFolder/run.sh"
     sudo systemctl enable "$svcFolder/$svc@.service"
 }
@@ -3874,10 +3890,10 @@ watch-daylight-gen-run-script ()
 	    local tmpfile; tmpfile="$(mktemp --tmpdir daylight.sh.XXXXXX)" || return
 	    if ! /opt/etcd/etcdctl \
 	        --discovery-srv hello.dylt.dev \
-	        get --print-value-only daylight.sh >"$tmpfile";
+	        get --print-value-only /daylight.sh >"$tmpfile";
 	    then
 	        local rc=$?
-	        printf '%s\n' "Failed to download daylight.sh from cluster" >&2
+	        printf '%s\n' "Failed to download /daylight.sh from cluster" >&2
 	        return $?
 	    else
 	        printf 'Download succeeded. Copying script to final location ...\n'
@@ -3886,8 +3902,8 @@ watch-daylight-gen-run-script ()
 	    printf 'Watching for further updates ....\n'
 	    /opt/etcd/etcdctl \
 	        --discovery-srv hello.dylt.dev \
-	        watch daylight.sh \
-	            -- sh -c '{ printf "Downloading update ..."; tmpfile="$(mktemp --tmpdir daylight.sh.XXXXXX)"; /opt/etcd/etcdctl --discovery-srv hello.dylt.dev get --print-value-only daylight.sh >"$tmpfile"; cp "$tmpfile" /opt/bin/daylight.sh; printf "Complete.\n"; }' || return
+	        watch /daylight.sh \
+	            -- sh -c '{ printf "Downloading update ..."; tmpfile="$(mktemp --tmpdir daylight.sh.XXXXXX)"; /opt/etcd/etcdctl --discovery-srv hello.dylt.dev get --print-value-only /daylight.sh >"$tmpfile"; cp "$tmpfile" /opt/bin/daylight.sh; printf "Complete.\n"; }' || return
 	}
 
 	main "$@"
@@ -3895,16 +3911,20 @@ watch-daylight-gen-run-script ()
 	EOT
 }
 
+
 watch-daylight-gen-unit-file ()
 {
     cat <<- "EOT"
 	[Unit]
-	Description=Watch cluster for daylight.sh 
+	Description=Watch cluster for /daylight.sh 
 
 	[Service]
 	ExecStart=/opt/svc/watch-daylight/run.sh
+	Restart=on-failure
+	RestartMode=normal
+	RestartSec=60
 	Type=exec
-	User=ubuntu
+	User=rayray
 	WorkingDirectory=/opt/svc/watch-daylight
 
 	[Install]
@@ -3912,17 +3932,18 @@ watch-daylight-gen-unit-file ()
 	EOT
 }
 
+
 watch-daylight-install-service ()
 {
 	local svc=watch-daylight
 	local svcFolder="/opt/svc/$svc"
 	mkdir -p "$svcFolder"
-    chown -R ubuntu:ubuntu "$svcFolder/"
     watch-daylight-gen-unit-file >"$svcFolder/$svc.service"
     watch-daylight-gen-run-script >"$svcFolder/run.sh"
     chmod 755 "$svcFolder/run.sh"
     sudo systemctl enable "$svcFolder/$svc.service"
     sudo systemctl start "$svc"
+    chown -R rayray:rayray "$svcFolder/"
 }
 
 
@@ -3959,12 +3980,12 @@ if [[ ! -f /opt/bin/daylight.sh  &&  -t 0 ]]; then
     printf '%s\n' "Installing fresh-daylight service ..."
     printf '\n' 
     install-fresh-daylight-svc
-    if [[ -f /home/ubuntu/.bashrc ]]; then
+    if [[ -f /home/rayray/.bashrc ]]; then
     {
         printf '%s\n' ""
         printf '%s\n' "# hello from daylight"
         printf '%s\n' "source /opt/bin/daylight.sh"
-    } >> /home/ubuntu/.bashrc;
+    } >> /home/rayray/.bashrc;
     fi
     printf '%s\n' Done.
     printf '\n' 
@@ -4018,6 +4039,7 @@ main ()
             etcd-gen-run-script) etcd-gen-run-script "$@";;
             etcd-gen-unit-file) etcd-gen-unit-file "$@";;
             etcd-install-latest) etcd-install-latest "$@";;
+            etcd-setup-data-dir) etcd-setup-data-dir "$@";;
             gen-completion-script) gen-completion-script "$@";;
             gen-nginx-flask)	gen-nginx-flask "$@";;
             gen-nginx-static)	gen-nginx-static "$@";;
