@@ -911,20 +911,20 @@ etcd-gen-run-script ()
 etcd-gen-unit-file ()
 {
     cat <<- 'EOT'
-    [Unit]
-    Description=etcd service
-    Documentation=https://github.com/coreos/etcd
-    
-    [Service]
-    ExecStart=/opt/svc/etcd/run.sh		
-    User=rayray
-    Type=simple
-    Restart=on-failure
-    RestartSec=5
-    WorkingDirectory=/opt/etcd/
-    
-    [Install]
-    WantedBy=multi-user.target
+	[Unit]
+	Description=etcd service
+	Documentation=https://github.com/coreos/etcd
+
+	[Service]
+	ExecStart=/opt/svc/etcd/run.sh		
+	User=rayray
+	Type=simple
+	Restart=on-failure
+	RestartSec=5
+	WorkingDirectory=/opt/etcd/
+
+	[Install]
+	WantedBy=multi-user.target
 	EOT
 }
 
