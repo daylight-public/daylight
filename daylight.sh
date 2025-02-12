@@ -980,7 +980,9 @@ etcd-install-latest ()
     local installFolder=$1
     local org=etcd-io
     local repo=etcd
-    local platform=${argmap[platform]=-'linux-amd64'}
+    local platform=${argmap[platform]}
+	[[ -n "$platform" ]] || platform=linux-amd64
+
     sudo mkdir -p "$installFolder"
     sudo chown -R ubuntu:ubuntu "$installFolder"
 	local version; version=$(etcd-get-latest-version) || return
