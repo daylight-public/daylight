@@ -975,8 +975,9 @@ etcd-install-latest ()
 	github-parse-args argmap nargs "$@" || return
 	shift "$nargs"
     # shellcheck disable=SC2016
-    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: etcd-install-latest [$installFolder]\n' >&2; return 1; }
-    local installFolder=${1:-/opt/etcd/}
+    (( $# <= 1 )) || { printf 'Usage: etcd-install-latest $installFolder\n' >&2; return 1; }
+	[[ -d "$1" ]] || { echo "Non-existent folder: $1" >&2; return 1; }
+    local installFolder=$1
     local org=etcd-io
     local repo=etcd
     local platform=${argmap[platform]=-'linux-amd64'}
@@ -1973,7 +1974,7 @@ github-release-install ()
 
     local -a flags=()
     github-create-flags argmap flags token version
-    local releasePath; releasePath=$(github-release-download "${flags}" "$org" "$repo" "$name" "$downloadFolder") || return
+    local releasePath; releasePath=$(github-release-download "${flags[@]}" "$org" "$repo" "$name" "$downloadFolder") || return
     case "$releasePath" in
         *.tgz|*.tar.gz)
             tar --strip-components=1 -C "$installFolder" -xzf "$releasePath";;
