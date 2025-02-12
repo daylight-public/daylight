@@ -975,7 +975,7 @@ etcd-install-latest ()
 	github-parse-args argmap nargs "$@" || return
 	shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# <= 1 )) || { printf 'Usage: etcd-install-latest $installFolder\n' >&2; return 1; }
+    (( $# == 1 )) || { printf 'Usage: etcd-install-latest $installFolder\n' >&2; return 1; }
 	[[ -d "$1" ]] || { echo "Non-existent folder: $1" >&2; return 1; }
     local installFolder=$1
     local org=etcd-io
@@ -983,12 +983,11 @@ etcd-install-latest ()
     local platform=${argmap[platform]}
 	[[ -n "$platform" ]] || platform=linux-amd64
 
-    sudo mkdir -p "$installFolder" || rerurn
-    sudo chown -R rayray:rayray "$installFolder" || return
 	local version; version=$(etcd-get-latest-version) || return
 	local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
 	local -a flags=(--version "$version")
-    github-release-install "${flags[@]}" "$org" "$repo" "$releaseName" "$installFolder"
+    github-release-install "${flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" || return
+    chown -R rayray:rayray "$installFolder" || return
 }
 
 
