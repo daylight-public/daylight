@@ -983,7 +983,8 @@ etcd-install-latest ()
     sudo mkdir -p "$installFolder"
     sudo chown -R ubuntu:ubuntu "$installFolder"
 	local version; version=$(etcd-get-latest-version) || return
-	local releaseNamer; releaseNamer=$(etcd-create-release-name) || return
+	local releaseName; releaseName=$(etcd-create-release-name) || return
+	local -a flags=(--version "$version")
     github-release-install "$org" "$repo" "$platform" "$installFolder"
 }
 
@@ -1797,7 +1798,7 @@ github-release-download ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: github-release-download-latest $org $repo $name $downloadFolder\n' >&2; return 1; }
+    (( $# == 4 )) || { printf 'Usage: github-release-download $org $repo $releaseName $downloadFolder\n' >&2; return 1; }
     local org=$1
     local repo=$2
     local name=$3
