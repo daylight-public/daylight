@@ -3885,10 +3885,10 @@ watch-daylight-gen-run-script ()
 	    local tmpfile; tmpfile="$(mktemp --tmpdir daylight.sh.XXXXXX)" || return
 	    if ! /opt/etcd/etcdctl \
 	        --discovery-srv hello.dylt.dev \
-	        get --print-value-only daylight.sh >"$tmpfile";
+	        get --print-value-only /daylight.sh >"$tmpfile";
 	    then
 	        local rc=$?
-	        printf '%s\n' "Failed to download daylight.sh from cluster" >&2
+	        printf '%s\n' "Failed to download /daylight.sh from cluster" >&2
 	        return $?
 	    else
 	        printf 'Download succeeded. Copying script to final location ...\n'
@@ -3897,8 +3897,8 @@ watch-daylight-gen-run-script ()
 	    printf 'Watching for further updates ....\n'
 	    /opt/etcd/etcdctl \
 	        --discovery-srv hello.dylt.dev \
-	        watch daylight.sh \
-	            -- sh -c '{ printf "Downloading update ..."; tmpfile="$(mktemp --tmpdir daylight.sh.XXXXXX)"; /opt/etcd/etcdctl --discovery-srv hello.dylt.dev get --print-value-only daylight.sh >"$tmpfile"; cp "$tmpfile" /opt/bin/daylight.sh; printf "Complete.\n"; }' || return
+	        watch /daylight.sh \
+	            -- sh -c '{ printf "Downloading update ..."; tmpfile="$(mktemp --tmpdir daylight.sh.XXXXXX)"; /opt/etcd/etcdctl --discovery-srv hello.dylt.dev get --print-value-only /daylight.sh >"$tmpfile"; cp "$tmpfile" /opt/bin/daylight.sh; printf "Complete.\n"; }' || return
 	}
 
 	main "$@"
@@ -3911,7 +3911,7 @@ watch-daylight-gen-unit-file ()
 {
     cat <<- "EOT"
 	[Unit]
-	Description=Watch cluster for daylight.sh 
+	Description=Watch cluster for /daylight.sh 
 
 	[Service]
 	ExecStart=/opt/svc/watch-daylight/run.sh
