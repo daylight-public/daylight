@@ -2463,7 +2463,8 @@ go-upgrade ()
     local goDownloadFile="go$version.linux-amd64.tar.gz"
     local goDownloadUrl=https://go.dev/dl/$goDownloadFile
     local goDownloadPath; goDownloadPath=$(mktemp --tmpdir "$goDownloadFile.XXXXXX") || return
-    curl --location \
+    curl --fail-with-body \
+         --location \
          --silent \
          --output "$goDownloadPath" \
          "$goDownloadUrl" \
@@ -2476,7 +2477,7 @@ go-upgrade ()
         chown -R rayray:rayray /usr/local/go.backup/
     fi
     mkdir -p /usr/local/go/ || return
-    tar --directory /usr/local/go/ --extract --unzip --file "$goDownloadPath" || return
+    tar --directory /usr/local/go/ --extract --uncompress --file "$goDownloadPath" || return
     chown -R rayray:rayray /usr/local/go/
 }
 
