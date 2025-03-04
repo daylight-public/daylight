@@ -4105,6 +4105,7 @@ main ()
             go-service-gen-nginx-domain-file) go-service-gen-nginx-domain-file "$@";;
             go-service-install) go-service-install "$@";;
             go-service-uninstall) go-service-uninstall "$@";;
+            go-upgrade) go-upgrade "$@";;
             hello) hello "$@";;
             incus-pull-file) incus-pull-file "$@";;
             incus-push-file) incus-push-file "$@";;
