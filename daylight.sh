@@ -1031,9 +1031,9 @@ gen-completion-script ()
     # E.g. gen-completion-script ./daylight.sh >~/.bash_completions.d/daylight.sh
 
     # shellcheck disable=SC2016
-    (( $# >= 0 )) && (( $# <= 2 )) || { printf 'Usage: gen-completion-script [$scriptPath [$functionName]]\n' >&2
-                                             printf '       gen-completion-script $scriptName [$functionName] < (...script content...)\n' >&2
-                                             return 1; }
+    (( $# >= 0 && $# <= 2 )) || { printf 'Usage: gen-completion-script [$scriptPath [$functionName]]\n' >&2
+                                  printf '       gen-completion-script $scriptName [$functionName] < (...script content...)\n' >&2
+                                  return 1; }
     if (( $# == 0 )); then
         scriptPath=${BASH_SOURCE[0]:-'/opt/bin/daylight.sh'}
         compScriptFolder=$HOME/bash-completion.d
@@ -1043,6 +1043,7 @@ gen-completion-script ()
 		printf 'Writing completion script for %s to %s ...\n' "$scriptPath" "$compScriptPath"
         gen-completion-script "$scriptPath" >"$compScriptPath" || return
 		printf 'Sourcing %s ...\n' "$compScriptPath"
+        # shellcheck disable=SC1090
 		source "$compScriptPath" || return
 		printf 'Done - bash completions for %s have been updated.\n' "$compScriptPath"
     # If stdin is a terminal, a $scriptPath arg is required. $scritpName is optional and will default to the basename of $scriptPath
@@ -1655,7 +1656,7 @@ github-get-release-data ()
     local argstring=''
     [[ -n ${argmap[token]} ]] && argstring+="--token ${argmap[token]}"
     # github-curl -- note $argstring is unquoted
-    github-curl $argstring "$urlPath" >"$tmpCurl" || return
+    github-curl "$argstring" "$urlPath" >"$tmpCurl" || return
 	printf '%s' "$tmpCurl"
 }
 
@@ -1891,9 +1892,8 @@ github-release-get-latest-tag ()
     # build flags for github-curl
     local -a flags=()
     [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    local VER; VER=$(github-curl "${flags[@]}" "$releasesUrlPath" \
-                     | jq -r .tag_name)
-
+    # local VER; VER=$(github-curl "${flags[@]}" "$releasesUrlPath" \
+                    #  | jq -r .tag_name)
     local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.latest.tag.XXXXXX) || return
     github-curl "${flags[@]}" "$releasesUrlPath" >"$tmpCurl" || return
     local tmpJq; tmpJq=$(mktemp --tmpdir jq.latest.tag.XXXXXX) || return
@@ -2460,15 +2460,15 @@ go-upgrade ()
     (( $# == 1 )) || { printf 'Usage: go-upgrade $version\n' >&2; return 1; }
     local version=$1
 
-    local goDownloadFile="go$goVersion.linux-amd64.tar.gz"
+    local goDownloadFile="go$version.linux-amd64.tar.gz"
     local goDownloadUrl=https://go.dev/dl/$goDownloadFile
-    local goDownloadPath; goDownloadPath=$(mktemp --tmpdir $goDownloadFile.XXXXXX) || return
+    local goDownloadPath; goDownloadPath=$(mktemp --tmpdir "$goDownloadFile.XXXXXX") || return
     curl --location \
          --silent \
-         --output "$goDownloadPath"
-         "$downloadUrl" \
+         --output "$goDownloadPath" \
+         "$goDownloadUrl" \
          || return
-    if [[ -d /usr/local/go/ ]];
+    if [[ -d /usr/local/go/ ]]; then
         if [[ -d /usr/local/go.backup ]]; then
             rm -rd /usr/local/go.backup || return
         fi
