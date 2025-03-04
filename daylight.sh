@@ -2448,6 +2448,37 @@ go-service-uninstall ()
 }
 
 
+###
+# Upgrade go on the host. Install go if it hasn't been previously installed.
+# There's currently no good way to query what the latest version of go is.
+# go isn't released on GitHub, so the GitHub API is no help. The only way to 
+# specify a version is to pass it on the command line.
+###
+go-upgrade ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: go-upgrade $version\n' >&2; return 1; }
+    local version=$1
+
+    local goDownloadFile="go$goVersion.linux-amd64.tar.gz"
+    local goDownloadUrl=https://go.dev/dl/$goDownloadFile
+    local goDownloadPath; goDownloadPath=$(mktemp --tmpdir $goDownloadFile.XXXXXX) || return
+    curl --location \
+         --silent \
+         --output "$goDownloadPath"
+         "$downloadUrl" \
+         || return
+    if [[ -d /usr/local/go/ ]];
+        if [[ -d /usr/local/go.backup ]]; then
+            rm -rd /usr/local/go.backup || return
+        fi
+        mv /usr/local/go/ /usr/local/g.backup/ || return
+    fi
+    mkdir -p /usr/local/go/ || return
+    tar --directory /usr/local/go/ --extract --unzip --file "$goDownloadPath" || return
+}
+
+
 hello ()
 {
     printf "Hello!\n"
