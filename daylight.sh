@@ -2477,8 +2477,9 @@ go-upgrade ()
         chown -R rayray:rayray /usr/local/go.backup/
     fi
     mkdir -p /usr/local/go/ || return
-    tar --directory /usr/local/go/ --extract --uncompress --file "$goDownloadPath" || return
+    tar --directory /usr/local/ --extract --gunzip --file "$goDownloadPath" || return
     chown -R rayray:rayray /usr/local/go/
+    dt=$(date)
 }
 
 
