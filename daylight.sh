@@ -2480,6 +2480,12 @@ go-upgrade ()
     tar --directory /usr/local/ --extract --gunzip --file "$goDownloadPath" || return
     chown -R rayray:rayray /usr/local/go/
     dt=$(date)
+    cat >> /home/rayray/.bashrc <<- EOT
+
+    # Added by daylight on $dt
+    PATH=$PATH:/usr/local/go/bin
+
+    EOT
 }
 
 
