@@ -2472,10 +2472,12 @@ go-upgrade ()
         if [[ -d /usr/local/go.backup ]]; then
             rm -rd /usr/local/go.backup || return
         fi
-        mv /usr/local/go/ /usr/local/g.backup/ || return
+        mv /usr/local/go/ /usr/local/go.backup/ || return
+        chown -R rayray:rayray /usr/local/go.backup/
     fi
     mkdir -p /usr/local/go/ || return
     tar --directory /usr/local/go/ --extract --unzip --file "$goDownloadPath" || return
+    chown -R rayray:rayray /usr/local/go/
 }
 
 
