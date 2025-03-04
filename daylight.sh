@@ -2482,10 +2482,10 @@ go-upgrade ()
     dt=$(date)
     cat >> /home/rayray/.bashrc <<- EOT
 
-    # Added by daylight on $dt
-    PATH=$PATH:/usr/local/go/bin
+	# Added by daylight on $dt
+	PATH=$PATH:/usr/local/go/bin
 
-    EOT
+EOT
 }
 
 
