@@ -3925,6 +3925,9 @@ update-and-restart ()
 }
 
 
+###
+# @deprecated - Please use dylt if possible
+#
 # Generate a run script for the watch-daylight.service
 watch-daylight-gen-run-script ()
 {
@@ -3960,6 +3963,9 @@ watch-daylight-gen-run-script ()
 }
 
 
+###
+# @deprecated - Please use dylt if possible
+#
 watch-daylight-gen-unit-file ()
 {
     cat <<- "EOT"
@@ -3981,6 +3987,9 @@ watch-daylight-gen-unit-file ()
 }
 
 
+###
+# @deprecated - Please use dylt if possible
+#
 watch-daylight-install-service ()
 {
 	local svc=watch-daylight
