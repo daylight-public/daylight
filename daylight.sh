@@ -3917,6 +3917,9 @@ untar-to-temp-folder ()
 }
 
 
+###
+# Pretty self-explanatory. A useful function to bounce VMs
+###
 update-and-restart ()
 {
     apt update -y
