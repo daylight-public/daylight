@@ -3880,13 +3880,17 @@ sync-run-service ()
 }
 
 
+###
+# Start a systemd service.
+# On failure, run journalctl to look at what happened.
+###
 sys-start ()
 {
     # shellcheck disable=SC2016
     (( $# == 1 )) || { printf 'Usage: sys-start $service\n' >&2; return 1; }
     local service=$1
 
-    sudo systemctl restart "$service" || journalctl --unit "$service"
+    systemctl restart "$service" || journalctl --unit "$service"
 }
 
 
