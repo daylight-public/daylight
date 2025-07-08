@@ -20,6 +20,11 @@ list-funcs ()
 
 gen-completion-script ()
 { 
+	if [[ -t 0 ]]; then
+		printf '\nstdin is a terminal; please redirect input from stdin.\n\n';
+		return 0
+	fi
+
 	# beggining of script
 	cat <<- END
 	_daylight-sh ()
@@ -45,7 +50,7 @@ gen-completion-script ()
 	            # Typical mapfile + comgen -W idiom
 	            mapfile -t COMPREPLY < <(compgen -W "\${mainCmds[*]}" -- "\$curr")
 	            ;;
-	    esac
+	    esac\n
 	}
 	
 	complete -F _daylight-sh daylight.sh
