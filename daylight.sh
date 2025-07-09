@@ -931,7 +931,12 @@ etcd-gen-unit-file ()
 # Dynamically get the version number for the latest etcd release.
 etcd-get-latest-version ()
 {
-    github-release-get-latest-tag etcd-io etcd
+	local tag; tag=$(github-release-get-latest-tag etcd-io etcd) || return
+	if [[ -t 0 ]]; then
+		printf '%s\n' "$tag"
+	else
+		printf '%s' "$tag"
+	fi
 }
 
 
@@ -1018,8 +1023,60 @@ etcd-setup-data-dir ()
 }
 
 
-gen-completion-script ()
-{ 
+gen-completion-script () {
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: cmdName\n' >&2; return 1; }
+    # The incoming list of tokens must come from redirected stdin, so 
+    # this session must not be interactive
+    # Confirm user is not interactive
+    if [[ -t 0 ]]; then
+        printf '\nstdin is a terminal; please redirect input from stdin.\n\n';
+        return 0
+    fi
+    local cmdName=$1
+	local functionName="_$cmdName"
+
+    # catdoc beginning of script
+    cat <<- END
+	$functionName ()
+	{
+	    local curr=\$2
+	    local last=\$3
+
+	    local mainCmds=(\\
+	END
+	
+	# print body of content - one indented line per subcommand
+	while read -r line; do
+	    printf  '        %s \\\n' "$line"
+	done
+
+	# catdoc end of script
+	cat <<- END
+	    )
+
+	    # Typical mapfile + comgen -W idiom
+	    mapfile -t COMPREPLY < <(compgen -W "\${mainCmds[*]}" -- "\$curr")
+	}
+
+	complete -F $functionName $cmdName
+	END
+}
+
+
+
+gen-completion-script-2 ()
+{
+    # Coming up with a nice CLI experience for a bash-completion-generation
+    # script is trickier than one might think.  The trick is that a very 
+    # important part of any bash completion script is the call to `complete -F 
+    # $functionName $scriptPath at the end.` This `complete -F` call is what
+    # binds the completion function to the script or command.
+    #
+    # Proposed CLI UX
+
+    #
+    # That means that  
     # This function is a filter. It can operate on a file, or on stdin.
     # If the caller is piping data in via stdin, the first argument is the name of the script path. The script name will be derived from the path.
     # If no stdin, the first argument is the name of the script. There is no path to derive a name from, so the name must be explicitly provided.
@@ -1034,6 +1091,12 @@ gen-completion-script ()
     (( $# >= 0 && $# <= 2 )) || { printf 'Usage: gen-completion-script [$scriptPath [$functionName]]\n' >&2
                                   printf '       gen-completion-script $scriptName [$functionName] < (...script content...)\n' >&2
                                   return 1; }
+    # Confirm user is not interactive
+    if [[ -t 0 ]]; then
+        printf '\nstdin is a terminal; please redirect input from stdin.\n\n';
+        return 0
+    fi    
+
     if (( $# == 0 )); then
         scriptPath=${BASH_SOURCE[0]:-'/opt/bin/daylight.sh'}
         compScriptFolder=$HOME/bash-completion.d
@@ -1097,6 +1160,20 @@ gen-completion-script ()
 		complete -F $functionName $scriptName
 		END
 	fi
+}
+
+gen-daylight-completion-script () {
+	# shellcheck disable=SC2016
+	(( $# >= 0 && $# <= 1 )) || { printf 'Usage: gen-daylight-completion-script [$daylightScriptPath] []\n' >&2; return 1; }
+	local scriptPath=${1:-/opt/bin/daylight.sh}
+	# shellcheck disable=SC2016
+	[[ -f "$scriptPath" ]] || { printf 'Non-existent path: $scriptPath\n' >&2; return 1; }
+
+	local cmdName=daylight.sh
+	# gen list of bash funcs & write to temp file
+	local tmpListBashFuncs; tmpListBashFuncs=$(mktemp --tmpdir list-bash-funcs.XXXXXX) || return	
+	list-bash-funcs <"$scriptPath" >"$tmpListBashFuncs" || return
+	gen-completion-script "$cmdName" < "$tmpListBashFuncs" || return
 }
 
 gen-nginx-flask ()
@@ -3048,19 +3125,18 @@ list-apps ()
 }
 
 
-list-conf-scripts ()
+# list all bash functions in a bash script, sorted
+# the bash script is a stdin redirection
+list-bash-funcs ()
 {
-    local bucket; bucket=$(get-bucket) || return
-    local s3url="s3://$bucket/dist/conf.tgz"
-    local confDir; confDir=$(download-to-temp-dir "$s3url") || return
-    local scriptDir="$confDir/scripts"
-    [[ -d "$scriptDir" ]] || { printf 'Non-existent folder: %s\n' "$scriptDir" >&2; return 1; }
-    ls -1 "$scriptDir"
-}
+	# shellcheck disable=SC2016
+	(( $# == 0 )) || { printf 'Usage: list-bash-funcs <bashScript.sh\n' >&2; return 1; }
+	# Confirm user is not interactive
+	if [[ -t 0 ]]; then
+		printf '\nstdin is a terminal; please redirect input from stdin.\n\n';
+		return 0
+	fi
 
-
-list-funcs ()
-{
 	# grep for all function declarations
 	# then, grep again to get just the function names from the delcarations
 	# @note this might be possible in one grep, but for now 2 greps is fine
@@ -3071,6 +3147,17 @@ list-funcs ()
            --only-matching \
            '^[A-Za-z0-9_-]+' \
     | sort
+}
+
+
+list-conf-scripts ()
+{
+    local bucket; bucket=$(get-bucket) || return
+    local s3url="s3://$bucket/dist/conf.tgz"
+    local confDir; confDir=$(download-to-temp-dir "$s3url") || return
+    local scriptDir="$confDir/scripts"
+    [[ -d "$scriptDir" ]] || { printf 'Non-existent folder: %s\n' "$scriptDir" >&2; return 1; }
+    ls -1 "$scriptDir"
 }
 
 
@@ -4102,6 +4189,7 @@ main ()
             etcd-download-latest) etcd-download-latest "$@";;
             etcd-gen-run-script) etcd-gen-run-script "$@";;
             etcd-gen-unit-file) etcd-gen-unit-file "$@";;
+			etcd-get-latest-version) etcd-get-latest-version "$@";;
             etcd-install-latest) etcd-install-latest "$@";;
             etcd-setup-data-dir) etcd-setup-data-dir "$@";;
             gen-completion-script) gen-completion-script "$@";;
