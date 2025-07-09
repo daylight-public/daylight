@@ -1873,7 +1873,13 @@ github-release-create-url-path ()
     else
         local urlPath="/repos/$org/$repo/releases/latest"
     fi
-    printf '%s' "$urlPath"
+
+    # printf with \n if interactive
+    if [[ -t 0 ]]; then
+        printf '%s\n' "$urlPath"
+    else
+        printf '%s' "$urlPath"
+    fi
 }
 
 
