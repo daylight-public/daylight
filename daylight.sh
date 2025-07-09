@@ -4193,6 +4193,7 @@ main ()
             etcd-install-latest) etcd-install-latest "$@";;
             etcd-setup-data-dir) etcd-setup-data-dir "$@";;
             gen-completion-script) gen-completion-script "$@";;
+			gen-daylight-completion-script) gen-daylight-completion-script "$@";;
             gen-nginx-flask)	gen-nginx-flask "$@";;
             gen-nginx-static)	gen-nginx-static "$@";;
             generate-unit-file)	generate-unit-file "$@";;
