@@ -940,42 +940,6 @@ etcd-get-latest-version ()
 }
 
 
-# @Note this logic is elsewhere in this script. Maybe it can be extracted 
-# to build this function
-etcd-install-service ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: etcd-install-service $discSvr $name $ip $dataDir\n' >&2; return 1; }
-    local discSvr=$1
-    local name=$2
-    local ip=$3
-    local dataDir=$4
-    [[ -d "$dataDir" ]] || { echo "Non-existent folder: $dataDir" >&2; return 1; }
-    
-    mkdir -p /opt/svc/etcd/ || return
-    etcd-gen-unit-file >/opt/svc/etcd/etcd.service || return
-    etcd-gen-run-script "$discSvr" "$name" "$ip" "existing" "$dataDir" >/opt/svc/etcd/run.sh || return
-    chmod 755 /opt/svc/etcd/run.sh || return
-    systemctl enable /opt/svc/etcd/etcd.service || return
-    systemctl start etcd || return
-    chown -R rayray:rayray /opt/svc/etcd/ || return
-}
-
-
-# Install an etcd release tarball into the specified folder
-# @note am I really wrapping a simple tar --extract?
-etcd-install-release ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: etcd-install-release $releasePath $installFolder\n' >&2; return 1; }
-    local releasePath=$1
-    local installFolder=$2
-    [[ -f "$releasePath" ]] || { echo "Non-existent path: $releasePath" >&2; return 1; }
-    [[ -d "$installFolder" ]] || { printf 'Non-existent folder: %s\n' "$installFolder" >&2; return 1; }
-    tar --gunzip --extract --file "$releasePath" --directory "$installFolder" --strip-components=1
-}
-
-
 # Install an etcd release tarball into the specified folder
 etcd-install-latest ()
 {
@@ -998,6 +962,42 @@ etcd-install-latest ()
 	local -a flags=(--version "$version")
     github-release-install "${flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" || return
     chown -R rayray:rayray "$installFolder" || return
+}
+
+
+# Install an etcd release tarball into the specified folder
+# @note am I really wrapping a simple tar --extract?
+etcd-install-release ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: etcd-install-release $releasePath $installFolder\n' >&2; return 1; }
+    local releasePath=$1
+    local installFolder=$2
+    [[ -f "$releasePath" ]] || { echo "Non-existent path: $releasePath" >&2; return 1; }
+    [[ -d "$installFolder" ]] || { printf 'Non-existent folder: %s\n' "$installFolder" >&2; return 1; }
+    tar --gunzip --extract --file "$releasePath" --directory "$installFolder" --strip-components=1
+}
+
+
+# @Note this logic is elsewhere in this script. Maybe it can be extracted 
+# to build this function
+etcd-install-service ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: etcd-install-service $discSvr $name $ip $dataDir\n' >&2; return 1; }
+    local discSvr=$1
+    local name=$2
+    local ip=$3
+    local dataDir=$4
+    [[ -d "$dataDir" ]] || { echo "Non-existent folder: $dataDir" >&2; return 1; }
+    
+    mkdir -p /opt/svc/etcd/ || return
+    etcd-gen-unit-file >/opt/svc/etcd/etcd.service || return
+    etcd-gen-run-script "$discSvr" "$name" "$ip" "existing" "$dataDir" >/opt/svc/etcd/run.sh || return
+    chmod 755 /opt/svc/etcd/run.sh || return
+    systemctl enable /opt/svc/etcd/etcd.service || return
+    systemctl start etcd || return
+    chown -R rayray:rayray /opt/svc/etcd/ || return
 }
 
 
