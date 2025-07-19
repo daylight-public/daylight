@@ -130,12 +130,12 @@ add-superuser ()
     id --user "$username" >/dev/null && { printf 'User "%s" exists\n' "$username"; return 1; }
 
     # Create the user -- normal home folder -- and add to sudo2
-    sudo adduser --gecos -'' --disabled-password "$username"
-    sudo adduser "$username" sudo2
+    adduser --gecos -'' --disabled-password "$username"
+    adduser "$username" sudo2
 
     # Setup the user's public key to allow ssh
     install-public-key "/home/$username" "$publicKeyPath"
-    sudo chown -R "$username:$username" "/home/$username"
+    chown -R "$username:$username" "/home/$username"
 
     # Update /etc/subuid and /etc/subgid with the new user
     add-user-to-shadow-ids "$username"
@@ -1960,18 +1960,19 @@ github-release-get-data ()
 #
 github-release-get-latest-tag ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-parse-args argmap nargs "$@" || return
-    shift "$nargs"
+    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq" >&2; return 1; }
     # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: github-get-latest-version [flags] $org $repo\n' >&2; return 1; }
     local org=$1
     local repo=$2
     
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    
     releasesUrlPath=$(github-release-create-url-path "$org" "$repo")
-    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq"; return 1; }
     # build flags for github-curl
     local -a flags=()
     [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
@@ -2575,6 +2576,27 @@ EOT
 hello ()
 {
     printf "Hello!\n"
+}
+
+
+# Initialize an alpine VM with daylight's requirements
+# - install packages
+# - create rayray user & group
+init-alpine ()
+{
+    apk update
+    apk upgrade
+
+    # Add packages
+    apk add bash curl jq sudo
+
+    # Add rayray user
+    addgroup -g 2000 rayray
+    adduser -g 'rayray - daylight user' -D -u 2000 -G rayray -s /bin/bash rayray
+
+    # Add sudo + doas support for rayray
+    echo 'permit nopass rayray' >/etc/doas.d/rayray.conf
+    echo 'rayray ALL = (root) NOPASSWD: ALL' >/etc/sudoers.d/01-rayray
 }
 
 
@@ -4019,6 +4041,11 @@ untar-to-temp-folder ()
 ###
 update-and-restart ()
 {
+    if (( EUID != 0 )); then
+        printf 'You must be root to do this\n' >&2
+        return 1
+    fi 
+
     apt update -y
     apt upgrade -y
     reboot
@@ -4231,6 +4258,7 @@ main ()
             incus-pull-file) incus-pull-file "$@";;
             incus-push-file) incus-push-file "$@";;
             incus-remove-file) incus-remove-file "$@";;
+            init-alpine) init-alpine "%@";;
             init-lxd)	init-lxd "$@";;
             init-nginx)	init-nginx "$@";;
             install-app)	install-app "$@";;
