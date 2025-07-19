@@ -2586,7 +2586,7 @@ init-alpine ()
 {
     apk update
     apk upgrade
-    
+
     # Add packages
     apk add bash curl jq sudo
 
@@ -4258,6 +4258,7 @@ main ()
             incus-pull-file) incus-pull-file "$@";;
             incus-push-file) incus-push-file "$@";;
             incus-remove-file) incus-remove-file "$@";;
+            init-alpine) init-alpine "%@";;
             init-lxd)	init-lxd "$@";;
             init-nginx)	init-nginx "$@";;
             install-app)	install-app "$@";;
