@@ -11,7 +11,7 @@ sudo chmod 777 /opt/bin/daylight.sh
 
 #### On an Alpine container
 ```
-apk add bash curl
+apk add bash curl jq
 mkdir -p /opt/bin/
 curl --remote-name --output-dir /opt/bin https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
 chmod 777 /opt/bin/daylight.sh
