@@ -36,6 +36,7 @@ sudo apt upgrade
 sudo apt install bash curl jq
 sudo mkdir -p /opt/bin/
 sudo curl --remote-name --output-dir /opt/bin https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
+chmod 777 /opt/bin/daylight.sh
 sudo /opt/bin/daylight.sh init-rpi
 # install incus
 ```
