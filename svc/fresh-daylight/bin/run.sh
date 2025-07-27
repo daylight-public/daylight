@@ -12,7 +12,7 @@ main ()
 
 	# Download script from github
 	url=https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
-	curl --remote-name --output-dir "$downloadFolder" "$url" || { local rc=$?; printf "Failed downloading & installing daylight.sh (%d)\n" $rc; exit $rc; }
+	curl --silent --remote-name --output-dir "$downloadFolder" "$url" || { local rc=$?; printf "Failed downloading & installing daylight.sh (%d)\n" $rc; exit $rc; }
 
 	printf '%s\n' Done.
 }
