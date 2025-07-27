@@ -2579,69 +2579,6 @@ hello ()
 }
 
 
-# Initialize an alpine VM with daylight's requirements
-# - install packages
-# - create rayray user & group
-init-alpine ()
-{
-    apk update
-    apk upgrade
-
-    # Add packages
-    apk add bash curl jq sudo
-
-    # Add rayray user
-    addgroup -g 2000 rayray
-    adduser -g 'rayray - daylight user' -D -u 2000 -G rayray -s /bin/bash rayray
-
-    # Add sudo + doas support for rayray
-    echo 'permit nopass rayray' >/etc/doas.d/rayray.conf
-    echo 'rayray ALL = (root) NOPASSWD: ALL' >/etc/sudoers.d/01-rayray
-}
-
-
-init-lxd ()
-{
-    # Remove the packaged lxc/d since it causes problems
-    apt-get remove -y lxd lxd-client liblxc-common liblxc-dev liblxc1 lxc-dev lxcfs nova-compute-lxc
-    # Setup subuid+subgid to allow for mapping ubuntu
-    add-user-to-shadow-ids ubuntu
-    # Setup /dev/xvdf as a btrfs volume, then bind mount it onto the lxd images folder
-    [[ -b "/dev/xvdf" ]] || { echo "Non-existent device: /dev/xvdf" >&2; return 1; }
-    mkfs -t btrfs /dev/xvdf || return
-    mkdir -p /mnt/data/lxd || return
-    mount /dev/xvdf /mnt/data/lxd || return
-    mkdir /mnt/data/lxd/images || return
-    # Install the lxd snap
-    snap install lxd || return
-    # Initialize lxd with btrfs and use the volume on /dev/xvdg for lxd stuff
-    [[ -b "/dev/xvdg" ]] || { echo "Non-existent device: /dev/xvdg" >&2; return 1; }
-    lxd init --auto --storage-backend btrfs --storage-create-device /dev/xvdg --storage-pool default || return
-    # Bind mount the images folder from above and restart lxd
-    mount -o bind /mnt/data/lxd/images /var/snap/lxd/common/lxd/images || return
-    snap restart lxd || return
-    # Setup xvdh to be the volume for instance home dirs
-    [[ -b "/dev/xvdh" ]] || { echo "Non-existent device: /dev/xvdh" >&2; return 1; }
-    mkfs -t ext4 /dev/xvdh
-    mkdir -p /mnt/home
-    mount /dev/xvdh /mnt/home
-    chown -R ubuntu:ubuntu /mnt/home
-    # profile: map ubuntu from host to container
-    lxc profile create map-ubuntu || return
-    local uid; uid=$(id --user ubuntu) || return
-    local gid; gid=$(id --group ubuntu) || return
-    lxc profile set map-ubuntu raw.idmap - < <(printf 'uid %d %d\ngid %d %d\n' "$uid" "$uid" "$gid" "$gid") || return
-    # profile: serve HTTP/S
-    lxc profile create www || return
-    lxc profile device add www https proxy listen=tcp:0.0.0.0:443 connect=tcp:127.0.0.1:443 || return
-    lxc profile device add www http proxy listen=tcp:0.0.0.0:80 connect=tcp:127.0.0.1:80 || return
-# }
-
-    # install the shell script handlers ... clunky but it'll do for now
-    aws s3 cp --recursive --exclude "*" --include "shell_script_per_*.py" "s3://$bucket/conf/scripts" /usr/bin
-}
-
-
 incus-create-ssh-profile ()
 {
 	# shellcheck disable=SC2016
@@ -2715,6 +2652,69 @@ incus-remove-file ()
 	if incus exec "$vm" -- bash -c "[[ -e $dstPath_q ]]"; then
 		incus exec "$vm" -- bash -c "rm $dstPath_q" || return
 	fi
+}
+
+
+# Initialize an alpine VM with daylight's requirements
+# - install packages
+# - create rayray user & group
+init-alpine ()
+{
+    apk update
+    apk upgrade
+
+    # Add packages
+    apk add bash curl jq sudo
+
+    # Add rayray user
+    addgroup -g 2000 rayray
+    adduser -g 'rayray - daylight user' -D -u 2000 -G rayray -s /bin/bash rayray
+
+    # Add sudo + doas support for rayray
+    echo 'permit nopass rayray' >/etc/doas.d/rayray.conf
+    echo 'rayray ALL = (root) NOPASSWD: ALL' >/etc/sudoers.d/01-rayray
+}
+
+
+init-lxd ()
+{
+    # Remove the packaged lxc/d since it causes problems
+    apt-get remove -y lxd lxd-client liblxc-common liblxc-dev liblxc1 lxc-dev lxcfs nova-compute-lxc
+    # Setup subuid+subgid to allow for mapping ubuntu
+    add-user-to-shadow-ids ubuntu
+    # Setup /dev/xvdf as a btrfs volume, then bind mount it onto the lxd images folder
+    [[ -b "/dev/xvdf" ]] || { echo "Non-existent device: /dev/xvdf" >&2; return 1; }
+    mkfs -t btrfs /dev/xvdf || return
+    mkdir -p /mnt/data/lxd || return
+    mount /dev/xvdf /mnt/data/lxd || return
+    mkdir /mnt/data/lxd/images || return
+    # Install the lxd snap
+    snap install lxd || return
+    # Initialize lxd with btrfs and use the volume on /dev/xvdg for lxd stuff
+    [[ -b "/dev/xvdg" ]] || { echo "Non-existent device: /dev/xvdg" >&2; return 1; }
+    lxd init --auto --storage-backend btrfs --storage-create-device /dev/xvdg --storage-pool default || return
+    # Bind mount the images folder from above and restart lxd
+    mount -o bind /mnt/data/lxd/images /var/snap/lxd/common/lxd/images || return
+    snap restart lxd || return
+    # Setup xvdh to be the volume for instance home dirs
+    [[ -b "/dev/xvdh" ]] || { echo "Non-existent device: /dev/xvdh" >&2; return 1; }
+    mkfs -t ext4 /dev/xvdh
+    mkdir -p /mnt/home
+    mount /dev/xvdh /mnt/home
+    chown -R ubuntu:ubuntu /mnt/home
+    # profile: map ubuntu from host to container
+    lxc profile create map-ubuntu || return
+    local uid; uid=$(id --user ubuntu) || return
+    local gid; gid=$(id --group ubuntu) || return
+    lxc profile set map-ubuntu raw.idmap - < <(printf 'uid %d %d\ngid %d %d\n' "$uid" "$uid" "$gid" "$gid") || return
+    # profile: serve HTTP/S
+    lxc profile create www || return
+    lxc profile device add www https proxy listen=tcp:0.0.0.0:443 connect=tcp:127.0.0.1:443 || return
+    lxc profile device add www http proxy listen=tcp:0.0.0.0:80 connect=tcp:127.0.0.1:80 || return
+# }
+
+    # install the shell script handlers ... clunky but it'll do for now
+    aws s3 cp --recursive --exclude "*" --include "shell_script_per_*.py" "s3://$bucket/conf/scripts" /usr/bin
 }
 
 
