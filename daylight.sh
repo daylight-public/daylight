@@ -1172,7 +1172,7 @@ gen-daylight-completion-script () {
 	local cmdName=daylight.sh
 	# gen list of bash funcs & write to temp file
 	local tmpListBashFuncs; tmpListBashFuncs=$(mktemp --tmpdir list-bash-funcs.XXXXXX) || return	
-	list-bash-funcs <"$scriptPath" >"$tmpListBashFuncs" || return
+	list-bash-funcs "$@" <"$scriptPath" >"$tmpListBashFuncs" || return
 	gen-completion-script "$cmdName" < "$tmpListBashFuncs" || return
 }
 
@@ -2744,8 +2744,8 @@ init-rpi ()
             --disabled-password \
             --uid 2000 \
             --shell /bin/bash \
-            rayray 
-            || { printf 'Couldn't create rayray user.\n' >&2; return 1;' }
+            rayray \
+            || { printf 'Unable to create rayray user.\n' >&2; return 1; }
 
     # Make rayray owner of all things /opt/bin/
     [[ -d "/opt/bin/" ]] || { printf 'Non-existent folder: /opt/bin/\n' >&2; return 1; }
