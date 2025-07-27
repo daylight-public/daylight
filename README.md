@@ -30,6 +30,17 @@ incus exec al -- su - rayray -c 'sudo ls /etc/sudoers.d'
 incus exec al -- su - rayray -c 'doas ls /etc/sudoers.d'
 ```
 
+#### On a Raspberry Pi running Raspberry Pi OS / Raspbian
+sudo apt update
+sudo apt upgrade
+sudo apt install bash curl jq
+sudo mkdir -p /opt/bin/
+sudo curl --remote-name --output-dir /opt/bin https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
+chmod 777 /opt/bin/daylight.sh
+sudo /opt/bin/daylight.sh init-rpi
+# install incus
+```
+
 ### Use `daylight.sh` to install etcd
 ```
 /opt/bin/daylight.sh etcd-install-latest

@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer file for the fresh-daylight service
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+Unit=fresh-daylight.service
+
+[Install]
+WantedBy=timers.target

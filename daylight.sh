@@ -1172,7 +1172,7 @@ gen-daylight-completion-script () {
 	local cmdName=daylight.sh
 	# gen list of bash funcs & write to temp file
 	local tmpListBashFuncs; tmpListBashFuncs=$(mktemp --tmpdir list-bash-funcs.XXXXXX) || return	
-	list-bash-funcs <"$scriptPath" >"$tmpListBashFuncs" || return
+	list-bash-funcs "$@" <"$scriptPath" >"$tmpListBashFuncs" || return
 	gen-completion-script "$cmdName" < "$tmpListBashFuncs" || return
 }
 
@@ -2733,6 +2733,31 @@ init-nginx ()
 }
 
 
+init-rpi ()
+{
+    # Create rayray user
+    # On Debian etc, adduser does not have a way to explicitly specify gid so 
+    # that uid and guid match. It appears the current behavior is to create
+    # a usergroup with matching gid by default, though that appears to be 
+    # undocumented.
+    adduser --comment 'rayray - daylight user' \
+            --disabled-password \
+            --uid 2000 \
+            --shell /bin/bash \
+            rayray \
+            || { printf 'Unable to create rayray user.\n' >&2; return 1; }
+
+    # Make rayray owner of all things /opt/bin/
+    [[ -d "/opt/bin/" ]] || { printf 'Non-existent folder: /opt/bin/\n' >&2; return 1; }
+    chown -R rayray:rayray /opt/bin/
+
+    # Set rayray up for sudo
+    [[ -d "/etc/sudoers.d" ]] || { printf 'Non-existent folder: /etc/sudoers.d\n' >&2; return 1; }
+    echo 'rayray ALL = (root) NOPASSWD: ALL' >/etc/sudoers.d/01-rayray
+
+}
+
+
 install-app ()
 {
     # shellcheck disable=SC2016
@@ -2822,15 +2847,15 @@ install-flask-app ()
 install-fresh-daylight-svc ()
 {
     repo=https://raw.githubusercontent.com/daylight-public/daylight/main
-    sudo mkdir -p /opt/svc/fresh-daylight/bin 
-    sudo chown -R rayray:rayray /opt/svc/fresh-daylight
+    mkdir -p /opt/svc/fresh-daylight/bin 
+    chown -R rayray:rayray /opt/svc/fresh-daylight
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.service"
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.timer"
     curl --silent --remote-name --output-dir /opt/svc/fresh-daylight/bin "$repo/svc/fresh-daylight/bin/run.sh"
     chmod 777 /opt/svc/fresh-daylight/bin/run.sh
-    sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
-    sudo systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
-    sudo systemctl start fresh-daylight.timer
+    systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
+    systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
+    systemctl start fresh-daylight.timer
 }
 
 
