@@ -591,8 +591,9 @@ download-dylt ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
-    local dstFolder=$1
+    (( $# == 2 )) || { printf 'Usage: download-dylt $platform $dstFolder\n' >&2; return 1; }
+    local platform=$1
+    local dstFolder=$2
 
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
     
@@ -2792,10 +2793,12 @@ install-awscli ()
 install-dylt ()
 {
     # shellcheck disable=SC2016
-    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: install-dylt [$dstFolder]\n' >&2; return 1; }
-    local dstFolder=${1:-/opt/bin/}
+    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: install-dylt [$dstFolder]\n' >&2; return 1; }
+    local platform=$1
+    local dstFolder=${2:-/opt/bin/}
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
-    download-dylt "$dstFolder"
+
+    download-dylt "$platform" "$dstFolder"
 }
 
 
