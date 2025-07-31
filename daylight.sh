@@ -603,8 +603,8 @@ download-dylt ()
     # get the latest version
     local version; version=$(github-release-get-latest-tag "${flags[@]}" dylt-dev dylt) || return
     # create the release name (goreleaser trims the leading 'v' from the release tag)
-    local releaseName="dylt_${version##v}_${platform}.tar.gz"
-    github-release-download-latest "${flags[@]}" dylt-dev dylt "$releaseName" "$dstFolder"
+    local releaseName="dylt_${platform}.tar.gz"
+    github-release-download-latest "${flags[@]}" dylt-dev dylt "$releaseName" "$dstFolder" || return
 }
 
 
@@ -1932,7 +1932,7 @@ github-release-download-latest ()
     github-create-flags argmap flags token || return
     local version; version=$(github-release-get-latest-tag "${flags[@]}" "$org" "$repo") || return
     flags+=(--version "$version")
-    github-release-download "${flags[@]}" "$org" "$repo" "$name" "$downloadFolder"
+    github-release-download "${flags[@]}" "$org" "$repo" "$name" "$downloadFolder" || return
 }
 
 
@@ -2798,7 +2798,10 @@ install-dylt ()
     local dstFolder=${2:-/opt/bin/}
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
-    download-dylt "$platform" "$dstFolder"
+    tmpFolder=${TMPDIR:-/tmp}
+    dyltPath=$(download-dylt "$platform" "$dstFolder") || return
+    tar -C "$dstFolder" -xzf "$dyltPath" || return
+    chmod 777 "$dstFolder/dylt" || return
 }
 
 
