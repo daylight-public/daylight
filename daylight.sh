@@ -2757,7 +2757,10 @@ init-rpi ()
     echo 'rayray ALL = (root) NOPASSWD: ALL' >/etc/sudoers.d/01-rayray
 
     # Install service to check daylight.sh every hour for updates
-    install-fresh-daylight-svc
+    install-fresh-daylight-svc || return
+
+    # Install dylt CLI
+    install-dylt Linux_arm64 /opt/bin/ || return
 }
 
 
