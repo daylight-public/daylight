@@ -2754,6 +2754,9 @@ init-rpi ()
     # Set rayray up for sudo
     [[ -d "/etc/sudoers.d" ]] || { printf 'Non-existent folder: /etc/sudoers.d\n' >&2; return 1; }
     echo 'rayray ALL = (root) NOPASSWD: ALL' >/etc/sudoers.d/01-rayray
+
+    # Install service to check daylight.sh every hour for updates
+    install-fresh-daylight-svc
 }
 
 
