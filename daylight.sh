@@ -2737,6 +2737,7 @@ init-nginx ()
 init-rpi ()
 {
     # Create rayray user
+    sudo: true
     # On Debian etc, adduser does not have a way to explicitly specify gid so 
     # that uid and guid match. It appears the current behavior is to create
     # a usergroup with matching gid by default, though that appears to be 
@@ -3236,14 +3237,25 @@ list-git-repos ()
 }
 
 
-list-shr-entries () 
-{ 
-	# shellcheck disable=SC2016
-	{ (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: list-shr-entries [shrHome]\n' >&2; return 1; }
-    shrHome=${1:-/opt/actions-runner/_work};
+list-host-public-keys ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 0 && $# <= 1 )) || { printf 'Usage: list-host-public-keys [$keyFolder=/etc/ssh/]\n' >&2; return 1; }
+    local keyFolder=${1:-/etc/ssh/}
+    [[ -d "$keyFolder" ]] || { printf 'Non-existent folder: $keyFolder\n' >&2; return 1; }
 
-    ( cd "$shrHome" && find . -mindepth 1 -maxdepth 1 -type d -regex '^\./[A-Za-z0-9].*$' )
+    # If there are no files, return with no error
+    [[ -f "$keyFolder/*.pub" ]] || return 0
+
+    local rx='^([[:digit:]]*) (.*):(.*) (.*) \\((.*)\\)'
+    for path in "$keyFolder/*.pub"; do
+        local line; line=$(ssh-keygen -l -f "$path") || return
+        if [[ "$line" =~ $rx ]]; then
+            printf '%-10s\t%s\n' "${BASH_REMATCH[5]}" "${BASH_REMATCH[3]}\n"
+        fi
+    done
 }
+
 
 list-public-keys ()
 {
@@ -3260,6 +3272,15 @@ list-services ()
     aws s3api list-objects --bucket "$bucket" --prefix 'dist/svc' --query 'Contents[].Key' | jq -r '.[] | match("^dist/svc/(.*)\\.tgz$").captures[0].string'
 }
 
+
+list-shr-entries () 
+{ 
+	# shellcheck disable=SC2016
+	{ (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: list-shr-entries [shrHome]\n' >&2; return 1; }
+    shrHome=${1:-/opt/actions-runner/_work};
+
+    ( cd "$shrHome" && find . -mindepth 1 -maxdepth 1 -type d -regex '^\./[A-Za-z0-9].*$' )
+}
 
 list-vms ()
 {
