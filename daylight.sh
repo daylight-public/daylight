@@ -1165,17 +1165,23 @@ gen-completion-script-2 ()
 
 gen-daylight-completion-script () {
 	# shellcheck disable=SC2016
-	(( $# >= 0 && $# <= 1 )) || { printf 'Usage: gen-daylight-completion-script [$daylightScriptPath] []\n' >&2; return 1; }
-	local scriptPath=${1:-/opt/bin/daylight.sh}
+	(( $# >= 0 && $# <= 1 )) || { printf 'Usage: gen-daylight-completion-script [$folder] []\n' >&2; return 1; }
+	local folder=${1:-~/.bash_completion.d}
 	# shellcheck disable=SC2016
-	[[ -f "$scriptPath" ]] || { printf 'Non-existent path: $scriptPath\n' >&2; return 1; }
+    if [[ ! -d "$folder" ]]; then
+        printf 'Creating folder %s\n' "$folder" >&2;
+        mkdir -p "$folder" || return
+    fi
 
+    local path="$folder/daylight.sh"
+    local scriptPath='/opt/bin/daylight.sh'
 	local cmdName=daylight.sh
 	# gen list of bash funcs & write to temp file
 	local tmpListBashFuncs; tmpListBashFuncs=$(mktemp --tmpdir list-bash-funcs.XXXXXX) || return	
 	list-bash-funcs "$@" <"$scriptPath" >"$tmpListBashFuncs" || return
-	gen-completion-script "$cmdName" < "$tmpListBashFuncs" || return
+	gen-completion-script "$cmdName" <"$tmpListBashFuncs" >"$path" || return
 }
+
 
 gen-nginx-flask ()
 {
@@ -3242,18 +3248,16 @@ list-host-public-keys ()
     # shellcheck disable=SC2016
     (( $# >= 0 && $# <= 1 )) || { printf 'Usage: list-host-public-keys [$keyFolder=/etc/ssh/]\n' >&2; return 1; }
     local keyFolder=${1:-/etc/ssh/}
+    # shellcheck disable=SC2016
     [[ -d "$keyFolder" ]] || { printf 'Non-existent folder: $keyFolder\n' >&2; return 1; }
 
-    # If there are no files, return with no error
-    [[ -f "$keyFolder/*.pub" ]] || return 0
-
-    local rx='^([[:digit:]]*) (.*):(.*) (.*) \\((.*)\\)'
-    for path in "$keyFolder/*.pub"; do
+    local rx='^([[:digit:]]*) (.*):(.*) (.*) \((.*)\)'
+    while read -r path; do
         local line; line=$(ssh-keygen -l -f "$path") || return
         if [[ "$line" =~ $rx ]]; then
-            printf '%-10s\t%s\n' "${BASH_REMATCH[5]}" "${BASH_REMATCH[3]}\n"
+            printf '%-10s\t%s\n' "${BASH_REMATCH[5]}" "${BASH_REMATCH[3]}"
         fi
-    done
+    done < <(find "$keyFolder" -maxdepth 1 -name '*.pub')
 }
 
 
@@ -4342,6 +4346,7 @@ main ()
             list-apps)	list-apps "$@";;
             list-conf-scripts)	list-conf-scripts "$@";;
             list-funcs) list-funcs "$@";;
+            list-host-public-keys) list-host-public-keys "$@";;
             list-public-keys)	list-public-keys "$@";;
             list-services)	list-services "$@";;
             list-vms)	list-vms "$@";;
