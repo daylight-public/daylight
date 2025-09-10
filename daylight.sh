@@ -737,11 +737,11 @@ edit-daylight ()
 emit-os-arch-vars ()
 {
     # shellcheck disable=SC2016
-    printf '$HOSTTYPE\0%s\0' "$HOSTTYPE"
+    printf 'HOSTTYPE\0%s\0' "$HOSTTYPE"
     # shellcheck disable=SC2016
-    printf '$MACHTYPE\0%s\0' "$MACHTYPE"
+    printf 'MACHTYPE\0%s\0' "$MACHTYPE"
     # shellcheck disable=SC2016
-    printf '$OSTYPE\0%s\0' "$OSTYPE"
+    printf 'OSTYPE\0%s\0' "$OSTYPE"
 }
 
 
