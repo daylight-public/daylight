@@ -733,6 +733,18 @@ edit-daylight ()
     fi
 }
 
+
+emit-os-arch-vars ()
+{
+    # shellcheck disable=SC2016
+    printf '$HOSTTYPE\0%s\0' "$HOSTTYPE"
+    # shellcheck disable=SC2016
+    printf '$MACHTYPE\0%s\0' "$MACHTYPE"
+    # shellcheck disable=SC2016
+    printf '$OSTYPE\0%s\0' "$OSTYPE"
+}
+
+
 # Statically create the URL from which to download a specific version of etcd.
 #
 # An optional $platform argument is supported as well. If omitted it defaults to
@@ -3186,6 +3198,48 @@ install-vm ()
     # lxc stop "$vm" || return
     # lxc publish "$vm" "$imageRepo:" --alias "$vm" || return
     # [[ -f "$userDataPath" ]] || { echo "Non-existent path: $userDataPath" >&2; return 1; }
+}
+
+
+###
+#
+# kvs-to-array()
+#
+# Consume a stream of NUL-delimited \n-terminated key-value pairs, and create an associative
+# array from all the kvs
+#
+# Args
+#   stdin       stream of key-value pairs
+#   $1          assoc array nameref
+#
+# Returns
+#   nameref     populated array
+#
+kvs-to-array ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 1 && $# <= 2 )) || { printf "Usage: kvs-to-array aaref\n" >&2; return 1; }
+    # shellcheck disable=SC2178
+    [[ $1 != aaref ]] && { local -n aaref; aaref=$1; }
+    aaref=()
+
+    # read all NUL-delimited data in at once. This is necessary since bash has
+    # no way to store lines containing NULs.
+    local -a data
+    readarray -t -d '' data || return
+    declare -p data
+
+    local i=0
+    printf '${#data}=%s\n' "${#data}"
+    while (( i < ${#data[@]} )); do
+        k=${data[i]}
+        v=${data[i+1]} 
+        declare -p k
+        declare -p v
+        aaref[$k]=$v
+        let i=i+2
+        declare -p i
+    done
 }
 
 
