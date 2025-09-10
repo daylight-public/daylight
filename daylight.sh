@@ -3729,7 +3729,9 @@ read-kvs ()
     (( $# >= 1 && $# <= 2 )) || { printf "Usage: read-kvs nkvs\n" >&2; return 1; }
     # shellcheck disable=SC2178
     [[ $1 != nkvs ]] && { local -n nkvs; nkvs=$1; }
-    [[ ${nkvs@a} =~ A ]] || { printf 'arg is not an associative array\n' >&2; return 1; }
+    if [[ -v ${!nkvs} ]] && [[ ! ${nkvss@a} =~ A ]]; then
+        printf 'arg is not an associative array\n' >&2; return 1;
+    fi
     nkvs=()
 
     # read all NUL-delimited data in at once. This is necessary since bash has
@@ -3747,9 +3749,6 @@ read-kvs ()
         let i=i+2
     done
 }
-
-
-
 
 
 replace-nginx-conf ()
