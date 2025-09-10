@@ -3201,48 +3201,6 @@ install-vm ()
 }
 
 
-###
-#
-# kvs-to-array()
-#
-# Consume a stream of NUL-delimited \n-terminated key-value pairs, and create an associative
-# array from all the kvs
-#
-# Args
-#   stdin       stream of key-value pairs
-#   $1          assoc array nameref
-#
-# Returns
-#   nameref     populated array
-#
-kvs-to-array ()
-{
-    # shellcheck disable=SC2016
-    (( $# >= 1 && $# <= 2 )) || { printf "Usage: kvs-to-array aaref\n" >&2; return 1; }
-    # shellcheck disable=SC2178
-    [[ $1 != aaref ]] && { local -n aaref; aaref=$1; }
-    aaref=()
-
-    # read all NUL-delimited data in at once. This is necessary since bash has
-    # no way to store lines containing NULs.
-    local -a data
-    readarray -t -d '' data || return
-    declare -p data
-
-    local i=0
-    printf '${#data}=%s\n' "${#data}"
-    while (( i < ${#data[@]} )); do
-        k=${data[i]}
-        v=${data[i+1]} 
-        declare -p k
-        declare -p v
-        aaref[$k]=$v
-        let i=i+2
-        declare -p i
-    done
-}
-
-
 list-apps ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -3749,6 +3707,49 @@ push-webapp ()
     local s3key; s3key="s3://$(get-bucket)/dist/webapp/$name.tgz" || return
     aws s3 cp "/tmp/$name.tgz" "$s3key" || return
 }
+
+
+###
+#
+# read-kvs()
+#
+# Consume a stream of NUL-delimited \n-terminated key-value pairs, and create an associative
+# array from all the kvs
+#
+# Args
+#   stdin       stream of key-value pairs
+#   $1          assoc array nameref
+#
+# Returns
+#   nameref     populated array
+#
+read-kvs ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 1 && $# <= 2 )) || { printf "Usage: read-kvs nkvs\n" >&2; return 1; }
+    # shellcheck disable=SC2178
+    [[ $1 != nkvs ]] && { local -n nkvs; nkvs=$1; }
+    [[ ${nkvs@a} =~ A ]] || { printf 'arg is not an associative array\n' >&2; return 1; }
+    nkvs=()
+
+    # read all NUL-delimited data in at once. This is necessary since bash has
+    # no way to store lines containing NULs.
+    local -a data
+    readarray -t -d '' data || return
+
+    local i=0
+    while (( i < ${#data[@]} )); do
+        k=${data[i]}
+        v=${data[i+1]} 
+        if [[ -n "$k" ]]; then
+            nkvs[$k]=$v
+        fi
+        let i=i+2
+    done
+}
+
+
+
 
 
 replace-nginx-conf ()
