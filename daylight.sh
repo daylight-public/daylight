@@ -736,12 +736,15 @@ edit-daylight ()
 
 emit-os-arch-vars ()
 {
-    # shellcheck disable=SC2016
-    printf 'HOSTTYPE\0%s\0' "$HOSTTYPE"
-    # shellcheck disable=SC2016
-    printf 'MACHTYPE\0%s\0' "$MACHTYPE"
-    # shellcheck disable=SC2016
-    printf 'OSTYPE\0%s\0' "$OSTYPE"
+    emit-vars HOSTTYPE MACHTYPE OSTYPE
+}
+
+
+emit-vars ()
+{
+    for varname in "$@"; do
+        printf '%s\0%s\0' "$varname" "${!varname}"
+    done
 }
 
 
@@ -3378,12 +3381,15 @@ prep-service ()
 
 print-os-arch-vars ()
 {
-    # shellcheck disable=SC2016
-    printf '$HOSTTYPE=%s\n' "$HOSTTYPE"
-    # shellcheck disable=SC2016
-    printf '$MACHTYPE=%s\n' "$MACHTYPE"
-    # shellcheck disable=SC2016
-    printf '$OSTYPE=%s\n' "$OSTYPE"
+    print-vars HOSTTYPE MACHTYPE OSTYPE
+}
+
+
+print-vars ()
+{
+    for varname in "$@"; do
+        printf '%s=%s\n' "$varname" "${!varname}"
+    done
 }
 
 
@@ -3729,7 +3735,7 @@ read-kvs ()
     (( $# >= 1 && $# <= 2 )) || { printf "Usage: read-kvs nkvs\n" >&2; return 1; }
     # shellcheck disable=SC2178
     [[ $1 != nkvs ]] && { local -n nkvs; nkvs=$1; }
-    if [[ -v ${!nkvs} ]] && [[ ! ${nkvss@a} =~ A ]]; then
+    if [[ -v ${!nkvs} ]] && [[ ! ${nkvs@a} =~ A ]]; then
         printf 'arg is not an associative array\n' >&2; return 1;
     fi
     nkvs=()
@@ -3744,9 +3750,9 @@ read-kvs ()
         k=${data[i]}
         v=${data[i+1]} 
         if [[ -n "$k" ]]; then
-            nkvs[$k]=$v
+            nkvs["$k"]=$v
         fi
-        let i=i+2
+        (( i=i+2 ))
     done
 }
 
