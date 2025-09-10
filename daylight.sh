@@ -2803,7 +2803,7 @@ install-awscli ()
 install-dylt ()
 {
     # shellcheck disable=SC2016
-    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: install-dylt [$dstFolder]\n' >&2; return 1; }
+    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: install-dylt $platform [$dstFolder]\n' >&2; return 1; }
     local platform=$1
     local dstFolder=${2:-/opt/bin/}
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
@@ -3361,6 +3361,17 @@ prep-service ()
 
     mkdir -p "/opt/svc/$svcName"
     mkdir -p "/opt/svc/$svcName/bin"
+}
+
+
+print-os-arch-vars ()
+{
+    # shellcheck disable=SC2016
+    printf '$HOSTTYPE=%s\n' "$HOSTTYPE"
+    # shellcheck disable=SC2016
+    printf '$MACHTYPE=%s\n' "$MACHTYPE"
+    # shellcheck disable=SC2016
+    printf '$OSTYPE=%s\n' "$OSTYPE"
 }
 
 
@@ -4351,6 +4362,7 @@ main ()
             list-services)	list-services "$@";;
             list-vms)	list-vms "$@";;
             prep-filesystem) prep-filesystem "$@";;
+            print-os-arch-vars) print-os-arch-vars "$@";;
             pullAppInfo) pullAppInfo "$@";;
             pull-app)	pull-app "$@";;
             pull-daylight)	pull-daylight "$@";;
