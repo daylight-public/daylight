@@ -1733,6 +1733,23 @@ github-download-latest-release ()
 
 
 ###
+#
+#
+github-get-local-platform ()
+{
+    printf '%s=%s\n' HOSTTYPE $HOSTTYPE >&2
+    printf '%s=%s\n' MACHTYPE $MACHTYPE >&2
+    printf '%s=%s\n' OSTYPE $OSTYPE >&2
+
+    if [[ "$HOSTTYPE" == 'aarch64' ]] && [[ "$OSTYPE" =~ darwin ]]; then
+        printf Darwin_arm64
+    else
+        return 1
+    fi
+}
+
+
+###
 # @deprecated
 # use github-release-get-data
 ###
@@ -3727,7 +3744,7 @@ push-webapp ()
 #   $1          assoc array nameref
 #
 # Returns
-#   nameref     populated array
+#   kvs         assoc array populated with keys+values
 #
 read-kvs ()
 {
