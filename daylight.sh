@@ -2880,13 +2880,12 @@ install-awscli ()
 install-dylt ()
 {
     # shellcheck disable=SC2016
-    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: install-dylt $platform [$dstFolder]\n' >&2; return 1; }
-    local platform=$1
-    local dstFolder=${2:-/opt/bin/}
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: install-dylt [$dstFolder]\n' >&2; return 1; }
+    local dstFolder=${1:-/opt/bin/}
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
     tmpFolder=${TMPDIR:-/tmp}
-    dyltPath=$(download-dylt "$platform" "$dstFolder") || return
+    dyltPath=$(download-dylt "$dstFolder") || return
     tar -C "$dstFolder" -xzf "$dyltPath" || return
     chmod 777 "$dstFolder/dylt" || return
 }
