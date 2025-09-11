@@ -591,12 +591,22 @@ download-dylt ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: download-dylt $platform $dstFolder\n' >&2; return 1; }
-    local platform=$1
-    local dstFolder=$2
-
+    (( $# == 1 )) || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
+    local dstFolder=$1
+    local platform=$2
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
-    
+
+    # If there's no platform, try and determine it. If it can't be determined,
+    # prompt the user
+    platform=$(github-detect-local-platform) || return
+    if [[ -z "$platform" ]]; then
+        platform=$(github-release-select-platform)
+    fi
+
+    # Confirm a platform was actually selected 
+    # shellcheck disable=SC2016
+    [[ -n "$platform" ]] || { printf 'Variable is unset or empty: $platform\n' >&2; return 1; }    
+
     # create flags (--token)
     local -a flags=()
     [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}") 
@@ -732,6 +742,21 @@ edit-daylight ()
         push-daylight
     fi
 }
+
+
+emit-os-arch-vars ()
+{
+    emit-vars HOSTTYPE MACHTYPE OSTYPE
+}
+
+
+emit-vars ()
+{
+    for varname in "$@"; do
+        printf '%s\0%s\0' "$varname" "${!varname}"
+    done
+}
+
 
 # Statically create the URL from which to download a specific version of etcd.
 #
@@ -1165,17 +1190,23 @@ gen-completion-script-2 ()
 
 gen-daylight-completion-script () {
 	# shellcheck disable=SC2016
-	(( $# >= 0 && $# <= 1 )) || { printf 'Usage: gen-daylight-completion-script [$daylightScriptPath] []\n' >&2; return 1; }
-	local scriptPath=${1:-/opt/bin/daylight.sh}
+	(( $# >= 0 && $# <= 1 )) || { printf 'Usage: gen-daylight-completion-script [$folder] []\n' >&2; return 1; }
+	local folder=${1:-~/.bash_completion.d}
 	# shellcheck disable=SC2016
-	[[ -f "$scriptPath" ]] || { printf 'Non-existent path: $scriptPath\n' >&2; return 1; }
+    if [[ ! -d "$folder" ]]; then
+        printf 'Creating folder %s\n' "$folder" >&2;
+        mkdir -p "$folder" || return
+    fi
 
+    local path="$folder/daylight.sh"
+    local scriptPath='/opt/bin/daylight.sh'
 	local cmdName=daylight.sh
 	# gen list of bash funcs & write to temp file
 	local tmpListBashFuncs; tmpListBashFuncs=$(mktemp --tmpdir list-bash-funcs.XXXXXX) || return	
 	list-bash-funcs "$@" <"$scriptPath" >"$tmpListBashFuncs" || return
-	gen-completion-script "$cmdName" < "$tmpListBashFuncs" || return
+	gen-completion-script "$cmdName" <"$tmpListBashFuncs" >"$path" || return
 }
+
 
 gen-nginx-flask ()
 {
@@ -1681,6 +1712,27 @@ github-curl-post ()
 }
 
 
+###
+#
+#
+github-detect-local-platform ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 0 )) || { printf 'Usage: github-detect-local=platform\n' >&2; return 1; }
+    printf '%s=%s\n' HOSTTYPE $HOSTTYPE >&2
+    printf '%s=%s\n' MACHTYPE $MACHTYPE >&2
+    printf '%s=%s\n' OSTYPE $OSTYPE >&2
+
+    if [[ "$HOSTTYPE" == 'aarch64' ]] && [[ "$OSTYPE" =~ darwin ]]; then
+        printf Darwin_arm64
+    elif [[ "$HOSTTYPE" == "x86_64" ]] && [[ "$OSTYPE" == linux-gnu ]]; then
+        printf Linux_x86_64
+    else
+        return 1
+    fi
+}
+
+
 github-download-latest-release ()
 {
     # parse github args
@@ -2134,6 +2186,26 @@ github-release-list ()
 }
 
 
+github-release-list-platforms ()
+{
+	# shellcheck disable=SC2016
+	(( $# == 2 )) || { printf 'Usage: github-release-list [flags] $org $repo\n' >&2; return 1; }
+	local org=$1
+	local repo=$2
+
+	# get release name list, using token if provided
+    readarray -t -d $'\t' releases < <(github-release-list "$@")
+    local platform
+    for release in "${releases[@]}"; do
+        if [[ ! "$release" =~ checksums.txt ]]; then
+            platform="${release##${repo}_}"
+            platform="${platform%%.*}"
+            echo $platform
+        fi
+    done
+}
+
+
 github-release-select ()
 {
     # parse github args
@@ -2151,6 +2223,17 @@ github-release-select ()
     [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
 	IFS=$'\t' read -r -a names < <(github-release-list "${flags[@]}" "$org" "$repo") || return
 	select name in "${names[@]}"; do break; done
+}
+
+
+github-release-select-platform ()
+{
+    local platforms
+    readarray -t -d $'\n' platforms < <(github-release-list-platforms "$@")
+	select platform in "${platforms[@]}"; do
+        printf '%s' "$platform" || return
+        break
+    done
 }
 
 
@@ -2737,6 +2820,7 @@ init-nginx ()
 init-rpi ()
 {
     # Create rayray user
+    sudo: true
     # On Debian etc, adduser does not have a way to explicitly specify gid so 
     # that uid and guid match. It appears the current behavior is to create
     # a usergroup with matching gid by default, though that appears to be 
@@ -2796,13 +2880,12 @@ install-awscli ()
 install-dylt ()
 {
     # shellcheck disable=SC2016
-    { (( $# >= 1 )) && (( $# <= 2 )); } || { printf 'Usage: install-dylt [$dstFolder]\n' >&2; return 1; }
-    local platform=$1
-    local dstFolder=${2:-/opt/bin/}
+    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: install-dylt [$dstFolder]\n' >&2; return 1; }
+    local dstFolder=${1:-/opt/bin/}
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
     tmpFolder=${TMPDIR:-/tmp}
-    dyltPath=$(download-dylt "$platform" "$dstFolder") || return
+    dyltPath=$(download-dylt "$dstFolder") || return
     tar -C "$dstFolder" -xzf "$dyltPath" || return
     chmod 777 "$dstFolder/dylt" || return
 }
@@ -3236,14 +3319,23 @@ list-git-repos ()
 }
 
 
-list-shr-entries () 
-{ 
-	# shellcheck disable=SC2016
-	{ (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: list-shr-entries [shrHome]\n' >&2; return 1; }
-    shrHome=${1:-/opt/actions-runner/_work};
+list-host-public-keys ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 0 && $# <= 1 )) || { printf 'Usage: list-host-public-keys [$keyFolder=/etc/ssh/]\n' >&2; return 1; }
+    local keyFolder=${1:-/etc/ssh/}
+    # shellcheck disable=SC2016
+    [[ -d "$keyFolder" ]] || { printf 'Non-existent folder: $keyFolder\n' >&2; return 1; }
 
-    ( cd "$shrHome" && find . -mindepth 1 -maxdepth 1 -type d -regex '^\./[A-Za-z0-9].*$' )
+    local rx='^([[:digit:]]*) (.*):(.*) (.*) \((.*)\)'
+    while read -r path; do
+        local line; line=$(ssh-keygen -l -f "$path") || return
+        if [[ "$line" =~ $rx ]]; then
+            printf '%-10s\t%s\n' "${BASH_REMATCH[5]}" "${BASH_REMATCH[3]}"
+        fi
+    done < <(find "$keyFolder" -maxdepth 1 -name '*.pub')
 }
+
 
 list-public-keys ()
 {
@@ -3260,6 +3352,15 @@ list-services ()
     aws s3api list-objects --bucket "$bucket" --prefix 'dist/svc' --query 'Contents[].Key' | jq -r '.[] | match("^dist/svc/(.*)\\.tgz$").captures[0].string'
 }
 
+
+list-shr-entries () 
+{ 
+	# shellcheck disable=SC2016
+	{ (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: list-shr-entries [shrHome]\n' >&2; return 1; }
+    shrHome=${1:-/opt/actions-runner/_work};
+
+    ( cd "$shrHome" && find . -mindepth 1 -maxdepth 1 -type d -regex '^\./[A-Za-z0-9].*$' )
+}
 
 list-vms ()
 {
@@ -3336,6 +3437,20 @@ prep-service ()
 
     mkdir -p "/opt/svc/$svcName"
     mkdir -p "/opt/svc/$svcName/bin"
+}
+
+
+print-os-arch-vars ()
+{
+    print-vars HOSTTYPE MACHTYPE OSTYPE
+}
+
+
+print-vars ()
+{
+    for varname in "$@"; do
+        printf '%s=%s\n' "$varname" "${!varname}"
+    done
 }
 
 
@@ -3658,6 +3773,48 @@ push-webapp ()
     tar -C "/www/$name" --exclude ./**/__pycache__ -czf "/tmp/$name.tgz" . || return
     local s3key; s3key="s3://$(get-bucket)/dist/webapp/$name.tgz" || return
     aws s3 cp "/tmp/$name.tgz" "$s3key" || return
+}
+
+
+###
+#
+# read-kvs()
+#
+# Consume a stream of NUL-delimited \n-terminated key-value pairs, and create an associative
+# array from all the kvs
+#
+# Args
+#   stdin       stream of key-value pairs
+#   $1          assoc array nameref
+#
+# Returns
+#   kvs         assoc array populated with keys+values
+#
+read-kvs ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 1 && $# <= 2 )) || { printf "Usage: read-kvs nkvs\n" >&2; return 1; }
+    # shellcheck disable=SC2178
+    [[ $1 != nkvs ]] && { local -n nkvs; nkvs=$1; }
+    if [[ -v ${!nkvs} ]] && [[ ! ${nkvs@a} =~ A ]]; then
+        printf 'arg is not an associative array\n' >&2; return 1;
+    fi
+    nkvs=()
+
+    # read all NUL-delimited data in at once. This is necessary since bash has
+    # no way to store lines containing NULs.
+    local -a data
+    readarray -t -d '' data || return
+
+    local i=0
+    while (( i < ${#data[@]} )); do
+        k=${data[i]}
+        v=${data[i+1]} 
+        if [[ -n "$k" ]]; then
+            nkvs["$k"]=$v
+        fi
+        (( i=i+2 ))
+    done
 }
 
 
@@ -4281,6 +4438,8 @@ main ()
             get-service-working-directory)	get-service-working-directory "$@";;
             github-create-user-access-token) github-create-user-access-token "$@";;
             github-download-latest-release)    github-download-latest-release "$@";;
+            github-get-local-platform)  github-get-local-platform "$@";;
+            github-get-release-name-list)   github-get-release-name-list "$@";;
             github-install-latest-release) github-install-latest-release "$@";;
             github-parse-args) github-parse-args "$@";;
             github-release-get-latest-tag) github-release-get-latest-tag "$@";;
@@ -4321,10 +4480,13 @@ main ()
             list-apps)	list-apps "$@";;
             list-conf-scripts)	list-conf-scripts "$@";;
             list-funcs) list-funcs "$@";;
+            list-host-public-keys) list-host-public-keys "$@";;
             list-public-keys)	list-public-keys "$@";;
             list-services)	list-services "$@";;
             list-vms)	list-vms "$@";;
+            print-os-arch-vars) print-os-arch-vars "$@";;
             prep-filesystem) prep-filesystem "$@";;
+            print-os-arch-vars) print-os-arch-vars "$@";;
             pullAppInfo) pullAppInfo "$@";;
             pull-app)	pull-app "$@";;
             pull-daylight)	pull-daylight "$@";;
