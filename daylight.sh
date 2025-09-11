@@ -591,12 +591,22 @@ download-dylt ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: download-dylt $platform $dstFolder\n' >&2; return 1; }
-    local platform=$1
-    local dstFolder=$2
-
+    (( $# == 1 )) || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
+    local dstFolder=$1
+    local platform=$2
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
-    
+
+    # If there's no platform, try and determine it. If it can't be determined,
+    # prompt the user
+    platform=$(github-detect-local-platform) || return
+    if [[ -z "$platform" ]]; then
+        platform=$(github-release-select-platform)
+    fi
+
+    # Confirm a platform was actually selected 
+    # shellcheck disable=SC2016
+    [[ -n "$platform" ]] || { printf 'Variable is unset or empty: $platform\n' >&2; return 1; }    
+
     # create flags (--token)
     local -a flags=()
     [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}") 
@@ -1702,6 +1712,27 @@ github-curl-post ()
 }
 
 
+###
+#
+#
+github-detect-local-platform ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 0 )) || { printf 'Usage: github-detect-local=platform\n' >&2; return 1; }
+    printf '%s=%s\n' HOSTTYPE $HOSTTYPE >&2
+    printf '%s=%s\n' MACHTYPE $MACHTYPE >&2
+    printf '%s=%s\n' OSTYPE $OSTYPE >&2
+
+    if [[ "$HOSTTYPE" == 'aarch64' ]] && [[ "$OSTYPE" =~ darwin ]]; then
+        printf Darwin_arm64
+    elif [[ "$HOSTTYPE" == "x86_64" ]] && [[ "$OSTYPE" == linux-gnu ]]; then
+        printf Linux_x86_64
+    else
+        return 1
+    fi
+}
+
+
 github-download-latest-release ()
 {
     # parse github args
@@ -1729,23 +1760,6 @@ github-download-latest-release ()
         github-curl --accept "$accept" --output "$output"
     fi
     printf '%s' "$releasePath"
-}
-
-
-###
-#
-#
-github-get-local-platform ()
-{
-    printf '%s=%s\n' HOSTTYPE $HOSTTYPE >&2
-    printf '%s=%s\n' MACHTYPE $MACHTYPE >&2
-    printf '%s=%s\n' OSTYPE $OSTYPE >&2
-
-    if [[ "$HOSTTYPE" == 'aarch64' ]] && [[ "$OSTYPE" =~ darwin ]]; then
-        printf Darwin_arm64
-    else
-        return 1
-    fi
 }
 
 
@@ -2172,6 +2186,26 @@ github-release-list ()
 }
 
 
+github-release-list-platforms ()
+{
+	# shellcheck disable=SC2016
+	(( $# == 2 )) || { printf 'Usage: github-release-list [flags] $org $repo\n' >&2; return 1; }
+	local org=$1
+	local repo=$2
+
+	# get release name list, using token if provided
+    readarray -t -d $'\t' releases < <(github-release-list "$@")
+    local platform
+    for release in "${releases[@]}"; do
+        if [[ ! "$release" =~ checksums.txt ]]; then
+            platform="${release##${repo}_}"
+            platform="${platform%%.*}"
+            echo $platform
+        fi
+    done
+}
+
+
 github-release-select ()
 {
     # parse github args
@@ -2189,6 +2223,17 @@ github-release-select ()
     [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
 	IFS=$'\t' read -r -a names < <(github-release-list "${flags[@]}" "$org" "$repo") || return
 	select name in "${names[@]}"; do break; done
+}
+
+
+github-release-select-platform ()
+{
+    local platforms
+    readarray -t -d $'\n' platforms < <(github-release-list-platforms "$@")
+	select platform in "${platforms[@]}"; do
+        printf '%s' "$platform" || return
+        break
+    done
 }
 
 
@@ -4394,6 +4439,8 @@ main ()
             get-service-working-directory)	get-service-working-directory "$@";;
             github-create-user-access-token) github-create-user-access-token "$@";;
             github-download-latest-release)    github-download-latest-release "$@";;
+            github-get-local-platform)  github-get-local-platform "$@";;
+            github-get-release-name-list)   github-get-release-name-list "$@";;
             github-install-latest-release) github-install-latest-release "$@";;
             github-parse-args) github-parse-args "$@";;
             github-release-get-latest-tag) github-release-get-latest-tag "$@";;
@@ -4438,6 +4485,7 @@ main ()
             list-public-keys)	list-public-keys "$@";;
             list-services)	list-services "$@";;
             list-vms)	list-vms "$@";;
+            print-os-arch-vars) print-os-arch-vars "$@";;
             prep-filesystem) prep-filesystem "$@";;
             print-os-arch-vars) print-os-arch-vars "$@";;
             pullAppInfo) pullAppInfo "$@";;
