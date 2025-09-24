@@ -580,8 +580,11 @@ download-dist ()
 }
 
 
+###
 #
 # Download latest dylt release
+#
+# If not platform is explicitly specified, infer the playform from bash envvars
 #
 download-dylt ()
 {
@@ -591,12 +594,12 @@ download-dylt ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
+    (( $# >= 1 )) || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
     local dstFolder=$1
     local platform=$2
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
-    # If there's no platform, try and determine it. If it can't be determined,
+    # If there's no platform, try and infer it. If it can't be inferred,
     # prompt the user
     platform=$(github-detect-local-platform) || return
     if [[ -z "$platform" ]]; then
@@ -610,8 +613,10 @@ download-dylt ()
     # create flags (--token)
     local -a flags=()
     [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}") 
+
     # get the latest version
     local version; version=$(github-release-get-latest-tag "${flags[@]}" dylt-dev dylt) || return
+
     # create the release name (goreleaser trims the leading 'v' from the release tag)
     local releaseName="dylt_${platform}.tar.gz"
     github-release-download-latest "${flags[@]}" dylt-dev dylt "$releaseName" "$dstFolder" || return
@@ -2877,6 +2882,14 @@ install-awscli ()
 }
 
 
+
+###
+#
+# install-dylt ()
+#
+# download the latest dylt binary and install it in the specified folder.
+# installation folder defaults to /opt/bin/
+#  
 install-dylt ()
 {
     # shellcheck disable=SC2016
@@ -2884,9 +2897,13 @@ install-dylt ()
     local dstFolder=${1:-/opt/bin/}
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
-    tmpFolder=${TMPDIR:-/tmp}
+    # Create a new temp folder and download dylt
+    local tmpFolder; tmpFolder=$(mktemp --directory --tmpdir dylt-XXXXXX) || return    
     dyltPath=$(download-dylt "$dstFolder") || return
-    tar -C "$dstFolder" -xzf "$dyltPath" || return
+
+    # Untar 
+    # @note some platforms, like Windows, might not use tarballs
+    tar --directory "$dstFolder" --extract --gunzip --file "$dyltPath" || return
     chmod 777 "$dstFolder/dylt" || return
 }
 
