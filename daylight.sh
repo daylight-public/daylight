@@ -1,5 +1,6 @@
 #! /usr/bin/env bash
  
+
 activate-flask-app ()
 {
     # shellcheck disable=SC2016
@@ -142,6 +143,15 @@ add-superuser ()
 }
 
 
+###
+#
+# add-user ()
+#
+# Add new user to a (probably) newly created VM or instance
+#
+# @note I've written more recent adduser scripts as one-offs. Maybe this
+# functions needs a refresher.
+# 
 add-user ()
 {
     # shellcheck disable=SC2016
@@ -164,6 +174,12 @@ add-user ()
 }
 
 
+###
+#
+# add-user-to-idmap ()
+#
+# 
+# 
 add-user-to-idmap ()
 {
     # shellcheck disable=SC2016
@@ -181,6 +197,19 @@ add-user-to-idmap ()
 }
 
 
+###
+#
+# add-user-to-shadow-ids ()
+#
+# incus has some tricky stuff around user ids and shadow ids, that has
+# something to do with making sure that uid/gid 0 on the host don't
+# get mapped to uid/gid in the container. This could allow a root user in a
+# container to jailbreak into the host and still have root. Or something.
+#
+# @note this appears to be lxd-specific and might need to be updated for incus
+# @note I wrote a whold readme on this, and maybe some of that info would make
+# for nice comments
+# 
 add-user-to-shadow-ids ()
 {
     # shellcheck disable=SC2016
@@ -254,6 +283,22 @@ create-github-user-access-token ()
 }
 
 
+
+###
+#
+# create-home-filesystem ()
+#
+# This appears to be a @legacy function, centered on creating a loop device on
+# the host system, mounting the loop device, and then sharing the loop device
+# with a container. The result is that the cointainer's filesystem is just a
+# single file on the host system, since that's how loop devices work. The idea
+# is that if the whole container is a single file, you gain a whole new level 
+# of portability.
+#
+# @note it's unclear if this is actually useful. Containers are pretty portable
+# via the lxc API, and layered filesystems (btrfs/zfs) might provide a lot of
+# the same benefit under the hood.
+# 
 create-home-filesystem ()
 {
     # shellcheck disable=SC2016
@@ -292,6 +337,13 @@ create-home-filesystem ()
 
 
 
+###
+#
+# create-loopback ()
+#
+# Helper function for @legacy loopback device functionality. Creates a loopback
+# device of a certain size at a certain path.
+# 
 create-loopback ()
 {
     # shellcheck disable=SC2016
@@ -308,9 +360,15 @@ create-loopback ()
 }
 
 
+###
 #
-# Create a cloud-init MIME including the special shellscript part-handlers (until they are a part of cloud-init!)
+# create-lxd-user-data ()
 #
+# Create a cloud-init MIME including the special shellscript part-handlers
+# (until they are a part of cloud-init!)
+# @note now that my handlers are a part of cloud-init, I'm not sure this 
+# function has any uses. However it is of historical interest. At least to me.
+# 
 create-lxd-user-data ()
 {
     # shellcheck disable=SC2016
@@ -362,6 +420,19 @@ create-publish-image-service ()
 }
 
 
+###
+#
+# create-pubbo-service ()
+#
+# `pubbo` is a simple app that makes a file available over a Unix socket.
+# Since Unix sockets already act like files, making a file available as
+# a socket doesn't seem that useful. And it isn't _that_ useful. But there
+# are tools like nginx and incus proxies that work on Unix sockets but not
+# files. `pubbo` can then serve as a bridge, so static content can be published
+# very easily without standing up a whole web server or reverse proxy
+#
+# @note this function is quite coarse-grained
+#
 create-pubbo-service ()
 {
     # shellcheck disable=SC2016
@@ -371,11 +442,11 @@ create-pubbo-service ()
     port=$3
     socketFolder=/run/sock/pubbo
     socketPath="$socketFolder/$svcName.sock"
-    
-    # Get ready
+    .
     prep-service "$svcName"
     
     # Catdoc the unit file
+    # @note User=www-data ... not `rayray` or `pubbo`
     local unitTmplPath; unitTmplPath=$(mktemp --tmpdir=/tmp/ .XXXXXX) || return
     cat >"$unitTmplPath" <<- 'EOT'
 [Unit]
@@ -669,6 +740,13 @@ download-public-key ()
 }
 
 
+###
+#
+# download-shr-tarball()
+#
+# Download the tarball for the latest GitHub Actions Self-Hosted Runner release
+#
+#
 download-shr-tarball ()
 {
     # shellcheck disable=SC2016
@@ -730,6 +808,14 @@ download-vm ()
 }
 
 
+###
+#
+# ec ()
+#
+# Run etcdctl on a cluster specified by --discovery-srv
+#
+# @note This is hardcoded to hello.dylt.dev which isn't great.
+# 
 ec ()
 {
     local discSrv='hello.dylt.dev'
