@@ -2770,6 +2770,24 @@ hello ()
 }
 
 
+incus-create-profiles ()
+{
+    # create small profile from docstring
+    incus profile create small <<- 'EOT'
+config:
+	limits.cpu.allowance: 50%
+	limits.memory: 512MiB 
+EOT
+
+    # create medium profile from docstring
+    incus profile create medium <<- 'EOT'
+config:
+	limits.cpu.allowance: 100%
+	limits.memory: 1GiB
+EOT
+}
+
+
 incus-create-ssh-profile ()
 {
 	# shellcheck disable=SC2016
@@ -2791,6 +2809,14 @@ incus-create-www-profile ()
     incus profile create www || return
     incus profile device add www http proxy listen"=tcp:0.0.0.0:$httpPort" connect=tcp:127.0.0.1:80 || return
     incus profile device add www https proxy listen="tcp:0.0.0.0:$httpsPort" connect=tcp:127.0.0.1:443 || return
+}
+
+
+incus-install ()
+{
+	apt-get update -y
+	apt-get upgrade -y
+	apt-get install incus -y
 }
 
 
@@ -2936,6 +2962,10 @@ init-rayray ()
 	chmod 700 /home/rayray/.ssh/ || return
 	chmod 600 /home/rayray/.ssh/authorized_keys || return
 	
+	# setup rayray for ssh login
+	local pubkey='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGM3ZAxYzH+1xiEYJ051UsmJkWWLR6zZ5dXx1ZPS1Bvj rayray@dylt.dev'
+   	printf '%s\n' "$pubkey" >> /home/rayray/.ssh/authorized_keys || return
+
     # make rayray:rayray owner of everything in home folder
     chown -R rayray:rayray /home/rayray/ || return
 }
@@ -4476,6 +4506,63 @@ yesno ()
 }
 
 
+zabbly-add-package-repo ()
+{
+	cat <<EOF > /etc/apt/sources.list.d/zabbly-incus-lts-6.0.sources
+	Enabled: yes
+	Types: deb
+	URIs: https://pkgs.zabbly.com/incus/lts-6.0
+	Suites: $(. /etc/os-release && echo ${VERSION_CODENAME})
+	Components: main
+	Architectures: $(dpkg --print-architecture)
+	Signed-By: /etc/apt/keyrings/zabbly.asc
+
+	EOF'
+}
+
+
+zabbly-get-fingerprint ()
+{
+    command -v "gpg" >/dev/null || { printf '%s is required, but was not found.\n' "gpg" >&2; return 255; }
+    
+    # curl gpg key to a temp folder
+    local url=https://pkgs.zabbly.com/key.asc 
+    local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.XXXXXX) || return
+    curl --fail \
+         --location \
+         --show-error \
+         --silent \
+         "$url" \
+         >"$tmpCurl" \
+    || return
+    
+    # burn one call to avoid extraneous gpg init output
+    gpg --show-keys <"$tmpCurl" >/dev/null || return
+
+    # clunky script to get the second line
+    {
+        read -r _
+        read -r line
+        echo "$line"
+    } < <(gpg --show-keys --fingerprint <"$tmpCurl") \
+    || return
+}
+
+
+zabbly-save-key ()
+{
+	mkdir -p /etc/apt/keyrings/						# confirm folder exists
+}
+
+
+zabbly-validate-fingerprint ()
+{
+    local fgValid='4EFC 5906 96CB 15B8 7C73  A3AD 82CC 8797 C838 DCFD'
+    local fg; fg=$(zabbly-get-fingerprint) || return
+
+    [[ "$fgValid" == "$fg" ]] || return 1
+}
+
 # If this script is being sourced in a terminal, and it does not exist on
 # the host in /opt/bin, then download this script to /opt/bin and install the
 # `fresh-daylight` service which will pull the latest script every hour.
@@ -4587,6 +4674,8 @@ main ()
             go-service-uninstall) go-service-uninstall "$@";;
             go-upgrade) go-upgrade "$@";;
             hello) hello "$@";;
+			incus-create-profiles) incus-create-profiles "$@";;
+			incus-install) incus-install "$@";;
             incus-pull-file) incus-pull-file "$@";;
             incus-push-file) incus-push-file "$@";;
             incus-remove-file) incus-remove-file "$@";;
