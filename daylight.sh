@@ -1,5 +1,6 @@
 #! /usr/bin/env bash
  
+
 activate-flask-app ()
 {
     # shellcheck disable=SC2016
@@ -103,9 +104,36 @@ add-container-user ()
     lxc exec "$container" -- sh -c "printf 'source %s\n' \"$(command -v daylight.sh)\" | sudo tee --append \"/home/$username/.bashrc\""
 
     lxc exec "$container" -- chown -R "$username:$username" "/home/$username"
-
 }
 
+
+add-rayray-debian ()
+{
+    # On Debian etc, adduser does not have a way to explicitly specify gid so 
+    # that uid and guid match. It appears the current behavior is to create
+    # a usergroup with matching gid by default, though that appears to be 
+    # undocumented.
+    adduser --comment 'rayray - daylight user' \
+            --disabled-password \
+            --uid 2000 \
+            --shell /bin/bash \
+            rayray \
+            || { printf 'Unable to create rayray user.\n' >&2; return 1; }
+
+    # Set rayray up for sudo
+    [[ -d "/etc/sudoers.d" ]] || { printf 'Non-existent folder: /etc/sudoers.d\n' >&2; return 1; }
+    echo 'rayray ALL = (root) NOPASSWD: ALL' >/etc/sudoers.d/rayray
+
+    # init ssh folder
+	mkdir -p /home/rayray/.ssh || return
+    touch /home/rayray/.ssh/authorized_keys || return
+	chmod 700 /home/rayray/.ssh/ || return
+	chmod 600 /home/rayray/.ssh/authorized_keys || return
+	
+    # make rayray:rayray owner of everything in home folder
+    chown -R rayray:rayray /home/rayray/ || return
+
+}
 
 add-ssh-to-container ()
 {
@@ -142,6 +170,15 @@ add-superuser ()
 }
 
 
+###
+#
+# add-user ()
+#
+# Add new user to a (probably) newly created VM or instance
+#
+# @note I've written more recent adduser scripts as one-offs. Maybe this
+# functions needs a refresher.
+# 
 add-user ()
 {
     # shellcheck disable=SC2016
@@ -164,6 +201,12 @@ add-user ()
 }
 
 
+###
+#
+# add-user-to-idmap ()
+#
+# 
+# 
 add-user-to-idmap ()
 {
     # shellcheck disable=SC2016
@@ -181,6 +224,19 @@ add-user-to-idmap ()
 }
 
 
+###
+#
+# add-user-to-shadow-ids ()
+#
+# incus has some tricky stuff around user ids and shadow ids, that has
+# something to do with making sure that uid/gid 0 on the host don't
+# get mapped to uid/gid in the container. This could allow a root user in a
+# container to jailbreak into the host and still have root. Or something.
+#
+# @note this appears to be lxd-specific and might need to be updated for incus
+# @note I wrote a whold readme on this, and maybe some of that info would make
+# for nice comments
+# 
 add-user-to-shadow-ids ()
 {
     # shellcheck disable=SC2016
@@ -254,6 +310,22 @@ create-github-user-access-token ()
 }
 
 
+
+###
+#
+# create-home-filesystem ()
+#
+# This appears to be a @legacy function, centered on creating a loop device on
+# the host system, mounting the loop device, and then sharing the loop device
+# with a container. The result is that the cointainer's filesystem is just a
+# single file on the host system, since that's how loop devices work. The idea
+# is that if the whole container is a single file, you gain a whole new level 
+# of portability.
+#
+# @note it's unclear if this is actually useful. Containers are pretty portable
+# via the lxc API, and layered filesystems (btrfs/zfs) might provide a lot of
+# the same benefit under the hood.
+# 
 create-home-filesystem ()
 {
     # shellcheck disable=SC2016
@@ -292,6 +364,13 @@ create-home-filesystem ()
 
 
 
+###
+#
+# create-loopback ()
+#
+# Helper function for @legacy loopback device functionality. Creates a loopback
+# device of a certain size at a certain path.
+# 
 create-loopback ()
 {
     # shellcheck disable=SC2016
@@ -308,9 +387,15 @@ create-loopback ()
 }
 
 
+###
 #
-# Create a cloud-init MIME including the special shellscript part-handlers (until they are a part of cloud-init!)
+# create-lxd-user-data ()
 #
+# Create a cloud-init MIME including the special shellscript part-handlers
+# (until they are a part of cloud-init!)
+# @note now that my handlers are a part of cloud-init, I'm not sure this 
+# function has any uses. However it is of historical interest. At least to me.
+# 
 create-lxd-user-data ()
 {
     # shellcheck disable=SC2016
@@ -362,6 +447,19 @@ create-publish-image-service ()
 }
 
 
+###
+#
+# create-pubbo-service ()
+#
+# `pubbo` is a simple app that makes a file available over a Unix socket.
+# Since Unix sockets already act like files, making a file available as
+# a socket doesn't seem that useful. And it isn't _that_ useful. But there
+# are tools like nginx and incus proxies that work on Unix sockets but not
+# files. `pubbo` can then serve as a bridge, so static content can be published
+# very easily without standing up a whole web server or reverse proxy
+#
+# @note this function is quite coarse-grained
+#
 create-pubbo-service ()
 {
     # shellcheck disable=SC2016
@@ -371,11 +469,11 @@ create-pubbo-service ()
     port=$3
     socketFolder=/run/sock/pubbo
     socketPath="$socketFolder/$svcName.sock"
-    
-    # Get ready
+    .
     prep-service "$svcName"
     
     # Catdoc the unit file
+    # @note User=www-data ... not `rayray` or `pubbo`
     local unitTmplPath; unitTmplPath=$(mktemp --tmpdir=/tmp/ .XXXXXX) || return
     cat >"$unitTmplPath" <<- 'EOT'
 [Unit]
@@ -580,8 +678,11 @@ download-dist ()
 }
 
 
+###
 #
 # Download latest dylt release
+#
+# If not platform is explicitly specified, infer the playform from bash envvars
 #
 download-dylt ()
 {
@@ -591,12 +692,12 @@ download-dylt ()
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
+    (( $# >= 1 )) || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
     local dstFolder=$1
     local platform=$2
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
-    # If there's no platform, try and determine it. If it can't be determined,
+    # If there's no platform, try and infer it. If it can't be inferred,
     # prompt the user
     platform=$(github-detect-local-platform) || return
     if [[ -z "$platform" ]]; then
@@ -610,8 +711,10 @@ download-dylt ()
     # create flags (--token)
     local -a flags=()
     [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}") 
+
     # get the latest version
     local version; version=$(github-release-get-latest-tag "${flags[@]}" dylt-dev dylt) || return
+
     # create the release name (goreleaser trims the leading 'v' from the release tag)
     local releaseName="dylt_${platform}.tar.gz"
     github-release-download-latest "${flags[@]}" dylt-dev dylt "$releaseName" "$dstFolder" || return
@@ -664,6 +767,13 @@ download-public-key ()
 }
 
 
+###
+#
+# download-shr-tarball()
+#
+# Download the tarball for the latest GitHub Actions Self-Hosted Runner release
+#
+#
 download-shr-tarball ()
 {
     # shellcheck disable=SC2016
@@ -725,6 +835,14 @@ download-vm ()
 }
 
 
+###
+#
+# ec ()
+#
+# Run etcdctl on a cluster specified by --discovery-srv
+#
+# @note This is hardcoded to hello.dylt.dev which isn't great.
+# 
 ec ()
 {
     local discSrv='hello.dylt.dev'
@@ -2877,6 +2995,14 @@ install-awscli ()
 }
 
 
+
+###
+#
+# install-dylt ()
+#
+# download the latest dylt binary and install it in the specified folder.
+# installation folder defaults to /opt/bin/
+#  
 install-dylt ()
 {
     # shellcheck disable=SC2016
@@ -2884,9 +3010,13 @@ install-dylt ()
     local dstFolder=${1:-/opt/bin/}
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
-    tmpFolder=${TMPDIR:-/tmp}
+    # Create a new temp folder and download dylt
+    local tmpFolder; tmpFolder=$(mktemp --directory --tmpdir dylt-XXXXXX) || return    
     dyltPath=$(download-dylt "$dstFolder") || return
-    tar -C "$dstFolder" -xzf "$dyltPath" || return
+
+    # Untar 
+    # @note some platforms, like Windows, might not use tarballs
+    tar --directory "$dstFolder" --extract --gunzip --file "$dyltPath" || return
     chmod 777 "$dstFolder/dylt" || return
 }
 
@@ -4382,6 +4512,7 @@ main ()
             activate-svc)	activate-svc "$@";;
             activate-vm)	activate-vm "$@";;
             add-container-user)	add-container-user "$@";;
+            add-rayray-debian)	add-rayray-debian "$@";;
             add-ssh-to-container)	add-ssh-to-container "$@";;
             add-superuser)	add-superuser "$@";;
             add-user)	add-user "$@";;
