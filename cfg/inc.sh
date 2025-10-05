@@ -2,7 +2,7 @@
 
 inc () {
 	incus rm --force isaac || return
-	incus init images:ubuntu/22.04/cloud isaac --storage c0 || return
+	incus init images:ubuntu/24.04/cloud isaac --storage c0 || return
 	incus config set isaac user.user-data - </tmp/incus.cfg || return
 	incus profile add isaac small || return
 	incus start isaac || return
