@@ -4593,6 +4593,7 @@ main ()
             init-alpine) init-alpine "%@";;
             init-lxd)	init-lxd "$@";;
             init-nginx)	init-nginx "$@";;
+            init-rayray) init-rayray "$@";;
             init-rpi) init-rpi "$@";;
             install-app)	install-app "$@";;
             install-awscli)	install-awscli "$@";;
