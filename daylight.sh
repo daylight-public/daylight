@@ -120,19 +120,8 @@ add-rayray-debian ()
             rayray \
             || { printf 'Unable to create rayray user.\n' >&2; return 1; }
 
-    # Set rayray up for sudo
-    [[ -d "/etc/sudoers.d" ]] || { printf 'Non-existent folder: /etc/sudoers.d\n' >&2; return 1; }
-    echo 'rayray ALL = (root) NOPASSWD: ALL' >/etc/sudoers.d/rayray
-
-    # init ssh folder
-	mkdir -p /home/rayray/.ssh || return
-    touch /home/rayray/.ssh/authorized_keys || return
-	chmod 700 /home/rayray/.ssh/ || return
-	chmod 600 /home/rayray/.ssh/authorized_keys || return
-	
-    # make rayray:rayray owner of everything in home folder
-    chown -R rayray:rayray /home/rayray/ || return
-
+    # Finish initializing rayray
+    init-rayray || return
 }
 
 add-ssh-to-container ()
@@ -2932,6 +2921,23 @@ init-nginx ()
 
     # Check that the certbot files are where they need to be
     # If they are, copy them to /etc/letsencrypt
+}
+
+
+init-rayray ()
+{
+    # Set rayray up for sudo
+    [[ -d "/etc/sudoers.d" ]] || { printf 'Non-existent folder: /etc/sudoers.d\n' >&2; return 1; }
+    echo 'rayray ALL = (root) NOPASSWD: ALL' >/etc/sudoers.d/rayray
+
+    # init ssh folder
+	mkdir -p /home/rayray/.ssh || return
+    touch /home/rayray/.ssh/authorized_keys || return
+	chmod 700 /home/rayray/.ssh/ || return
+	chmod 600 /home/rayray/.ssh/authorized_keys || return
+	
+    # make rayray:rayray owner of everything in home folder
+    chown -R rayray:rayray /home/rayray/ || return
 }
 
 
