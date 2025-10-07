@@ -679,6 +679,8 @@ download-dylt ()
     local -A argmap=()
     local nargs=0
     github-parse-args argmap nargs "$@" || return
+    local -a flags=()
+    github-create-flags argmap flags token
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# >= 1 )) || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
@@ -688,9 +690,9 @@ download-dylt ()
 
     # If there's no platform, try and infer it. If it can't be inferred,
     # prompt the user
-    platform=$(github-detect-local-platform "$@") || return
+    platform=$(github-detect-local-platform "${flags[@]}") || return
     if [[ -z "$platform" ]]; then
-        platform=$(github-release-select-platform "$@")
+        platform=$(github-release-select-platform "${flags[@]}")
     fi
 
     # Confirm a platform was actually selected 
@@ -1630,6 +1632,7 @@ github-app-get-info ()
     _info[slug]=${args[2]}
 }
 
+
 github-create-flags ()
 {
     # shellcheck disable=SC2016
@@ -1825,7 +1828,7 @@ github-curl-post ()
 github-detect-local-platform ()
 {
     # shellcheck disable=SC2016
-    (( $# == 0 )) || { printf 'Usage: github-detect-local=platform\n' >&2; return 1; }
+    (( $# == 0 )) || { printf 'Usage: github-detect-local-platform\n' >&2; return 1; }
     printf '%s=%s\n' HOSTTYPE "$HOSTTYPE" >&2
     printf '%s=%s\n' MACHTYPE "$MACHTYPE" >&2
     printf '%s=%s\n' OSTYPE "$OSTYPE" >&2
