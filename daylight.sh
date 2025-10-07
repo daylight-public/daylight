@@ -688,9 +688,9 @@ download-dylt ()
 
     # If there's no platform, try and infer it. If it can't be inferred,
     # prompt the user
-    platform=$(github-detect-local-platform) || return
+    platform=$(github-detect-local-platform "$@") || return
     if [[ -z "$platform" ]]; then
-        platform=$(github-release-select-platform)
+        platform=$(github-release-select-platform "$@")
     fi
 
     # Confirm a platform was actually selected 
@@ -1826,9 +1826,9 @@ github-detect-local-platform ()
 {
     # shellcheck disable=SC2016
     (( $# == 0 )) || { printf 'Usage: github-detect-local=platform\n' >&2; return 1; }
-    printf '%s=%s\n' HOSTTYPE $HOSTTYPE >&2
-    printf '%s=%s\n' MACHTYPE $MACHTYPE >&2
-    printf '%s=%s\n' OSTYPE $OSTYPE >&2
+    printf '%s=%s\n' HOSTTYPE "$HOSTTYPE" >&2
+    printf '%s=%s\n' MACHTYPE "$MACHTYPE" >&2
+    printf '%s=%s\n' OSTYPE "$OSTYPE" >&2
 
     if [[ "$HOSTTYPE" == 'aarch64' ]] && [[ "$OSTYPE" =~ darwin ]]; then
         printf Darwin_arm64
@@ -2295,8 +2295,13 @@ github-release-list ()
 
 github-release-list-platforms ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
 	# shellcheck disable=SC2016
-	(( $# == 2 )) || { printf 'Usage: github-release-list [flags] $org $repo\n' >&2; return 1; }
+	(( $# = 2 )) || { printf 'Usage: github-release-list [flags] $org $repo\n' >&2; return 1; }
 	local org=$1
 	local repo=$2
 
@@ -2305,9 +2310,9 @@ github-release-list-platforms ()
     local platform
     for release in "${releases[@]}"; do
         if [[ ! "$release" =~ checksums.txt ]]; then
-            platform="${release##${repo}_}"
+            platform="${release##"${repo}"_}"
             platform="${platform%%.*}"
-            echo $platform
+        	printf '%s\n' "$platform"
         fi
     done
 }
@@ -2335,6 +2340,13 @@ github-release-select ()
 
 github-release-select-platform ()
 {
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+	# shellcheck disable=SC2016
+	(( $# = 2 )) || { printf 'Usage: github-release-select-platforms [flags] $org $repo' >&2; return 1; }
     local platforms
     readarray -t -d $'\n' platforms < <(github-release-list-platforms "$@")
 	select platform in "${platforms[@]}"; do
@@ -4508,7 +4520,7 @@ yesno ()
 
 zabbly-add-package-repo ()
 {
-	cat <<EOF > /etc/apt/sources.list.d/zabbly-incus-lts-6.0.sources
+	cat <<- 'EOT' >/etc/apt/sources.list.d/zabbly-incus-lts-6.0.sources
 	Enabled: yes
 	Types: deb
 	URIs: https://pkgs.zabbly.com/incus/lts-6.0
@@ -4516,8 +4528,7 @@ zabbly-add-package-repo ()
 	Components: main
 	Architectures: $(dpkg --print-architecture)
 	Signed-By: /etc/apt/keyrings/zabbly.asc
-
-	EOF'
+	EOT
 }
 
 
@@ -4711,7 +4722,6 @@ main ()
             list-public-keys)	list-public-keys "$@";;
             list-services)	list-services "$@";;
             list-vms)	list-vms "$@";;
-            print-os-arch-vars) print-os-arch-vars "$@";;
             prep-filesystem) prep-filesystem "$@";;
             print-os-arch-vars) print-os-arch-vars "$@";;
             pullAppInfo) pullAppInfo "$@";;
