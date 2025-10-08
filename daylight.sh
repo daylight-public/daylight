@@ -4523,7 +4523,7 @@ yesno ()
 
 zabbly-add-package-repo ()
 {
-	cat <<- 'EOT' >/etc/apt/sources.list.d/zabbly-incus-lts-6.0.sources
+	sh -c 'cat <<EOT >/etc/apt/sources.list.d/zabbly-incus-lts-6.0.sources
 	Enabled: yes
 	Types: deb
 	URIs: https://pkgs.zabbly.com/incus/lts-6.0
@@ -4531,7 +4531,8 @@ zabbly-add-package-repo ()
 	Components: main
 	Architectures: $(dpkg --print-architecture)
 	Signed-By: /etc/apt/keyrings/zabbly.asc
-	EOT
+	
+    EOT'
 }
 
 
@@ -4563,9 +4564,43 @@ zabbly-get-fingerprint ()
 }
 
 
+zabbly-init ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 0 )) || { printf 'Usage: zabbly-init\n' >&2; return 1; }
+
+    # validate the zabbly key fingerprint
+    if ! zabbly-validate-fingerprint; then
+        printf 'Unable to validate fingerprint\n' >&2
+        return 1
+    fi
+
+    # download the zabbly key
+    if ! zabbly-save-key; then
+        printf 'Unable to save zabbly key\n' >&2
+        return 1
+    fi
+
+    # Add the zabbly packge repository
+    if ! zabbly-add-package-repo; then
+        printf 'Error adding zabbly package repo\n' >&2
+        return 1
+    fi
+}
+
+
 zabbly-save-key ()
 {
 	mkdir -p /etc/apt/keyrings/						# confirm folder exists
+    curl -fsSL https://pkgs.zabbly.com/key.asc -o /etc/apt/keyrings/zabbly.asc
+    local url=https://pkgs.zabbly.com/key.asc 
+    curl --fail \
+         --location \
+         --show-error \
+         --silent \
+         --output /etc/apt/keyrings/zabbly.asc \
+         "$url" \
+        || return
 }
 
 
@@ -4576,6 +4611,7 @@ zabbly-validate-fingerprint ()
 
     [[ "$fgValid" == "$fg" ]] || return 1
 }
+
 
 # If this script is being sourced in a terminal, and it does not exist on
 # the host in /opt/bin, then download this script to /opt/bin and install the
@@ -4763,6 +4799,7 @@ main ()
             watch-daylight-gen-run-script) watch-daylight-gen-run-script "$@";;
             watch-daylight-gen-unit-file) watch-daylight-gen-unit-file "$@";;
             watch-daylight-install-service) watch-daylight-install-service "$@";;	
+            zabbly-init) zabbly-init "$@";;
             *) printf 'Unknown command: %s \n' "$cmd" >&2; return 1;;
         esac
     fi
