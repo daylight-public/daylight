@@ -4524,15 +4524,15 @@ yesno ()
 zabbly-add-package-repo ()
 {
 	sh -c 'cat <<EOT >/etc/apt/sources.list.d/zabbly-incus-lts-6.0.sources
-	Enabled: yes
-	Types: deb
-	URIs: https://pkgs.zabbly.com/incus/lts-6.0
-	Suites: $(. /etc/os-release && echo ${VERSION_CODENAME})
-	Components: main
-	Architectures: $(dpkg --print-architecture)
-	Signed-By: /etc/apt/keyrings/zabbly.asc
-	
-    EOT'
+Enabled: yes
+Types: deb
+URIs: https://pkgs.zabbly.com/incus/lts-6.0
+Suites: $(. /etc/os-release && echo ${VERSION_CODENAME})
+Components: main
+Architectures: $(dpkg --print-architecture)
+Signed-By: /etc/apt/keyrings/zabbly.asc
+
+EOT'
 }
 
 
