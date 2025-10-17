@@ -1482,6 +1482,24 @@ get-image-repo ()
 }
 
 
+get-linux-version-codename ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 0 )) || { printf 'Usage: get-linux-version-codename\n' >&2; return 1; }
+    # shellcheck disable=SC2016
+    [[ -f "/etc/os-release" ]] || { printf 'Non-existent path: /etc/os-release\n' >&2; return 1; }
+    local versionCodeName=''
+    while read -r line; do
+        if [[ "$line" =~ $rx ]]; then
+            versionCodeName=${BASH_REMATCH[1]}
+        fi
+    done </etc/os-release
+    # printf with \n if interactive
+    printf '%s' "$versionCodeName"
+    [[ -t 0 ]] && printf '\n'
+}
+
+
 # Parse `systemctl cat` for the given service and return the value for the given key
 get-service-file-value ()
 {
@@ -3597,6 +3615,44 @@ lxd-share-folder ()
     lxc config device add "$container" "$share" disk source="$srcDir" path="$dstDir"
 }
 
+
+pgql-add-repo ()
+{
+    local versionCodeName; versionCodeName=$(get-linux-version-codename) || return
+    local signedBy=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+    local aptUrl="https://apt.postgresql.org/pub/repos/apt"
+    local aptListdPath="/etc/apt/sources.list.d/pgdg.list"
+    sh -c "echo 'deb [signed-by=$signedBy] $aptUrl $versionCodeName-pgdg main' >$aptListdPath"
+}
+
+
+pgql-install-client ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 0 && $# <= 1 )) || { printf 'Usage: pgql-install-client [$version]\n' >&2; return 1; }
+    pgql-install-repo-key || return
+    pgql-add-repo || return
+    apt update -y || return
+    local packageName
+    if [[ -n "$version" ]]; then
+        packageName="postgresql-client-$version"
+    else
+        packageName="postgresql-client"
+    fi
+    apt install "$packageName" -y || return
+}
+
+
+pgql-install-repo-key ()
+{
+    apt update -y
+    apt install curl ca-certificates || return
+    install -d /usr/share/postgresql-common/pgdg || return
+    curl --silent \
+         --fail \
+         --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+         https://www.postgresql.org/media/keys/ACCC4CF8.asc
+}
 
 
 prep-filesystem ()
