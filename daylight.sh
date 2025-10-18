@@ -1300,7 +1300,7 @@ gen-completion-script-2 ()
 gen-daylight-completion-script () {
 	# shellcheck disable=SC2016
 	(( $# >= 0 && $# <= 1 )) || { printf 'Usage: gen-daylight-completion-script [$folder] []\n' >&2; return 1; }
-	local folder=${1:-~/.bash_completion.d}
+	local folder=${1:-~/bash-completion.d}
 	# shellcheck disable=SC2016
     if [[ ! -d "$folder" ]]; then
         printf 'Creating folder %s\n' "$folder" >&2;
@@ -1479,6 +1479,27 @@ get-image-repo ()
     local base; base=$(get-image-base "$srcFolder") || return
     local repo="${base%%:*}"
     printf '%s' "$repo"
+}
+
+
+get-linux-version-codename ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 0 )) || { printf 'Usage: get-linux-version-codename\n' >&2; return 1; }
+    # shellcheck disable=SC2016
+    [[ -f "/etc/os-release" ]] || { printf 'Non-existent path: /etc/os-release\n' >&2; return 1; }
+    local versionCodeName=''
+    local rx='VERSION_CODENAME=(.*)'
+    while read -r line; do
+        if [[ "$line" =~ $rx ]]; then
+            versionCodeName=${BASH_REMATCH[1]}
+        fi
+    done </etc/os-release
+    # shellcheck disable=SC2016
+    [[ -n "$versionCodeName" ]] || { printf 'Variable is unset or empty: $versionCodeName\n' >&2; return 1; }
+    # printf with \n if interactive
+    printf '%s' "$versionCodeName"
+    [[ -t 0 ]] && printf '\n'
 }
 
 
@@ -3598,6 +3619,46 @@ lxd-share-folder ()
 }
 
 
+pgql-add-repo ()
+{
+    local versionCodeName; versionCodeName=$(get-linux-version-codename) || return
+    local signedBy=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+    local aptUrl="https://apt.postgresql.org/pub/repos/apt"
+    local aptListdPath="/etc/apt/sources.list.d/pgdg.list"
+    sh -c "echo 'deb [signed-by=$signedBy] $aptUrl $versionCodeName-pgdg main' >$aptListdPath"
+}
+
+
+pgql-install-client ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 0 && $# <= 1 )) || { printf 'Usage: pgql-install-client [$version]\n' >&2; return 1; }
+    local version=${1:-''}
+
+    pgql-install-repo-key || return
+    pgql-add-repo || return
+    apt update -y || return
+    local packageName
+    if [[ -n "$version" ]]; then
+        packageName="postgresql-client-$version"
+    else
+        packageName="postgresql-client"
+    fi
+    apt install "$packageName" -y || return
+}
+
+
+pgql-install-repo-key ()
+{
+    apt update -y
+    apt install curl ca-certificates || return
+    install -d /usr/share/postgresql-common/pgdg || return
+    curl --silent \
+         --fail \
+         --output /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+         https://www.postgresql.org/media/keys/ACCC4CF8.asc
+}
+
 
 prep-filesystem ()
 {
@@ -4761,6 +4822,7 @@ main ()
             list-public-keys)	list-public-keys "$@";;
             list-services)	list-services "$@";;
             list-vms)	list-vms "$@";;
+            pgql-install-client)    pgql-install-client "$@";;
             prep-filesystem) prep-filesystem "$@";;
             print-os-arch-vars) print-os-arch-vars "$@";;
             pullAppInfo) pullAppInfo "$@";;
