@@ -1489,11 +1489,14 @@ get-linux-version-codename ()
     # shellcheck disable=SC2016
     [[ -f "/etc/os-release" ]] || { printf 'Non-existent path: /etc/os-release\n' >&2; return 1; }
     local versionCodeName=''
+    local rx='VERSION_CODENAME=(.*)'
     while read -r line; do
         if [[ "$line" =~ $rx ]]; then
             versionCodeName=${BASH_REMATCH[1]}
         fi
     done </etc/os-release
+    # shellcheck disable=SC2016
+    [[ -n "$versionCodeName" ]] || { printf 'Variable is unset or empty: $versionCodeName\n' >&2; return 1; }
     # printf with \n if interactive
     printf '%s' "$versionCodeName"
     [[ -t 0 ]] && printf '\n'
@@ -4817,6 +4820,7 @@ main ()
             list-public-keys)	list-public-keys "$@";;
             list-services)	list-services "$@";;
             list-vms)	list-vms "$@";;
+            pgql-install-client)    pgql-install-client "$@";;
             prep-filesystem) prep-filesystem "$@";;
             print-os-arch-vars) print-os-arch-vars "$@";;
             pullAppInfo) pullAppInfo "$@";;
