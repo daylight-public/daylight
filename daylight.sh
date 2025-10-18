@@ -3633,6 +3633,8 @@ pgql-install-client ()
 {
     # shellcheck disable=SC2016
     (( $# >= 0 && $# <= 1 )) || { printf 'Usage: pgql-install-client [$version]\n' >&2; return 1; }
+    local version=${1:-''}
+
     pgql-install-repo-key || return
     pgql-add-repo || return
     apt update -y || return
