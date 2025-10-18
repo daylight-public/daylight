@@ -1300,7 +1300,7 @@ gen-completion-script-2 ()
 gen-daylight-completion-script () {
 	# shellcheck disable=SC2016
 	(( $# >= 0 && $# <= 1 )) || { printf 'Usage: gen-daylight-completion-script [$folder] []\n' >&2; return 1; }
-	local folder=${1:-~/.bash_completion.d}
+	local folder=${1:-~/bash-completion.d}
 	# shellcheck disable=SC2016
     if [[ ! -d "$folder" ]]; then
         printf 'Creating folder %s\n' "$folder" >&2;
