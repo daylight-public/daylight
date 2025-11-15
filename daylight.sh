@@ -2806,6 +2806,92 @@ hello ()
 }
 
 
+incus-api-call ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 1 && $# <= 5 )) || { printf 'Usage: incus-api-curl $path [$jqexp [$schemeAndHost [$socketPath [$version]]]]\n' >&2; return 1; }
+    local path=$1
+    local jqexp=${2:-'.'}
+    local schemeAndHost=${3:-'http://localhost'}
+    local socketPath=${4:-"$HOME/.colima/default/incus.sock"}
+    local version=${5:-'1.0'}
+
+    # trim path leading slash if necessary
+    path=${path#/}
+    local url="$schemeAndHost/$version/$path"
+    local tmpCurl; tmpCurl=$(mktemp --tmpdir incus.api.call.XXXXXX) || return
+    curl --fail \
+         --silent \
+         --unix-socket "$socketPath" \
+         "$url" \
+         > "$tmpCurl" \
+         || return
+    cat "$tmpCurl" | jq -r "$jqexp" || return
+}
+
+
+incus-api-curl ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 1 && $# <= 2 )) || { printf 'Usage: incus-api-curl $path [$socketPath]\n' >&2; return 1; }
+    local url=$1
+    local socketPath=${2:-"$HOME/.colima/default/incus.sock"}
+
+    local tmpCurl; tmpCurl=$(mktemp --tmpdir incus.api.curl.XXXXXX) || return
+    curl --fail \
+         --silent \
+         --unix-socket "$socketPath" \
+         "$url" \
+         > "$tmpCurl" \
+         || return
+    cat "$tmpCurl"
+}
+
+
+incus-api-instances ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 0 && $# <= 3 )) || { printf 'Usage: incus-api-instances [$schemeAndHost [$socketPath [$version]]]\n' >&2; return 1; }
+    local schemeAndHost=${1:-'http://localhost'}
+    local socketPath=${2:-"$HOME/.colima/default/incus.sock"}
+    local version=${3:-'1.0'}
+
+    local path='/instances'
+    local jqexp='.metadata[] | ltrimstr("/1.0/instances/")'
+    incus-api-call "$path" "$jqexp" || return
+}
+
+
+incus-api-versions ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 0 && $# <= 1 )) || { printf 'Usage: incus-api-versions [$socketPath]\n' >&2; return 1; }
+    local socketPath=${1:-"$HOME/.colima/default/incus.sock"}
+
+    local path="http://localhost/"
+    incus-api-curl "$path" \
+    | jq -r '.metadata.[]' \
+    || return
+}
+
+
+#
+# incus-config-snapshots $instanceName $schedule $expiry [$pattern]
+# 
+# Configure snapshots for an incus container
+incus-config-snapshots ()
+{
+    local name=$1
+    local schedule=$2
+    local expiry=$3
+    local pattern=${4:-"{{ creation_date|date:'2006-01-02_15-04-05' }}"}
+    incus config set "$name" \
+        snapshots.schedule="$schedule" \
+        snapshots.expiry="$expiry" \
+        snapshots.pattern="$pattern"
+}
+
+
 incus-create-profiles ()
 {
     # create small profile from docstring
