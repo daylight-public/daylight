@@ -974,9 +974,9 @@ etcd-create-release-name ()
     local version=$1
     local platform=$2
 
-    # All releases are tarballs except Windows which is a zipfile
+    # .tar.gz for Linux; .zip for Windows and macOS (etcd publishes macOS as .zip)
     local releaseName
-    if [[ $platform == 'windows' ]]; then
+    if [[ $platform == windows-* || $platform == darwin-* ]]; then
         releaseName="etcd-$version-$platform.zip"
     else
         releaseName="etcd-$version-$platform.tar.gz"
