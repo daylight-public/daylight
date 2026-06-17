@@ -667,6 +667,30 @@ download-dist ()
 }
 
 
+# ------------------------------------------------------------------------------
+detect-platform ()
+{
+    (( $# == 0 )) || { printf 'Usage: detect-platform\n' >&2; return 1; }
+    local os arch
+
+    case "$(uname -s)" in
+        Linux)                     os="linux" ;;
+        Darwin)                    os="darwin" ;;
+        MINGW*|MSYS*|CYGWIN*)     os="windows" ;;
+        *) printf 'Unsupported OS: %s\n' "$(uname -s)" >&2; return 1 ;;
+    esac
+
+    case "$(uname -m)" in
+        x86_64|amd64)             arch="amd64" ;;
+        aarch64|arm64)            arch="arm64" ;;
+        armv7l|armv6l)            arch="arm" ;;
+        *) printf 'Unsupported architecture: %s\n' "$(uname -m)" >&2; return 1 ;;
+    esac
+
+    printf '%s-%s' "$os" "$arch"
+}
+
+
 ###
 #
 # Download latest dylt release
@@ -688,27 +712,24 @@ download-dylt ()
     local platform=$2
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
-    # If there's no platform, try and infer it. If it can't be inferred,
-    # prompt the user
-    platform=$(github-detect-local-platform "${flags[@]}") || return
     if [[ -z "$platform" ]]; then
-        platform=$(github-release-select-platform "${flags[@]}")
+        platform=$(detect-platform) || return
     fi
 
-    # Confirm a platform was actually selected 
-    # shellcheck disable=SC2016
-    [[ -n "$platform" ]] || { printf 'Variable is unset or empty: $platform\n' >&2; return 1; }    
-
-    # create flags (--token)
     local -a flags=()
     [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}") 
 
-    # get the latest version
     local version; version=$(github-release-get-latest-tag "${flags[@]}" dylt-dev dylt) || return
 
-    # create the release name (goreleaser trims the leading 'v' from the release tag)
     local releaseName="dylt_${platform}.tar.gz"
-    github-release-download-latest "${flags[@]}" dylt-dev dylt "$releaseName" "$dstFolder" || return
+    local legacyName="dylt_$(dylt-legacy-platform "$platform").tar.gz"
+    local url="https://github.com/dylt-dev/dylt/releases/download/$version/$releaseName"
+
+    if curl --fail --location --head "$url" >/dev/null 2>&1; then
+        github-release-download-latest "${flags[@]}" dylt-dev dylt "$releaseName" "$dstFolder" || return
+    else
+        github-release-download-latest "${flags[@]}" dylt-dev dylt "$legacyName" "$dstFolder" || return
+    fi
 }
 
 
@@ -758,6 +779,30 @@ download-public-key ()
 }
 
 
+# ------------------------------------------------------------------------------
+detect-runner-platform ()
+{
+    (( $# == 0 )) || { printf 'Usage: detect-runner-platform\n' >&2; return 1; }
+    local os arch
+
+    case "$(uname -s)" in
+        Linux)                     os="linux" ;;
+        Darwin)                    os="osx" ;;
+        MINGW*|MSYS*|CYGWIN*)     os="win" ;;
+        *) printf 'Unsupported OS: %s\n' "$(uname -s)" >&2; return 1 ;;
+    esac
+
+    case "$(uname -m)" in
+        x86_64|amd64)             arch="x64" ;;
+        aarch64|arm64)            arch="arm64" ;;
+        armv7l|armv6l)            arch="arm" ;;
+        *) printf 'Unsupported architecture: %s\n' "$(uname -m)" >&2; return 1 ;;
+    esac
+
+    printf '%s-%s' "$os" "$arch"
+}
+
+
 ###
 #
 # download-shr-tarball()
@@ -767,21 +812,42 @@ download-public-key ()
 #
 download-shr-tarball ()
 {
-    # shellcheck disable=SC2016
     (( $# == 1 )) || { printf 'Usage: download-shr-tarball $targetFolder\n' >&2; return 1; }
     local downloadFolder=$1
     local urlLatestRelease="https://api.github.com/repos/actions/runner/releases/latest"
+    local platform
+    platform=$(detect-runner-platform) || return
+    local fileExt="tar.gz"
+
+    if [[ $platform == win-* ]]; then
+        fileExt="zip"
+    fi
+
+    local namePattern="^actions-runner-$platform-.*\\.$fileExt\$"
     local tarballFileName tarballUrl
     local args
     read -r -a args < <(curl --silent "$urlLatestRelease" \
-        | jq -r '.assets[]? | select(.name | test("^actions-runner-linux-x64.*\\d\\.tar.gz$")) | [.name, .browser_download_url] | @tsv') \
+        | jq -r --arg pat "$namePattern" '.assets[]? | select(.name | test($pat)) | [.name, .browser_download_url] | @tsv') \
         || return
+
+    if [[ ${#args[@]} -eq 0 ]]; then
+        printf 'No runner asset found for platform: %s\n' "$platform" >&2
+        return 1
+    fi
+
     tarballFileName=${args[0]}
     tarballUrl=${args[1]}
     local tarballPath; tarballPath="$(create-temp-file "XXX.$tarballFileName")" || return
     curl --location --silent --output "$tarballPath" "$tarballUrl"
-    tar --list --gunzip --file "$tarballPath" >/dev/null
-    tar --directory "$downloadFolder" --extract --gunzip --file "$tarballPath" || return
+
+    if [[ "$fileExt" == "zip" ]]; then
+        unzip -t "$tarballPath" >/dev/null || return
+        unzip -o -d "$downloadFolder" "$tarballPath" >/dev/null || return
+    else
+        tar --list --gunzip --file "$tarballPath" >/dev/null
+        tar --directory "$downloadFolder" --extract --gunzip --file "$tarballPath" || return
+    fi
+
     printf '%s' "$downloadFolder" 
 }
 
@@ -883,7 +949,10 @@ etcd-create-download-url ()
     # get arg values from flags, if present (if not fall back to defaults
     local version=${argmap[version]:-''}
     [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
-    local platform=${argmap[platform]:-'linux-amd64'}
+    local platform=${argmap[platform]:-''}
+    if [[ -z "$platform" ]]; then
+        platform=$(detect-platform) || platform='linux-amd64'
+    fi
     local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform")
 
     local -A info
@@ -945,7 +1014,10 @@ etcd-download ()
 
     local version=${argmap[version]:-''}
     [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
-    local platform=${argmap[platform]:-'linux-amd64'}
+    local platform=${argmap[platform]:-''}
+    if [[ -z "$platform" ]]; then
+        platform=$(detect-platform) || platform='linux-amd64'
+    fi
     local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
     local -a flags
     github-create-flags argmap flags token
@@ -1089,8 +1161,10 @@ etcd-install-latest ()
     local installFolder=$1
     local org=etcd-io
     local repo=etcd
-    local platform=${argmap[platform]}
-	[[ -n "$platform" ]] || platform=linux-amd64
+    local platform=${argmap[platform]:-''}
+    if [[ -z "$platform" ]]; then
+        platform=$(detect-platform) || platform='linux-amd64'
+    fi
 
 	local version; version=$(etcd-get-latest-version) || return
 	local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
@@ -1846,21 +1920,20 @@ github-curl-post ()
 ###
 #
 #
-github-detect-local-platform ()
+dylt-legacy-platform ()
 {
-    # shellcheck disable=SC2016
-    (( $# == 0 )) || { printf 'Usage: github-detect-local-platform\n' >&2; return 1; }
-    printf '%s=%s\n' HOSTTYPE "$HOSTTYPE" >&2
-    printf '%s=%s\n' MACHTYPE "$MACHTYPE" >&2
-    printf '%s=%s\n' OSTYPE "$OSTYPE" >&2
-
-    if [[ "$HOSTTYPE" == 'aarch64' ]] && [[ "$OSTYPE" =~ darwin ]]; then
-        printf Darwin_arm64
-    elif [[ "$HOSTTYPE" == "x86_64" ]] && [[ "$OSTYPE" == linux-gnu ]]; then
-        printf Linux_x86_64
-    else
-        return 1
-    fi
+    (( $# == 1 )) || { printf 'Usage: dylt-legacy-platform $canonical_platform\n' >&2; return 1; }
+    local platform=$1
+    case $platform in
+        linux-amd64)  printf 'Linux_x86_64' ;;
+        linux-arm64)  printf 'Linux_arm64'  ;;
+        linux-386)    printf 'Linux_i386'   ;;
+        linux-arm)    printf 'Linux_armv7l' ;;
+        darwin-amd64) printf 'Darwin_x86_64' ;;
+        darwin-arm64) printf 'Darwin_arm64'  ;;
+        windows-*)    printf 'Unsupported platform for dylt: %s\n' "$platform" >&2; return 1 ;;
+        *)            printf '%s' "$platform" ;;
+    esac
 }
 
 
@@ -3120,7 +3193,7 @@ init-rpi ()
     install-fresh-daylight-svc || return
 
     # Install dylt CLI
-    install-dylt Linux_arm64 /opt/bin/ || return
+    install-dylt /opt/bin/ || return
 }
 
 
@@ -3163,18 +3236,23 @@ install-awscli ()
 #  
 install-dylt ()
 {
-    # shellcheck disable=SC2016
-    { (( $# >= 0 )) && (( $# <= 1 )); } || { printf 'Usage: install-dylt [$dstFolder]\n' >&2; return 1; }
-    local dstFolder=${1:-/opt/bin/}
+    { (( $# >= 0 )) && (( $# <= 2 )); } || { printf 'Usage: install-dylt [$platform [$dstFolder]]\n' >&2; return 1; }
+    local platform=${1:-''}
+    local dstFolder=${2:-/opt/bin/}
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
-    # Create a new temp folder and download dylt
-    local tmpFolder; tmpFolder=$(mktemp --directory --tmpdir dylt-XXXXXX) || return    
-    dyltPath=$(download-dylt "$dstFolder") || return
+    local tmpFolder; tmpFolder=$(mktemp --directory --tmpdir dylt-XXXXXX) || return
+    if [[ -n "$platform" ]]; then
+        download-dylt "$tmpFolder" "$platform" || return
+    else
+        download-dylt "$tmpFolder" || return
+    fi
 
-    # Untar 
-    # @note some platforms, like Windows, might not use tarballs
-    tar --directory "$dstFolder" --extract --gunzip --file "$dyltPath" || return
+    local tarball
+    tarball=$(find "$tmpFolder" -name 'dylt_*.tar.gz' -type f | head -1) || return
+    [[ -n "$tarball" ]] || { printf 'No tarball found in %s\n' "$tmpFolder" >&2; return 1; }
+
+    tar --directory "$dstFolder" --extract --gunzip --file "$tarball" || return
     chmod 777 "$dstFolder/dylt" || return
 }
 
