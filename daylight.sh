@@ -3341,6 +3341,37 @@ install-fresh-daylight-svc ()
 }
 
 
+daylight-add-to-bashrc ()
+{
+    local bashrc="$HOME/.bashrc"
+    local funcName='daylight'
+    local daylightPath='/opt/bin/daylight.sh'
+
+    if [[ ! -f "$daylightPath" ]]; then
+        printf '`%s` not found at %s — install daylight.sh first\n' "$funcName" "$daylightPath" >&2
+        return 1
+    fi
+
+    if grep -q "^${funcName}()" "$bashrc" 2>/dev/null; then
+        printf '`%s` function already exists in %s — nothing to do\n' "$funcName" "$bashrc"
+        return 0
+    fi
+
+    cat >> "$bashrc" << EOF
+
+# added by opencode in loyal service to master
+$funcName()
+{
+    $daylightPath "\$@"
+}
+EOF
+
+    printf 'Added `%s` function to %s\n' "$funcName" "$bashrc"
+    printf 'Restart your shell or run: source %s\n' "$bashrc"
+    printf 'Then type: %s --help\n' "$funcName"
+}
+
+
 install-gnome-keyring ()
 {
     sudo apt-get install libsecret-1-0 libsecret-1-dev
@@ -4918,6 +4949,7 @@ main ()
             create-pubbo-service) create-pubbo-service "$@";;
             create-service-from-dist-script)	create-service-from-dist-script "$@";;
             create-static-website)	create-static-website "$@";;
+            daylight-add-to-bashrc)	daylight-add-to-bashrc "$@";;
             delete-lxd-instance)	delete-lxd-instance "$@";;
             download-app)	download-app "$@";;
             download-dylt)	download-dylt "$@";;
