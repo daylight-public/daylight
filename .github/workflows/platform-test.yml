@@ -40,7 +40,6 @@ jobs:
           echo "PASS: $p / $r"
           EOF
       - name: test download-dylt smoke
-        if: runner.os != 'Windows'
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then BASH=$(brew --prefix)/bin/bash; else BASH=bash; fi
@@ -49,11 +48,9 @@ jobs:
           TMP=$(mktemp -d)
           download-dylt "$TMP"
           ls -la "$TMP"
-          file "$TMP"/*
           rm -rf "$TMP"
           EOF
       - name: test etcd url construction
-        if: runner.os != 'Windows'
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then BASH=$(brew --prefix)/bin/bash; else BASH=bash; fi
