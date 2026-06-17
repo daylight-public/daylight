@@ -46,8 +46,10 @@ jobs:
         shell: bash
         run: |
           source daylight.sh
+          set -x
           TMP=$(mktemp -d)
-          download-dylt --token "${{ github.token }}" "$TMP"
+          download-dylt "$TMP"
+          set +x
           ls -la "$TMP"
           rm -rf "$TMP"
       - name: test etcd url construction
