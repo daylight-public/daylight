@@ -1,0 +1,83 @@
+name: platform-detection-test
+on: [workflow_dispatch]
+jobs:
+  detect:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            expected_platform: linux-amd64
+            expected_runner: linux-x64
+          - os: ubuntu-24.04-arm
+            expected_platform: linux-arm64
+            expected_runner: linux-arm64
+          - os: macos-13
+            expected_platform: darwin-amd64
+            expected_runner: osx-x64
+          - os: macos-14
+            expected_platform: darwin-arm64
+            expected_runner: osx-arm64
+          - os: windows-latest
+            expected_platform: windows-amd64
+            expected_runner: win-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: test platform detection
+        shell: bash
+        run: |
+          source daylight.sh
+          p=$(detect-platform)
+          r=$(detect-runner-platform)
+          [[ "$p" == "${{ matrix.expected_platform }}" ]] || { echo "MISMATCH: detect-platform=$p, expected=${{ matrix.expected_platform }}"; exit 1; }
+          [[ "$r" == "${{ matrix.expected_runner }}" ]] || { echo "MISMATCH: detect-runner-platform=$r, expected=${{ matrix.expected_runner }}"; exit 1; }
+          echo "PASS: $p / $r"
+      - name: test download-dylt smoke
+        shell: bash
+        run: |
+          source daylight.sh
+          TMP=$(mktemp -d)
+          download-dylt "$TMP"
+          ls -la "$TMP"
+          file "$TMP"/*/
+          rm -rf "$TMP"
+      - name: test etcd url construction
+        shell: bash
+        run: |
+          source daylight.sh
+          p=$(detect-platform)
+          url=$(etcd-create-download-url)
+          echo "URL: $url"
+          [[ "$url" == *"$p"* ]] || { echo "MISMATCH: URL $url does not contain platform $p"; exit 1; }
+          echo "PASS: URL contains platform $p"
+
+  linux-arm32:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: test ARM32 via QEMU
+        run: |
+          docker run --rm --platform linux/arm/v7 \
+            -v $PWD:/repo \
+            arm32v7/ubuntu bash -c "
+              apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1
+              source /repo/daylight.sh
+              p=\$(detect-platform)
+              r=\$(detect-runner-platform)
+              [[ \"\$p\" == \"linux-arm\" ]] || { echo \"MISMATCH: detect-platform=\$p, expected=linux-arm\"; exit 1; }
+              [[ \"\$r\" == \"linux-arm\" ]] || { echo \"MISMATCH: detect-runner-platform=\$r, expected=linux-arm\"; exit 1; }
+              echo \"PASS: \$p / \$r\"
+            "
+      - name: test ARM32 dylt download
+        run: |
+          docker run --rm --platform linux/arm/v7 \
+            -v $PWD:/repo \
+            arm32v7/ubuntu bash -c "
+              apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1
+              source /repo/daylight.sh
+              TMP=\$(mktemp -d)
+              download-dylt \"\$TMP\"
+              ls -la \"\$TMP\"
+              rm -rf \"\$TMP\"
+              echo 'PASS: download-dylt on ARM32'
+            "
