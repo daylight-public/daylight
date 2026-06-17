@@ -107,6 +107,38 @@ add-container-user ()
 }
 
 
+is-debian ()
+{
+    (( $# == 0 )) || { printf 'Usage: is-debian\n' >&2; return 1; }
+    
+    # Check if /etc/os-release exists
+    [[ -f /etc/os-release ]] || return 1
+    
+    # Source the os-release file
+    source /etc/os-release
+    
+    # Check if ID is debian or ID_LIKE contains debian
+    if [[ "$ID" == "debian" ]] || [[ "$ID_LIKE" == *"debian"* ]]; then
+        return 0
+    fi
+    
+    return 1
+}
+
+
+add-rayray ()
+{
+    (( $# == 0 )) || { printf 'Usage: add-rayray\n' >&2; return 1; }
+    
+    if ! is-debian; then
+        printf 'Error: This system is not Debian-based. Cannot add rayray user.\n' >&2
+        return 1
+    fi
+    
+    add-rayray-debian || return
+}
+
+
 add-rayray-debian ()
 {
     # On Debian etc, adduser does not have a way to explicitly specify gid so 
@@ -4949,6 +4981,7 @@ main ()
             activate-svc)                             activate-svc "$@";;
             activate-vm)                              activate-vm "$@";;
             add-container-user)                       add-container-user "$@";;
+            add-rayray)                                 add-rayray "$@";;
             add-rayray-debian)                        add-rayray-debian "$@";;
             add-ssh-to-container)                     add-ssh-to-container "$@";;
             add-superuser)                            add-superuser "$@";;
