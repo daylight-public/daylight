@@ -44,14 +44,12 @@ jobs:
           EOF
       - name: test download-dylt smoke
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then BASH=$(brew --prefix)/bin/bash; else BASH=bash; fi
           $BASH -e << 'EOF'
           source daylight.sh
           TMP=$(mktemp -d)
-          download-dylt --token "$GITHUB_TOKEN" "$TMP"
+          download-dylt "$TMP"
           ls -la "$TMP"
           rm -rf "$TMP"
           EOF
