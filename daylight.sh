@@ -4929,9 +4929,6 @@ main ()
         cmd=$1
         shift
         case "$cmd" in 
-			etcd-get-latest-version) etcd-get-latest-version "$@";;
-			incus-create-profiles) incus-create-profiles "$@";;
-			incus-install) incus-install "$@";;
             activate-flask-app)	activate-flask-app "$@";;
             activate-svc)	activate-svc "$@";;
             activate-vm)	activate-vm "$@";;
@@ -4971,6 +4968,7 @@ main ()
             etcd-download-latest) etcd-download-latest "$@";;
             etcd-gen-run-script) etcd-gen-run-script "$@";;
             etcd-gen-unit-file) etcd-gen-unit-file "$@";;
+            etcd-get-latest-version) etcd-get-latest-version "$@";;
             etcd-install-latest) etcd-install-latest "$@";;
             etcd-setup-data-dir) etcd-setup-data-dir "$@";;
             gen-completion-script) gen-completion-script "$@";;
@@ -5006,6 +5004,8 @@ main ()
             go-upgrade) go-upgrade "$@";;
             hello) hello "$@";;
             incus-config-snapshots) incus-config-snapshots "$@";;
+            incus-create-profiles) incus-create-profiles "$@";;
+            incus-install) incus-install "$@";;
             incus-pull-file) incus-pull-file "$@";;
             incus-push-file) incus-push-file "$@";;
             incus-remove-file) incus-remove-file "$@";;
