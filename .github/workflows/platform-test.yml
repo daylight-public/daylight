@@ -8,26 +8,31 @@ jobs:
           - os: ubuntu-latest
             expected_platform: linux-amd64
             expected_runner: linux-x64
+            bash_path: bash
           - os: ubuntu-24.04-arm
             expected_platform: linux-arm64
             expected_runner: linux-arm64
+            bash_path: bash
           - os: macos-13
             expected_platform: darwin-amd64
             expected_runner: osx-x64
+            bash_path: /usr/local/bin/bash
           - os: macos-14
             expected_platform: darwin-arm64
             expected_runner: osx-arm64
+            bash_path: /usr/local/bin/bash
           - os: windows-latest
             expected_platform: windows-amd64
             expected_runner: win-x64
+            bash_path: bash
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - name: Install modern bash
+      - name: Install modern bash on macOS
         if: runner.os == 'macOS'
         run: HOMEBREW_NO_AUTO_UPDATE=1 brew install bash
       - name: test platform detection
-        shell: ${{ runner.os == 'macOS' && '/usr/local/bin/bash' || 'bash' }} {0}
+        shell: ${{ matrix.bash_path }} {0}
         run: |
           source daylight.sh
           p=$(detect-platform)
@@ -36,7 +41,7 @@ jobs:
           [[ "$r" == "${{ matrix.expected_runner }}" ]] || { echo "MISMATCH: detect-runner-platform=$r, expected=${{ matrix.expected_runner }}"; exit 1; }
           echo "PASS: $p / $r"
       - name: test download-dylt smoke
-        shell: ${{ runner.os == 'macOS' && '/usr/local/bin/bash' || 'bash' }} {0}
+        shell: ${{ matrix.bash_path }} {0}
         run: |
           source daylight.sh
           TMP=$(mktemp -d)
@@ -45,7 +50,7 @@ jobs:
           file "$TMP"/*/
           rm -rf "$TMP"
       - name: test etcd url construction
-        shell: ${{ runner.os == 'macOS' && '/usr/local/bin/bash' || 'bash' }} {0}
+        shell: ${{ matrix.bash_path }} {0}
         run: |
           source daylight.sh
           url=$(etcd-create-download-url)
