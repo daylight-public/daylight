@@ -42,41 +42,14 @@ jobs:
           [[ "$r" == "${{ matrix.expected_runner }}" ]] || { echo "MISMATCH: detect-runner-platform=$r, expected=${{ matrix.expected_runner }}"; exit 1; }
           echo "PASS: $p / $r"
           EOF
-      - name: debug curl + test download-dylt smoke
+      - name: test download-dylt smoke
         shell: bash
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          if [[ "$RUNNER_OS" == "macOS" ]]; then BASH=$(brew --prefix)/bin/bash; else BASH=bash; fi
-          # Debug: check curl version and test GitHub API
-          echo "=== curl version ==="
-          curl --version | head -1
-          echo "=== test github API ==="
-          curl --fail-with-body --location --silent \
-            --header "Authorization: Bearer $GITHUB_TOKEN" \
-            https://api.github.com/repos/dylt-dev/dylt/releases/latest \
-            > /tmp/api-test.json 2>&1
-          echo "exit=$?"
-          head -c 200 /tmp/api-test.json
-          echo
-          echo "=== test new-style download URL ==="
-          TAG=$(jq -r .tag_name /tmp/api-test.json)
-          echo "latest tag: $TAG"
-          curl --fail --location --head \
-            "https://github.com/dylt-dev/dylt/releases/download/$TAG/dylt_$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')".tar.gz \
-            > /dev/null 2>&1 && echo "NEW URL EXISTS" || echo "NEW URL MISSING"
-          # If Windows, set CA bundle for git bash curl
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            export CURL_CA_BUNDLE="C:/Program Files/Git/mingw64/ssl/certs/ca-bundle.crt"
-            export SSL_CERT_FILE="C:/Program Files/Git/mingw64/ssl/certs/ca-bundle.crt"
-          fi
-          $BASH -e << 'EOF'
           source daylight.sh
           TMP=$(mktemp -d)
-          download-dylt "$TMP"
+          download-dylt --token "${{ github.token }}" "$TMP"
           ls -la "$TMP"
           rm -rf "$TMP"
-          EOF
       - name: test etcd url construction
         shell: bash
         run: |
