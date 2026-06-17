@@ -45,11 +45,14 @@ jobs:
       - name: test download-dylt smoke
         shell: bash
         run: |
+          if [[ "$RUNNER_OS" == "macOS" ]]; then BASH=$(brew --prefix)/bin/bash; else BASH=bash; fi
+          $BASH -e << 'EOF'
           source daylight.sh
           TMP=$(mktemp -d)
           download-dylt "$TMP"
           ls -la "$TMP"
           rm -rf "$TMP"
+          EOF
       - name: test etcd url construction
         shell: bash
         run: |
