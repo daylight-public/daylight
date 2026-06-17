@@ -23,8 +23,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Install modern bash
+        if: runner.os == 'macOS'
+        run: HOMEBREW_NO_AUTO_UPDATE=1 brew install bash
       - name: test platform detection
-        shell: bash
+        shell: ${{ runner.os == 'macOS' && '/usr/local/bin/bash' || 'bash' }} {0}
         run: |
           source daylight.sh
           p=$(detect-platform)
@@ -33,7 +36,7 @@ jobs:
           [[ "$r" == "${{ matrix.expected_runner }}" ]] || { echo "MISMATCH: detect-runner-platform=$r, expected=${{ matrix.expected_runner }}"; exit 1; }
           echo "PASS: $p / $r"
       - name: test download-dylt smoke
-        shell: bash
+        shell: ${{ runner.os == 'macOS' && '/usr/local/bin/bash' || 'bash' }} {0}
         run: |
           source daylight.sh
           TMP=$(mktemp -d)
@@ -42,7 +45,7 @@ jobs:
           file "$TMP"/*/
           rm -rf "$TMP"
       - name: test etcd url construction
-        shell: bash
+        shell: ${{ runner.os == 'macOS' && '/usr/local/bin/bash' || 'bash' }} {0}
         run: |
           source daylight.sh
           url=$(etcd-create-download-url)
