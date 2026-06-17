@@ -12,9 +12,10 @@ jobs:
           - os: ubuntu-24.04-arm
             expected_platform: linux-arm64
             expected_runner: linux-arm64
-          - os: macos-13
-            expected_platform: darwin-amd64
-            expected_runner: osx-x64
+          # macos-13 removed temporarily — runner scarcity
+          # - os: macos-13
+          #   expected_platform: darwin-amd64
+          #   expected_runner: osx-x64
           - os: macos-14
             expected_platform: darwin-arm64
             expected_runner: osx-arm64
@@ -42,6 +43,19 @@ jobs:
           [[ "$r" == "${{ matrix.expected_runner }}" ]] || { echo "MISMATCH: detect-runner-platform=$r, expected=${{ matrix.expected_runner }}"; exit 1; }
           echo "PASS: $p / $r"
           EOF
+      - name: debug curl and GITHUB_TOKEN
+        shell: bash
+        run: |
+          echo "GITHUB_TOKEN: ${GITHUB_TOKEN+set} len=${#GITHUB_TOKEN}"
+          curl --version | head -1
+          if curl --fail-with-body --location --silent \
+            --header "Authorization: Bearer $GITHUB_TOKEN" \
+            https://api.github.com/repos/dylt-dev/dylt/releases/latest > /dev/null; then
+            echo "AUTH PASS"
+          else
+            r=$?
+            echo "AUTH FAIL (exit=$r)"
+          fi
       - name: test download-dylt smoke
         shell: bash
         run: |
