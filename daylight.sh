@@ -4929,6 +4929,9 @@ main ()
         cmd=$1
         shift
         case "$cmd" in 
+			etcd-get-latest-version) etcd-get-latest-version "$@";;
+			incus-create-profiles) incus-create-profiles "$@";;
+			incus-install) incus-install "$@";;
             activate-flask-app)	activate-flask-app "$@";;
             activate-svc)	activate-svc "$@";;
             activate-vm)	activate-vm "$@";;
@@ -4936,6 +4939,7 @@ main ()
             add-rayray-debian)	add-rayray-debian "$@";;
             add-ssh-to-container)	add-ssh-to-container "$@";;
             add-superuser)	add-superuser "$@";;
+            add-to-bashrc)	add-to-bashrc "$@";;
             add-user)	add-user "$@";;
             add-user-to-idmap)	add-user-to-idmap "$@";;
             add-user-to-shadow-ids)	add-user-to-shadow-ids "$@";;
@@ -4945,16 +4949,15 @@ main ()
             create-home-filesystem)	create-home-filesystem "$@";;
             create-loopback)	create-loopback "$@";;
             create-lxd-user-data)	create-lxd-user-data "$@";;
-            create-publish-image-service)	create-publish-image-service "$@";;
             create-pubbo-service) create-pubbo-service "$@";;
+            create-publish-image-service)	create-publish-image-service "$@";;
             create-service-from-dist-script)	create-service-from-dist-script "$@";;
             create-static-website)	create-static-website "$@";;
-            add-to-bashrc)	add-to-bashrc "$@";;
             delete-lxd-instance)	delete-lxd-instance "$@";;
             download-app)	download-app "$@";;
-            download-dylt)	download-dylt "$@";;
             download-daylight)	download-daylight "$@";;
             download-dist)	download-dist "$@";;
+            download-dylt)	download-dylt "$@";;
             download-flask-app)	download-flask-app "$@";;
             download-flask-service)	download-flask-service "$@";;
             download-public-key)	download-public-key "$@";;
@@ -4962,13 +4965,12 @@ main ()
             download-svc)	download-svc "$@";;
             download-to-temp-dir)	download-to-temp-dir "$@";;
             download-vm)	download-vm "$@";;
-            etcd-create-download-url) etcd-create-download-url "$@";;
             edit-daylight)	edit-daylight "$@";;
+            etcd-create-download-url) etcd-create-download-url "$@";;
             etcd-download) etcd-download "$@";;
             etcd-download-latest) etcd-download-latest "$@";;
             etcd-gen-run-script) etcd-gen-run-script "$@";;
             etcd-gen-unit-file) etcd-gen-unit-file "$@";;
-			etcd-get-latest-version) etcd-get-latest-version "$@";;
             etcd-install-latest) etcd-install-latest "$@";;
             etcd-setup-data-dir) etcd-setup-data-dir "$@";;
             gen-completion-script) gen-completion-script "$@";;
@@ -4978,22 +4980,22 @@ main ()
             generate-unit-file)	generate-unit-file "$@";;
             get-bucket)	get-bucket "$@";;
             get-container-ip)	get-container-ip "$@";;
-            github-app-get-client-id) github-app-get-client-id "$@";;
-            github-app-get-id) github-app-get-id "$@";;
-            github-release-download) github-release-download "$@";;
-            github-release-download-latest) github-release-download-latest "$@";;
             get-image-base)	get-image-base "$@";;
             get-image-name)	get-image-name "$@";;
             get-image-repo)	get-image-repo "$@";;
-            get-service-file-value)	get-service-file-value "$@";;
             get-service-environment-file)	get-service-environment-file "$@";;
             get-service-exec-start)	get-service-exec-start "$@";;
+            get-service-file-value)	get-service-file-value "$@";;
             get-service-working-directory)	get-service-working-directory "$@";;
+            github-app-get-client-id) github-app-get-client-id "$@";;
+            github-app-get-id) github-app-get-id "$@";;
             github-create-user-access-token) github-create-user-access-token "$@";;
             github-download-latest-release)    github-download-latest-release "$@";;
             github-get-release-name-list)   github-get-release-name-list "$@";;
             github-install-latest-release) github-release-install "$@";;
             github-parse-args) github-parse-args "$@";;
+            github-release-download) github-release-download "$@";;
+            github-release-download-latest) github-release-download-latest "$@";;
             github-release-get-latest-tag) github-release-get-latest-tag "$@";;
             github-release-select-platform) github-release-select-platform "$@";;
             github-test-repo) github-test-repo "$@";;
@@ -5004,8 +5006,6 @@ main ()
             go-upgrade) go-upgrade "$@";;
             hello) hello "$@";;
             incus-config-snapshots) incus-config-snapshots "$@";;
-			incus-create-profiles) incus-create-profiles "$@";;
-			incus-install) incus-install "$@";;
             incus-pull-file) incus-pull-file "$@";;
             incus-push-file) incus-push-file "$@";;
             incus-remove-file) incus-remove-file "$@";;
@@ -5023,12 +5023,12 @@ main ()
             install-gnome-keyring)	install-gnome-keyring "$@";;
             install-latest-httpie)	install-latest-httpie "$@";;
             install-mssql-tools)	install-mssql-tools "$@";;
-            install-public-key)	install-public-key "$@";;
             install-pubbo) install-pubbo "$@";;
+            install-public-key)	install-public-key "$@";;
             install-python)	install-python "$@";;
             install-service)	install-service "$@";;
-            install-service-from-script)	install-service-from-script "$@";;
             install-service-from-command)	install-service-from-command "$@";;
+            install-service-from-script)	install-service-from-script "$@";;
             install-shellscript-part-handlers)	install-shellscript-part-handlers "$@";;
             install-shr-token)	install-shr-token "$@";;
             install-svc)	install-svc "$@";;
@@ -5044,7 +5044,6 @@ main ()
             pgql-install-client)    pgql-install-client "$@";;
             prep-filesystem) prep-filesystem "$@";;
             print-os-arch-vars) print-os-arch-vars "$@";;
-            pullAppInfo) pullAppInfo "$@";;
             pull-app)	pull-app "$@";;
             pull-daylight)	pull-daylight "$@";;
             pull-flask-app)	pull-flask-app "$@";;
@@ -5054,6 +5053,7 @@ main ()
             pull-svc)	pull-svc "$@";;
             pull-vm)	pull-vm "$@";;
             pull-webapp)	pull-webapp "$@";;
+            pullAppInfo) pullAppInfo "$@";;
             push-app)	push-app "$@";;
             push-daylight)	push-daylight "$@";;
             push-flask-app)	push-flask-app "$@";;
@@ -5069,10 +5069,10 @@ main ()
             start-service)	start-service "$@";;
             sync-add-service) sync-add-service "$@";;
             sync-create-unit-name) sync-create-unit-name "$@";;
+            sync-daylight-install-service) sync-daylight-install-service "$@";;
             sync-follow-service) sync-follow-service "$@";;
             sync-remove-service) sync-remove-service "$@";;
             sync-run-service) sync-run-service "$@";;
-            sync-daylight-install-service) sync-daylight-install-service "$@";;
             sys-start)	sys-start "$@";;
             uninstall-etcd)	uninstall-etcd "$@";;
             untar-to-temp-folder)	untar-to-temp-folder "$@";;
