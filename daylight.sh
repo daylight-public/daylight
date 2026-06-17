@@ -3341,7 +3341,7 @@ install-fresh-daylight-svc ()
 }
 
 
-daylight-add-to-bashrc ()
+add-to-bashrc ()
 {
     local bashrc="$HOME/.bashrc"
     local funcName='daylight'
@@ -4949,7 +4949,7 @@ main ()
             create-pubbo-service) create-pubbo-service "$@";;
             create-service-from-dist-script)	create-service-from-dist-script "$@";;
             create-static-website)	create-static-website "$@";;
-            daylight-add-to-bashrc)	daylight-add-to-bashrc "$@";;
+            add-to-bashrc)	add-to-bashrc "$@";;
             delete-lxd-instance)	delete-lxd-instance "$@";;
             download-app)	download-app "$@";;
             download-dylt)	download-dylt "$@";;
