@@ -43,40 +43,32 @@ jobs:
           [[ "$r" == "${{ matrix.expected_runner }}" ]] || { echo "MISMATCH: detect-runner-platform=$r, expected=${{ matrix.expected_runner }}"; exit 1; }
           echo "PASS: $p / $r"
           EOF
-      - name: debug curl and GITHUB_TOKEN
-        shell: bash
-        run: |
-          echo "GITHUB_TOKEN: ${GITHUB_TOKEN+set} len=${#GITHUB_TOKEN}"
-          curl --version | head -1
-          if curl --fail-with-body --location --silent \
-            --header "Authorization: Bearer $GITHUB_TOKEN" \
-            https://api.github.com/repos/dylt-dev/dylt/releases/latest > /dev/null; then
-            echo "AUTH PASS"
-          else
-            r=$?
-            echo "AUTH FAIL (exit=$r)"
-          fi
       - name: test download-dylt smoke
+        if: runner.os != 'Windows'
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            $(brew --prefix)/bin/bash -e << 'EOF'
-            source daylight.sh
-            TMP=$(mktemp -d)
-            download-dylt "$TMP"
-            ls -la "$TMP"
-            rm -rf "$TMP"
-            EOF
-          else
-            set -e
-            source daylight.sh
-            TMP=$(mktemp -d)
-            download-dylt "$TMP"
-            ls -la "$TMP"
-            rm -rf "$TMP"
-          fi
+          if [[ "$RUNNER_OS" == "macOS" ]]; then BASH=$(brew --prefix)/bin/bash; else BASH=bash; fi
+          $BASH -e << 'EOF'
+          source daylight.sh
+          TMP=$(mktemp -d)
+          download-dylt "$TMP"
+          ls -la "$TMP"
+          rm -rf "$TMP"
+          EOF
+      - name: test download-dylt smoke (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          source daylight.sh
+          TMP=$(mktemp -d)
+          download-dylt "$TMP"
+          ls -la "$TMP"
+          rm -rf "$TMP"
       - name: test etcd url construction
         shell: bash
         env:
