@@ -46,7 +46,8 @@ jobs:
           source daylight.sh
           TMP=$(mktemp -d)
           download-dylt "$TMP"
-          ls -la "$TMP"/*/
+          ls -la "$TMP"
+          file "$TMP"/*
           rm -rf "$TMP"
           EOF
       - name: test etcd url construction
