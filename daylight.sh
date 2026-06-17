@@ -2450,6 +2450,27 @@ github-release-select ()
 
 
 
+
+
+
+github-release-select-platform ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+	# shellcheck disable=SC2016
+	(( $# = 2 )) || { printf 'Usage: github-release-select-platforms [flags] $org $repo' >&2; return 1; }
+    local platforms
+    readarray -t -d $'\n' platforms < <(github-release-list-platforms "$@")
+	select platform in "${platforms[@]}"; do
+        printf '%s' "$platform" || return
+        break
+    done
+}
+
+
 # Simple attempt to get info for a repo
 # If it does not succeed, it could mean the org or repo are nonexistent or misspelled
 # But it could also mean that the repo is non-public and requires a token for authentication
@@ -3317,21 +3338,6 @@ install-fresh-daylight-svc ()
     systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
     systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
     systemctl start fresh-daylight.timer
-}
-
-
-install-build-dylt-svc ()
-{
-    repo=https://raw.githubusercontent.com/daylight-public/daylight/main
-    mkdir -p /opt/svc/build-dylt/bin
-    chown -R rayray:rayray /opt/svc/build-dylt
-    curl --silent --remote-name --output-dir /opt/svc/build-dylt "$repo/svc/build-dylt/build-dylt.service"
-    curl --silent --remote-name --output-dir /opt/svc/build-dylt "$repo/svc/build-dylt/build-dylt.timer"
-    curl --silent --remote-name --output-dir /opt/svc/build-dylt/bin "$repo/svc/build-dylt/bin/run.sh"
-    chmod 777 /opt/svc/build-dylt/bin/run.sh
-    systemctl enable /opt/svc/build-dylt/build-dylt.service
-    systemctl enable /opt/svc/build-dylt/build-dylt.timer
-    systemctl start build-dylt.timer
 }
 
 
@@ -4957,6 +4963,7 @@ main ()
             github-install-latest-release) github-release-install "$@";;
             github-parse-args) github-parse-args "$@";;
             github-release-get-latest-tag) github-release-get-latest-tag "$@";;
+            github-release-select-platform) github-release-select-platform "$@";;
             github-test-repo) github-test-repo "$@";;
             github-test-repo-with-auth) github-test-repo-with-auth "$@";;
             go-service-gen-nginx-domain-file) go-service-gen-nginx-domain-file "$@";;
@@ -4980,7 +4987,6 @@ main ()
             install-dylt) install-dylt "$@";;
             install-etcd)	install-etcd "$@";;
             install-flask-app)	install-flask-app "$@";;
-            install-build-dylt-svc)	install-build-dylt-svc "$@";;
             install-fresh-daylight-svc)	install-fresh-daylight-svc "$@";;
             install-gnome-keyring)	install-gnome-keyring "$@";;
             install-latest-httpie)	install-latest-httpie "$@";;
