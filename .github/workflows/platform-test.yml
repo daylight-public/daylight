@@ -53,6 +53,7 @@ jobs:
           rm -rf "$TMP"
           EOF
       - name: test etcd url construction
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then BASH=$(brew --prefix)/bin/bash; else BASH=bash; fi
