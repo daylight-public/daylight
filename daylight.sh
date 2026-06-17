@@ -1929,6 +1929,9 @@ github-curl-post ()
 
 ###
 #
+# Translates from current platform spec into a legacy spec. This was necessary
+# for fallback testing when dylt changed its release names to be more consistent
+# with other FOSS majors. I do not remember the details.
 #
 dylt-legacy-platform ()
 {
