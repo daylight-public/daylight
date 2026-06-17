@@ -1931,7 +1931,8 @@ dylt-legacy-platform ()
         linux-arm)    printf 'Linux_armv7l' ;;
         darwin-amd64) printf 'Darwin_x86_64' ;;
         darwin-arm64) printf 'Darwin_arm64'  ;;
-        windows-*)    printf 'Unsupported platform for dylt: %s\n' "$platform" >&2; return 1 ;;
+        windows-amd64) printf 'Windows_x86_64' ;;
+        windows-arm64) printf 'Windows_arm64'  ;;
         *)            printf '%s' "$platform" ;;
     esac
 }
