@@ -3317,21 +3317,6 @@ install-fresh-daylight-svc ()
 }
 
 
-install-build-dylt-svc ()
-{
-    repo=https://raw.githubusercontent.com/daylight-public/daylight/main
-    mkdir -p /opt/svc/build-dylt/bin
-    chown -R rayray:rayray /opt/svc/build-dylt
-    curl --silent --remote-name --output-dir /opt/svc/build-dylt "$repo/svc/build-dylt/build-dylt.service"
-    curl --silent --remote-name --output-dir /opt/svc/build-dylt "$repo/svc/build-dylt/build-dylt.timer"
-    curl --silent --remote-name --output-dir /opt/svc/build-dylt/bin "$repo/svc/build-dylt/bin/run.sh"
-    chmod 777 /opt/svc/build-dylt/bin/run.sh
-    systemctl enable /opt/svc/build-dylt/build-dylt.service
-    systemctl enable /opt/svc/build-dylt/build-dylt.timer
-    systemctl start build-dylt.timer
-}
-
-
 install-gnome-keyring ()
 {
     sudo apt-get install libsecret-1-0 libsecret-1-dev
@@ -4977,7 +4962,6 @@ main ()
             install-dylt) install-dylt "$@";;
             install-etcd)	install-etcd "$@";;
             install-flask-app)	install-flask-app "$@";;
-            install-build-dylt-svc)	install-build-dylt-svc "$@";;
             install-fresh-daylight-svc)	install-fresh-daylight-svc "$@";;
             install-gnome-keyring)	install-gnome-keyring "$@";;
             install-latest-httpie)	install-latest-httpie "$@";;
