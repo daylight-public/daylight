@@ -717,7 +717,7 @@ download-dylt ()
     fi
 
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}") 
+    [[ -n "${argmap[token]+exists}" ]] && flags+=(--token "${argmap[token]}") 
 
     local version; version=$(github-release-get-latest-tag "${flags[@]}" dylt-dev dylt) || return
 
