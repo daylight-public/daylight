@@ -61,14 +61,22 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          if [[ "$RUNNER_OS" == "macOS" ]]; then BASH=$(brew --prefix)/bin/bash; else BASH=bash; fi
-          $BASH -e << 'EOF'
-          source daylight.sh
-          TMP=$(mktemp -d)
-          download-dylt "$TMP"
-          ls -la "$TMP"
-          rm -rf "$TMP"
-          EOF
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            $(brew --prefix)/bin/bash -e << 'EOF'
+            source daylight.sh
+            TMP=$(mktemp -d)
+            download-dylt "$TMP"
+            ls -la "$TMP"
+            rm -rf "$TMP"
+            EOF
+          else
+            set -e
+            source daylight.sh
+            TMP=$(mktemp -d)
+            download-dylt "$TMP"
+            ls -la "$TMP"
+            rm -rf "$TMP"
+          fi
       - name: test etcd url construction
         shell: bash
         env:
