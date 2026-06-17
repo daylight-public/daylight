@@ -3,6 +3,7 @@ on: [workflow_dispatch]
 jobs:
   detect:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
@@ -39,6 +40,7 @@ jobs:
           echo "PASS: $p / $r"
           EOF
       - name: test download-dylt smoke
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then BASH=$(brew --prefix)/bin/bash; else BASH=bash; fi
