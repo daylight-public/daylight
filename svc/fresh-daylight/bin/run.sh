@@ -2,19 +2,50 @@
 
 main ()
 {
-	printf '%s\n' "Installing daylight ..."
-	local downloadFolder=/opt/bin/
-	# Confirm downloadFolder exists
-	if [[ ! -d $downloadFolder ]]; then
-		printf 'Download folder %s does not exist\n' "$downloadFolder"
-		exit 1
-	fi
+    printf '%s\n' "Checking for daylight.sh update ..."
+    local installPath=/opt/bin/daylight.sh
 
-	# Download script from github
-	url=https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
-	curl --silent --remote-name --output-dir "$downloadFolder" "$url" || { local rc=$?; printf "Failed downloading & installing daylight.sh (%d)\n" $rc; exit $rc; }
+    local installFolder; installFolder=$(dirname "$installPath")
+    if [[ ! -d $installFolder ]]; then
+        printf 'Folder %s does not exist — creating it\n' "$installFolder" >&2
+        mkdir -p "$installFolder" || { printf 'Failed to create %s\n' "$installFolder" >&2; exit 1; }
+    fi
 
-	printf '%s\n' Done.
+    local tmpDir; tmpDir=$(mktemp -d) || { printf 'Failed to create temp dir\n' >&2; exit 1; }
+    local tmpFile="$tmpDir/daylight.sh"
+    local url=https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
+    curl --silent --location --output "$tmpFile" "$url" || {
+        local rc=$?
+        printf 'Failed to download daylight.sh (exit %d)\n' $rc >&2
+        rm -rf "$tmpDir"
+        exit $rc
+    }
+
+    bash -n "$tmpFile" || {
+        printf 'Syntax check FAILED — not installing corrupted download\n' >&2
+        rm -rf "$tmpDir"
+        exit 1
+    }
+
+    if [[ -f "$installPath" ]]; then
+        if diff -q "$tmpFile" "$installPath" >/dev/null 2>&1; then
+            printf 'Already up to date — no changes\n'
+            rm -rf "$tmpDir"
+            exit 0
+        fi
+        printf 'Changes detected\n'
+    else
+        printf 'No existing daylight.sh found — installing\n'
+    fi
+
+    cp "$tmpFile" "$installPath" || {
+        printf 'Failed to copy to %s\n' "$installPath" >&2
+        rm -rf "$tmpDir"
+        exit 1
+    }
+    chmod 755 "$installPath"
+    rm -rf "$tmpDir"
+    printf 'Done — installed %s\n' "$installPath"
 }
 
 main "$@"

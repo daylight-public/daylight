@@ -1,5 +1,5 @@
 [Unit]
-Description=Service to download latest daylight.sh and install it in /opt/bin
+Description=Download, validate, and conditionally install latest daylight.sh
 
 [Service]
 ExecStart=/opt/svc/fresh-daylight/bin/run.sh

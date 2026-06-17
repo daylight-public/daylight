@@ -1,0 +1,11 @@
+[Unit]
+Description=Nightly dylt build — tag HEAD and push to trigger goreleaser
+
+[Service]
+Type=oneshot
+User=rayray
+WorkingDirectory=/opt/svc/build-dylt/repo
+ExecStart=/opt/svc/build-dylt/bin/run.sh
+
+[Install]
+WantedBy=multi-user.target
