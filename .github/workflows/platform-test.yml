@@ -58,6 +58,8 @@ jobs:
           fi
       - name: test download-dylt smoke
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then BASH=$(brew --prefix)/bin/bash; else BASH=bash; fi
           $BASH -e << 'EOF'
@@ -69,6 +71,8 @@ jobs:
           EOF
       - name: test etcd url construction
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if [[ "$RUNNER_OS" == "macOS" ]]; then BASH=$(brew --prefix)/bin/bash; else BASH=bash; fi
           $BASH -e << 'EOF'
