@@ -1862,7 +1862,13 @@ github-curl ()
     flags+=(--header "Accept: $accept")
     flags+=(--output "$output")
     [[ -v argmap[data] ]] && flags+=(--data "$(printf "'%s'" "${argmap[data]}")")
-    [[ -v argmap[token] ]] && flags+=(--header "Authorization: Token ${argmap[token]}")
+    local tokenVal
+    if [[ -v argmap[token] ]]; then
+        tokenVal=${argmap[token]}
+    elif [[ -n "${GITHUB_TOKEN-}" ]]; then
+        tokenVal=$GITHUB_TOKEN
+    fi
+    [[ -n "$tokenVal" ]] && flags+=(--header "Authorization: Bearer $tokenVal")
     curl "${flags[@]}" "$url" \
         || { printf 'curl failed inside github-curl\n' >&2; return 1; }
 }
