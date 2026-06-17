@@ -1656,7 +1656,7 @@ github-app-get-client-id ()
     local appSlug=$1
 
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -n "${argmap[token]+exists}" ]] && flags+=(--token "${argmap[token]}")
     local -A info
     github-app-get-info "${flags[@]}" info "$appSlug" || return
     local clientId=${info[client_id]}
@@ -1676,7 +1676,7 @@ github-app-get-data ()
     local appSlug=$1
 
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -n "${argmap[token]+exists}" ]] && flags+=(--token "${argmap[token]}")
     github-curl "${flags[@]}" "/apps/$appSlug" || return
 }
 
@@ -1693,7 +1693,7 @@ github-app-get-id ()
     local appSlug=$1
 
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -n "${argmap[token]+exists}" ]] && flags+=(--token "${argmap[token]}")
     local -A info
     github-app-get-info "${flags[@]}" info "$appSlug" || return
     local id=${info[id]}
@@ -1714,7 +1714,7 @@ github-app-get-info ()
     local appSlug=$2
 
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -n "${argmap[token]+exists}" ]] && flags+=(--token "${argmap[token]}")
     local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.XXXXXX) || return
     github-app-get-data "${flags[@]}" "$appSlug" >"$tmpCurl" || return
     local tmpJq; tmpJq=$(mktemp --tmpdir jq.XXXXXX) || return
@@ -1754,7 +1754,7 @@ github-create-flags ()
     else
         while (( $# > 0 )); do
             argname=$1
-            if [[ -v argmap["$argname"] ]]; then
+            if [[ -n "${argmap[$argname]+exists}" ]]; then
                 arg=${argmap["$argname"]}
                 flags+=("--${argname}" "$arg")
             fi
@@ -1792,7 +1792,7 @@ github-create-user-access-token ()
     local appSlug=$2
 
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -n "${argmap[token]+exists}" ]] && flags+=(--token "${argmap[token]}")
     
     # Get the clientId for the dylt-cli GitHub App CLI, which must be installed 
     local clientId; clientId=$(github-app-get-client-id "${flags[@]}" "$appSlug") || return
@@ -1861,8 +1861,8 @@ github-curl ()
     local -a flags=(--fail-with-body --location --silent)
     flags+=(--header "Accept: $accept")
     flags+=(--output "$output")
-    [[ -v argmap[data] ]] && flags+=(--data "$(printf "'%s'" "${argmap[data]}")")
-    [[ -v argmap[token] ]] && flags+=(--header "Authorization: Token ${argmap[token]}")
+    [[ -n "${argmap[data]+exists}" ]] && flags+=(--data "$(printf "'%s'" "${argmap[data]}")")
+    [[ -n "${argmap[token]+exists}" ]] && flags+=(--header "Authorization: Token ${argmap[token]}")
     curl "${flags[@]}" "$url" \
         || { printf 'curl failed inside github-curl\n' >&2; return 1; }
 }
@@ -2232,7 +2232,7 @@ github-release-get-latest-tag ()
     releasesUrlPath=$(github-release-create-url-path "$org" "$repo")
     # build flags for github-curl
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -n "${argmap[token]+exists}" ]] && flags+=(--token "${argmap[token]}")
     # local VER; VER=$(github-curl "${flags[@]}" "$releasesUrlPath" \
                     #  | jq -r .tag_name)
     local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.latest.tag.XXXXXX) || return
@@ -2382,7 +2382,7 @@ github-release-list ()
 
 	# get release name list, using token if provided
     local -a flags=()
-	[[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+	[[ -n "${argmap[token]+exists}" ]] && flags+=(--token "${argmap[token]}")
 	github-release-get-data "${flags[@]}" "$org" "$repo" \
 	| jq -r '[.assets[].name] | sort | @tsv' \
 	|| return
@@ -2429,7 +2429,7 @@ github-release-select ()
 	local repo=$3
 
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -n "${argmap[token]+exists}" ]] && flags+=(--token "${argmap[token]}")
 	IFS=$'\t' read -r -a names < <(github-release-list "${flags[@]}" "$org" "$repo") || return
 	select name in "${names[@]}"; do break; done
 }
@@ -2471,7 +2471,7 @@ github-test-repo ()
 
     local urlPath="/repos/$org/$repo"
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -n "${argmap[token]+exists}" ]] && flags+=(--token "${argmap[token]}")
     # We don't care about the info, just if we can successfully call the endpoint
     github-curl "${flags[@]}" --output /dev/null "$urlPath" || return
 }
