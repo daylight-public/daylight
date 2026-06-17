@@ -2875,10 +2875,14 @@ incus-api-versions ()
 }
 
 
+#####
 #
 # incus-config-snapshots $instanceName $schedule $expiry [$pattern]
 # 
 # Configure snapshots for an incus container
+#
+# `incus snapshot --help` && incus docs for more info on the incus arg syntax
+#
 incus-config-snapshots ()
 {
     local name=$1
@@ -4871,6 +4875,7 @@ main ()
             go-service-uninstall) go-service-uninstall "$@";;
             go-upgrade) go-upgrade "$@";;
             hello) hello "$@";;
+            incus-config-snapshots) incus-config-snapshots "$@";;
 			incus-create-profiles) incus-create-profiles "$@";;
 			incus-install) incus-install "$@";;
             incus-pull-file) incus-pull-file "$@";;
