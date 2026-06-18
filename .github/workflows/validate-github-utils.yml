@@ -1,0 +1,13 @@
+name: Validate github-utils.sh
+
+on:
+  pull_request:
+    paths: [github-utils.sh, daylight.sh]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: ./extract-github-funcs.sh > /tmp/github-utils.sh
+      - run: diff /tmp/github-utils.sh github-utils.sh

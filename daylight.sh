@@ -2403,6 +2403,35 @@ github-curl-post ()
 
 #-------------------------------------------------------------------------------
 #
+# github-detect-platform()
+#
+# Detect the OS and architecture as a platform string
+#
+github-detect-platform ()
+{
+    (( $# == 0 )) || { printf 'Usage: github-detect-platform\n' >&2; return 1; }
+    local os arch
+
+    case "$(uname -s)" in
+        Linux)                     os="linux" ;;
+        Darwin)                    os="darwin" ;;
+        MINGW*|MSYS*|CYGWIN*)     os="windows" ;;
+        *) printf 'Unsupported OS: %s\n' "$(uname -s)" >&2; return 1 ;;
+    esac
+
+    case "$(uname -m)" in
+        x86_64|amd64)             arch="amd64" ;;
+        aarch64|arm64)            arch="arm64" ;;
+        armv7l|armv6l)            arch="arm" ;;
+        *) printf 'Unsupported architecture: %s\n' "$(uname -m)" >&2; return 1 ;;
+    esac
+
+    printf '%s-%s' "$os" "$arch"
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # github-download-latest-release()
 #
 # Download the latest release asset from a GitHub repository
@@ -6274,6 +6303,7 @@ main ()
             github-app-get-client-id)                 github-app-get-client-id "$@";;
             github-app-get-id)                        github-app-get-id "$@";;
             github-create-user-access-token)          github-create-user-access-token "$@";;
+            github-detect-platform)                   github-detect-platform "$@";;
             github-download-latest-release)           github-download-latest-release "$@";;
             github-get-release-name-list)             github-get-release-name-list "$@";;
             github-release-install)                   github-release-install "$@";;
