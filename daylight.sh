@@ -1,6 +1,10 @@
 #! /usr/bin/env bash
  
 
+#-------------------------------------------------------------------------------
+#
+# activate-flask-app()
+#
 activate-flask-app ()
 {
     # shellcheck disable=SC2016
@@ -11,6 +15,10 @@ activate-flask-app ()
 }
 
 
+#-------------------------------------------------------------------------------
+# 
+# activate-svc() 
+#
 activate-svc ()
 {
     # shellcheck disable=SC2016
@@ -44,6 +52,10 @@ activate-svc ()
 }
 
 
+#-------------------------------------------------------------------------------
+# 
+# activate-vm()
+#
 activate-vm ()
 {
     # shellcheck disable=SC2016
@@ -63,6 +75,10 @@ activate-vm ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# add-container-user
+# 
 add-container-user ()
 {
     # shellcheck disable=SC2016
@@ -107,6 +123,10 @@ add-container-user ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# add-rayray()
+#
 add-rayray ()
 {
     (( $# == 0 )) || { printf 'Usage: add-rayray\n' >&2; return 1; }
@@ -120,6 +140,10 @@ add-rayray ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# add-rayray-debian()
+#
 add-rayray-debian ()
 {
     # On Debian etc, adduser does not have a way to explicitly specify gid so 
@@ -137,6 +161,11 @@ add-rayray-debian ()
     init-rayray || return
 }
 
+
+#-------------------------------------------------------------------------------
+#
+# add-ssh-to-container()
+#
 add-ssh-to-container ()
 {
     # shellcheck disable=SC2016
@@ -149,6 +178,10 @@ add-ssh-to-container ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# add-superuser()
+#
 add-superuser ()
 {
     # shellcheck disable=SC2016
@@ -172,7 +205,42 @@ add-superuser ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
+#
+# add-to-bashrc()
+#
+add-to-bashrc ()
+{
+    local bashrc="$HOME/.bashrc"
+    local funcName='daylight'
+    local daylightPath='/opt/bin/daylight.sh'
+
+    if [[ ! -f "$daylightPath" ]]; then
+        printf '`%s` not found at %s — install daylight.sh first\n' "$funcName" "$daylightPath" >&2
+        return 1
+    fi
+
+    if grep -q "^${funcName}()" "$bashrc" 2>/dev/null; then
+        printf '`%s` function already exists in %s — nothing to do\n' "$funcName" "$bashrc"
+        return 0
+    fi
+
+    cat >> "$bashrc" << EOF
+
+# added by opencode in loyal service to master
+$funcName()
+{
+    $daylightPath "\$@"
+}
+EOF
+
+    printf 'Added `%s` function to %s\n' "$funcName" "$bashrc"
+    printf 'Restart your shell or run: source %s\n' "$bashrc"
+    printf 'Then type: %s --help\n' "$funcName"
+}
+
+
+#-------------------------------------------------------------------------------
 #
 # add-user ()
 #
@@ -203,7 +271,7 @@ add-user ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 #
 # add-user-to-idmap ()
 #
@@ -226,7 +294,7 @@ add-user-to-idmap ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 #
 # add-user-to-shadow-ids ()
 #
@@ -255,6 +323,10 @@ add-user-to-shadow-ids ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# cat-conf-script()
+#
 cat-conf-script ()
 {
     # shellcheck disable=SC2016
@@ -270,6 +342,10 @@ cat-conf-script ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# create-flask-app()
+#
 create-flask-app ()
 {
     # shellcheck disable=SC2016
@@ -291,10 +367,10 @@ create-flask-app ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 # @deprecated
 # use github-create-user-access-token instead
-###
+#
 create-github-user-access-token ()
 {
     client_id=Iv1.f69b43d6e5f4ea24
@@ -313,7 +389,7 @@ create-github-user-access-token ()
 
 
 
-###
+#-------------------------------------------------------------------------------
 #
 # create-home-filesystem ()
 #
@@ -366,7 +442,7 @@ create-home-filesystem ()
 
 
 
-###
+#-------------------------------------------------------------------------------
 #
 # create-loopback ()
 #
@@ -389,7 +465,7 @@ create-loopback ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 #
 # create-lxd-user-data ()
 #
@@ -449,7 +525,7 @@ create-publish-image-service ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 #
 # create-pubbo-service ()
 #
@@ -556,6 +632,10 @@ create-service-from-dist-script ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# create-static-website()
+#
 create-static-website ()
 {
     # shellcheck disable=SC2016
@@ -577,6 +657,10 @@ create-static-website ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# create-sudo2-group()
+#
 create-sudo2-group ()
 {
     sudo addgroup --gid 2000 sudo2
@@ -584,6 +668,10 @@ create-sudo2-group ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# create-temp-file()
+#
 create-temp-file ()
 {
     # shellcheck disable=SC2016
@@ -603,6 +691,10 @@ create-temp-file ()
 
 
 # shellcheck disable=SC2120 # It's valid and common to use this function with 0 arguments
+#-------------------------------------------------------------------------------
+#
+# create-temp-folder()
+#
 create-temp-folder ()
 {
     # shellcheck disable=SC2016
@@ -635,6 +727,11 @@ delete-lxd-instance ()
     fi
 }
 
+
+#-------------------------------------------------------------------------------
+#
+# download-app()
+#
 download-app ()
 {
     # shellcheck disable=SC2016
@@ -704,7 +801,7 @@ detect-platform ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 #
 # Download latest dylt release
 #
@@ -777,6 +874,10 @@ download-flask-service ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# download-public-key()
+#
 download-public-key ()
 {
     # shellcheck disable=SC2016
@@ -816,12 +917,11 @@ detect-runner-platform ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 #
 # download-shr-tarball()
 #
 # Download the tarball for the latest GitHub Actions Self-Hosted Runner release
-#
 #
 download-shr-tarball ()
 {
@@ -865,6 +965,10 @@ download-shr-tarball ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# download-svc()
+#
 download-svc ()
 {
     # shellcheck disable=SC2016
@@ -878,6 +982,10 @@ download-svc ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# download-to-temp-dir()
+#
 download-to-temp-dir ()
 {
     # shellcheck disable=SC2016
@@ -891,6 +999,10 @@ download-to-temp-dir ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# download-vm()
+#
 download-vm ()
 {
     # shellcheck disable=SC2016
@@ -905,7 +1017,7 @@ download-vm ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 #
 # ec ()
 #
@@ -920,6 +1032,10 @@ ec ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# edit-daylight()
+#
 edit-daylight ()
 {
     local daylightPath; daylightPath=$(command -v daylight.sh)
@@ -932,12 +1048,20 @@ edit-daylight ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# emit-os-arch-vars()
+#
 emit-os-arch-vars ()
 {
     emit-vars HOSTTYPE MACHTYPE OSTYPE
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# emit-vars()
+#
 emit-vars ()
 {
     for varname in "$@"; do
@@ -975,11 +1099,11 @@ etcd-create-download-url ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 #
 # Create an etcd release name based on version on platform
 #
-###
+#
 etcd-create-release-name ()
 {
     # shellcheck disable=SC2016
@@ -1245,6 +1369,10 @@ etcd-setup-data-dir ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# gen-completion-script()
+#
 gen-completion-script () {
     # shellcheck disable=SC2016
     (( $# == 1 )) || { printf 'Usage: cmdName\n' >&2; return 1; }
@@ -1287,6 +1415,10 @@ gen-completion-script () {
 
 
 
+#-------------------------------------------------------------------------------
+#
+# gen-completion-script-2()
+#
 gen-completion-script-2 ()
 {
     # Coming up with a nice CLI experience for a bash-completion-generation
@@ -1384,6 +1516,11 @@ gen-completion-script-2 ()
 	fi
 }
 
+
+#-------------------------------------------------------------------------------
+#
+# gen-daylight-completion-script()
+#
 gen-daylight-completion-script () {
 	# shellcheck disable=SC2016
 	(( $# >= 0 && $# <= 1 )) || { printf 'Usage: gen-daylight-completion-script [$folder] []\n' >&2; return 1; }
@@ -1404,6 +1541,10 @@ gen-daylight-completion-script () {
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# gen-nginx-flask()
+#
 gen-nginx-flask ()
 {
     # shellcheck disable=SC2016
@@ -1442,6 +1583,10 @@ EOD
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# gen-nginx-static()
+#
 gen-nginx-static ()
 {
     # shellcheck disable=SC2016
@@ -1517,6 +1662,10 @@ EOD
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# get-bucket()
+#
 get-bucket ()
 {
     local bucket; bucket=$(aws sts get-caller-identity --query 'Account' --output text) || return
@@ -1525,6 +1674,10 @@ get-bucket ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# get-container-ip()
+#
 get-container-ip ()
 {
     # shellcheck disable=SC2016
@@ -1535,6 +1688,10 @@ get-container-ip ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# get-image-base()
+#
 get-image-base ()
 {
     # shellcheck disable=SC2016
@@ -1549,6 +1706,10 @@ get-image-base ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# get-image-name()
+#
 get-image-name ()
 {
     # shellcheck disable=SC2016
@@ -1561,6 +1722,10 @@ get-image-name ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# get-image-repo()
+#
 get-image-repo ()
 {
     # shellcheck disable=SC2016
@@ -1573,6 +1738,10 @@ get-image-repo ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# get-linux-version-codename()
+#
 get-linux-version-codename ()
 {
     # shellcheck disable=SC2016
@@ -1650,6 +1819,10 @@ get-service-working-directory ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# getVmName()
+#
 getVmName ()
 {
     # shellcheck disable=SC2016
@@ -1661,6 +1834,10 @@ getVmName ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-app-get-client-id()
+#
 github-app-get-client-id ()
 {
     # parse github args
@@ -1681,6 +1858,10 @@ github-app-get-client-id ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-app-get-data()
+#
 github-app-get-data ()
 {
     # parse github args
@@ -1698,6 +1879,10 @@ github-app-get-data ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-app-get-id()
+#
 github-app-get-id ()
 {
     # parse github args
@@ -1718,6 +1903,10 @@ github-app-get-id ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-app-get-info()
+#
 github-app-get-info ()
 {
     # parse github args
@@ -1745,6 +1934,10 @@ github-app-get-info ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-create-flags()
+#
 github-create-flags ()
 {
     # shellcheck disable=SC2016
@@ -1781,6 +1974,10 @@ github-create-flags ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-create-url()
+#
 github-create-url ()
 {
     local urlPath=$1
@@ -1795,6 +1992,11 @@ github-create-url ()
     printf '%s' "$url" || return
 }
 
+
+#-------------------------------------------------------------------------------
+#
+# github-create-user-access-token()
+#
 github-create-user-access-token ()
 {
     # parse github args
@@ -1855,6 +2057,10 @@ github-create-user-access-token ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-curl()
+#
 github-curl ()
 {
     # parse github args
@@ -1892,10 +2098,10 @@ github-curl ()
 
 
 
-###
+#-------------------------------------------------------------------------------
 # @deprecated
 # use github-curl with --data 'your-data'
-###
+#
 github-curl-post ()
 {
     # parse github args
@@ -1940,7 +2146,7 @@ github-curl-post ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 #
 # Translates from current platform spec into a legacy spec. This was necessary
 # for fallback testing when dylt changed its release names to be more consistent
@@ -1964,6 +2170,10 @@ dylt-legacy-platform ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-download-latest-release()
+#
 github-download-latest-release ()
 {
     # parse github args
@@ -1994,10 +2204,10 @@ github-download-latest-release ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 # @deprecated
 # use github-release-get-data
-###
+#
 github-get-release-data ()
 {
     # parse github args
@@ -2022,10 +2232,10 @@ github-get-release-data ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 # @deprecated
 # use github-release-get-name-list
-###
+#
 github-get-release-name-list ()
 {
     # shellcheck disable=SC2016
@@ -2045,10 +2255,10 @@ github-get-release-name-list ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 # @deprecated
 # use github-release-get-package-data
-###
+#
 github-get-release-package-data ()
 {
     # shellcheck disable=SC2016
@@ -2070,10 +2280,10 @@ github-get-release-package-data ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 # @deprecated
 # use github-release-get-package-info
-###
+#
 github-get-release-package-info ()
 {
     # shellcheck disable=SC2016
@@ -2096,6 +2306,10 @@ github-get-release-package-info ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-parse-args()
+#
 github-parse-args ()
 {
     # shellcheck disable=SC2016
@@ -2138,6 +2352,10 @@ github-parse-args ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-release-create-url-path()
+#
 github-release-create-url-path ()
 {
     # parse github args
@@ -2167,6 +2385,10 @@ github-release-create-url-path ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-release-download()
+#
 github-release-download ()
 {
     # parse github args
@@ -2197,6 +2419,10 @@ github-release-download ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-release-download-latest()
+#
 github-release-download-latest ()
 {
     # parse github args
@@ -2219,6 +2445,10 @@ github-release-download-latest ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-release-get-data()
+#
 github-release-get-data ()
 {
     # parse github args
@@ -2272,6 +2502,10 @@ github-release-get-latest-tag ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-release-get-package-data()
+#
 github-release-get-package-data ()
 {
     # parse github args
@@ -2299,6 +2533,10 @@ github-release-get-package-data ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-release-get-package-info()
+#
 github-release-get-package-info ()
 {
     # parse github args
@@ -2340,6 +2578,10 @@ github-release-get-package-info ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-release-install()
+#
 github-release-install ()
 {
     # parse github args
@@ -2369,9 +2611,9 @@ github-release-install ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 # @note - github-release-install will install the latest by default, if you don't specify a version
-###
+#
 github-release-install-latest ()
 {
     # parse github args
@@ -2395,6 +2637,10 @@ github-release-install-latest ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-release-list()
+#
 github-release-list ()
 {
 	# parse github args
@@ -2417,6 +2663,10 @@ github-release-list ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-release-list-platforms()
+#
 github-release-list-platforms ()
 {
     # parse github args
@@ -2442,6 +2692,10 @@ github-release-list-platforms ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-release-select()
+#
 github-release-select ()
 {
     # parse github args
@@ -2462,10 +2716,10 @@ github-release-select ()
 }
 
 
-
-
-
-
+#-------------------------------------------------------------------------------
+#
+# github-release-select-platform()
+#
 github-release-select-platform ()
 {
     # parse github args
@@ -2528,6 +2782,10 @@ github-test-repo-with-auth ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# go-service-gen-nginx-domain-file()
+#
 go-service-gen-nginx-domain-file ()
 {
     # shellcheck disable=SC2016
@@ -2552,6 +2810,10 @@ go-service-gen-nginx-domain-file ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# go-service-gen-run-script()
+#
 go-service-gen-run-script ()
 {
     # shellcheck disable=SC2016
@@ -2590,6 +2852,10 @@ go-service-gen-run-script ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# go-service-gen-stop-script()
+#
 go-service-gen-stop-script ()
 {
     # shellcheck disable=SC2016
@@ -2616,6 +2882,11 @@ go-service-gen-stop-script ()
 	EOT
 }
 
+
+#-------------------------------------------------------------------------------
+#
+# go-service-gen-unit-file()
+#
 go-service-gen-unit-file ()
 {
     # shellcheck disable=SC2016
@@ -2646,6 +2917,10 @@ go-service-gen-unit-file ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# go-service-install()
+#
 go-service-install ()
 {
 	# shellcheck disable=SC2016
@@ -2789,6 +3064,10 @@ go-service-install ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# go-service-uninstall()
+#
 go-service-uninstall ()
 {
 	# shellcheck disable=SC2016
@@ -2863,12 +3142,12 @@ go-service-uninstall ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 # Upgrade go on the host. Install go if it hasn't been previously installed.
 # There's currently no good way to query what the latest version of go is.
 # go isn't released on GitHub, so the GitHub API is no help. The only way to 
 # specify a version is to pass it on the command line.
-###
+#
 go-upgrade ()
 {
     # shellcheck disable=SC2016
@@ -2904,12 +3183,20 @@ EOT
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# hello()
+#
 hello ()
 {
     printf "Hello!\n"
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# incus-api-call()
+#
 incus-api-call ()
 {
     # shellcheck disable=SC2016
@@ -2934,6 +3221,10 @@ incus-api-call ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# incus-api-curl()
+#
 incus-api-curl ()
 {
     # shellcheck disable=SC2016
@@ -2952,6 +3243,10 @@ incus-api-curl ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# incus-api-instances()
+#
 incus-api-instances ()
 {
     # shellcheck disable=SC2016
@@ -2966,6 +3261,10 @@ incus-api-instances ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# incus-api-versions()
+#
 incus-api-versions ()
 {
     # shellcheck disable=SC2016
@@ -3000,6 +3299,10 @@ incus-config-snapshots ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# incus-create-profiles()
+#
 incus-create-profiles ()
 {
     # create small profile from docstring
@@ -3018,6 +3321,10 @@ EOT
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# incus-create-ssh-profile()
+#
 incus-create-ssh-profile ()
 {
 	# shellcheck disable=SC2016
@@ -3029,6 +3336,10 @@ incus-create-ssh-profile ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# incus-create-www-profile()
+#
 incus-create-www-profile ()
 {
 	# shellcheck disable=SC2016
@@ -3042,6 +3353,10 @@ incus-create-www-profile ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# incus-install()
+#
 incus-install ()
 {
 	apt-get update -y
@@ -3050,7 +3365,7 @@ incus-install ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 # 
 # Pull a file from a vm to a newly created temp folder
 # Return path of new file
@@ -3068,6 +3383,11 @@ incus-pull-file ()
 	printf '%s' "$remotePath"
 }
 
+
+#-------------------------------------------------------------------------------
+#
+# incus-push-file()
+#
 incus-push-file ()
 {
 	# shellcheck disable=SC2016
@@ -3087,6 +3407,10 @@ incus-push-file ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# incus-remove-file()
+#
 incus-remove-file ()
 {
 	# shellcheck disable=SC2016
@@ -3123,6 +3447,10 @@ init-alpine ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# init-lxd()
+#
 init-lxd ()
 {
     # Remove the packaged lxc/d since it causes problems
@@ -3165,6 +3493,10 @@ init-lxd ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# init-nginx()
+#
 init-nginx ()
 {
     :
@@ -3180,6 +3512,10 @@ init-nginx ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# init-rayray()
+#
 init-rayray ()
 {
     # Set rayray up for sudo
@@ -3201,6 +3537,10 @@ init-rayray ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# init-rpi()
+#
 init-rpi ()
 {
     # Create rayray user
@@ -3232,6 +3572,10 @@ init-rpi ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# install-app()
+#
 install-app ()
 {
     # shellcheck disable=SC2016
@@ -3246,6 +3590,10 @@ install-app ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# install-awscli()
+#
 install-awscli ()
 {
     # shellcheck disable=SC2016
@@ -3262,7 +3610,7 @@ install-awscli ()
 
 
 
-###
+#-------------------------------------------------------------------------------
 #
 # install-dylt ()
 #
@@ -3318,6 +3666,10 @@ install-etcd ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# install-flask-app()
+#
 install-flask-app ()
 {
     # shellcheck disable=SC2016
@@ -3339,6 +3691,10 @@ install-flask-app ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# install-fresh-daylight-svc()
+#
 install-fresh-daylight-svc ()
 {
     repo=https://raw.githubusercontent.com/daylight-public/daylight/main
@@ -3354,37 +3710,10 @@ install-fresh-daylight-svc ()
 }
 
 
-add-to-bashrc ()
-{
-    local bashrc="$HOME/.bashrc"
-    local funcName='daylight'
-    local daylightPath='/opt/bin/daylight.sh'
-
-    if [[ ! -f "$daylightPath" ]]; then
-        printf '`%s` not found at %s — install daylight.sh first\n' "$funcName" "$daylightPath" >&2
-        return 1
-    fi
-
-    if grep -q "^${funcName}()" "$bashrc" 2>/dev/null; then
-        printf '`%s` function already exists in %s — nothing to do\n' "$funcName" "$bashrc"
-        return 0
-    fi
-
-    cat >> "$bashrc" << EOF
-
-# added by opencode in loyal service to master
-$funcName()
-{
-    $daylightPath "\$@"
-}
-EOF
-
-    printf 'Added `%s` function to %s\n' "$funcName" "$bashrc"
-    printf 'Restart your shell or run: source %s\n' "$bashrc"
-    printf 'Then type: %s --help\n' "$funcName"
-}
-
-
+#-------------------------------------------------------------------------------
+#
+# install-gnome-keyring()
+#
 install-gnome-keyring ()
 {
     sudo apt-get install libsecret-1-0 libsecret-1-dev
@@ -3393,6 +3722,10 @@ install-gnome-keyring ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# install-latest-httpie()
+#
 install-latest-httpie ()
 {
     curl -SsL -o /etc/apt/sources.list.d/httpie.list https://packages.httpie.io/deb/httpie.list
@@ -3402,6 +3735,10 @@ install-latest-httpie ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# install-mssql-tools()
+#
 install-mssql-tools ()
 {
     curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
@@ -3411,6 +3748,10 @@ install-mssql-tools ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# install-pubbo()
+#
 install-pubbo ()
 {
     [[ -d "/opt/bin/" ]] || { echo "Non-existent folder: /opt/bin/" >&2; return 1; }
@@ -3418,6 +3759,10 @@ install-pubbo ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# install-public-key()
+#
 install-public-key ()
 {
     # shellcheck disable=SC2016
@@ -3437,6 +3782,10 @@ install-public-key ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# install-python()
+#
 install-python ()
 {
     add-apt-repository -y ppa:deadsnakes/ppa
@@ -3552,6 +3901,10 @@ install-shellscript-part-handlers ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# install-shr-token()
+#
 install-shr-token ()
 {
     # shellcheck disable=SC2016
@@ -3589,6 +3942,10 @@ install-shr-token ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# install-svc()
+#
 install-svc ()
 {
     # shellcheck disable=SC2016
@@ -3619,6 +3976,10 @@ install-svc ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# install-venv()
+#
 install-venv ()
 {
     # shellcheck disable=SC2016
@@ -3697,6 +4058,10 @@ install-vm ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# is-debian()
+#
 is-debian ()
 {
     (( $# == 0 )) || { printf 'Usage: is-debian\n' >&2; return 1; }
@@ -3716,6 +4081,10 @@ is-debian ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# list-apps()
+#
 list-apps ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -3764,6 +4133,10 @@ list-bash-funcs ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# list-conf-scripts()
+#
 list-conf-scripts ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -3775,6 +4148,10 @@ list-conf-scripts ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# list-git-repos()
+#
 list-git-repos () 
 { 
 	# shellcheck disable=SC2016
@@ -3786,6 +4163,10 @@ list-git-repos ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# list-host-public-keys()
+#
 list-host-public-keys ()
 {
     # shellcheck disable=SC2016
@@ -3804,6 +4185,10 @@ list-host-public-keys ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# list-public-keys()
+#
 list-public-keys ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -3813,6 +4198,10 @@ list-public-keys ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# list-services()
+#
 list-services ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -3820,6 +4209,10 @@ list-services ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# list-shr-entries()
+#
 list-shr-entries () 
 { 
 	# shellcheck disable=SC2016
@@ -3829,6 +4222,11 @@ list-shr-entries ()
     ( cd "$shrHome" && find . -mindepth 1 -maxdepth 1 -type d -regex '^\./[A-Za-z0-9].*$' )
 }
 
+
+#-------------------------------------------------------------------------------
+#
+# list-vms()
+#
 list-vms ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -3836,6 +4234,10 @@ list-vms ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# lxd-dump-id-map()
+#
 lxd-dump-id-map ()
 {
     # shellcheck disable=SC2016
@@ -3848,6 +4250,10 @@ lxd-dump-id-map ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# lxd-instance-exists()
+#
 lxd-instance-exists ()
 {
     # shellcheck disable=SC2016
@@ -3857,6 +4263,10 @@ lxd-instance-exists ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# lxd-set-id-map()
+#
 lxd-set-id-map ()
 {
     # shellcheck disable=SC2016
@@ -3870,6 +4280,10 @@ lxd-set-id-map ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# lxd-share-folder()
+#
 lxd-share-folder ()
 {
     # shellcheck disable=SC2016
@@ -3884,6 +4298,10 @@ lxd-share-folder ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# pgql-add-repo()
+#
 pgql-add-repo ()
 {
     local versionCodeName; versionCodeName=$(get-linux-version-codename) || return
@@ -3894,6 +4312,10 @@ pgql-add-repo ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# pgql-install-client()
+#
 pgql-install-client ()
 {
     # shellcheck disable=SC2016
@@ -3913,6 +4335,10 @@ pgql-install-client ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# pgql-install-repo-key()
+#
 pgql-install-repo-key ()
 {
     apt update -y
@@ -3925,6 +4351,10 @@ pgql-install-repo-key ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# prep-filesystem()
+#
 prep-filesystem ()
 {
     mkdir -p /etc/nginx/streams.d/
@@ -3935,6 +4365,10 @@ prep-filesystem ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# prep-service()
+#
 prep-service ()
 {
     # shellcheck disable=SC2016
@@ -3947,12 +4381,20 @@ prep-service ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# print-os-arch-vars()
+#
 print-os-arch-vars ()
 {
     print-vars HOSTTYPE MACHTYPE OSTYPE
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# print-vars()
+#
 print-vars ()
 {
     for varname in "$@"; do
@@ -3961,6 +4403,10 @@ print-vars ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# pull-app()
+#
 pull-app ()
 {
     # shellcheck disable=SC2016
@@ -3979,6 +4425,10 @@ pull-app ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# pullAppInfo()
+#
 pullAppInfo ()
 {
     # shellcheck disable=SC2016
@@ -4028,6 +4478,10 @@ pull-daylight ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# pull-flask-app()
+#
 pull-flask-app ()
 {
     # shellcheck disable=SC2016
@@ -4040,6 +4494,10 @@ pull-flask-app ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# pull-git-repo()
+#
 pull-git-repo ()
 {
     local repoUrl=$1
@@ -4152,6 +4610,10 @@ pull-image ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# pull-ssh-tarball()
+#
 pull-ssh-tarball ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -4161,6 +4623,10 @@ pull-ssh-tarball ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# pull-svc()
+#
 pull-svc ()
 {
     # shellcheck disable=SC2016
@@ -4173,6 +4639,10 @@ pull-svc ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# pull-vm()
+#
 pull-vm ()
 {
     # shellcheck disable=SC2016
@@ -4185,6 +4655,10 @@ pull-vm ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# pull-webapp()
+#
 pull-webapp ()
 {
     # shellcheck disable=SC2016
@@ -4203,6 +4677,10 @@ pull-webapp ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# push-app()
+#
 push-app ()
 {
     # shellcheck disable=SC2016
@@ -4221,8 +4699,10 @@ push-app ()
 }
 
 
-
-
+#-------------------------------------------------------------------------------
+#
+# push-daylight()
+#
 push-daylight ()
 {
     # shellcheck disable=SC2016
@@ -4237,6 +4717,10 @@ push-daylight ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# push-flask-app()
+#
 push-flask-app ()
 {
     # shellcheck disable=SC2016
@@ -4255,6 +4739,10 @@ push-flask-app ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# push-svc()
+#
 push-svc ()
 {
     # shellcheck disable=SC2016
@@ -4271,6 +4759,10 @@ push-svc ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# push-webapp()
+#
 push-webapp ()
 {
     # shellcheck disable=SC2016
@@ -4283,7 +4775,7 @@ push-webapp ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 #
 # read-kvs()
 #
@@ -4325,6 +4817,10 @@ read-kvs ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# replace-nginx-conf()
+#
 replace-nginx-conf ()
 {
     # shellcheck disable=SC2016
@@ -4402,6 +4898,10 @@ EOT
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# restart-nginx()
+#
 restart-nginx ()
 {
     if ! nginx -t; then
@@ -4412,6 +4912,10 @@ restart-nginx ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# run-conf-script()
+#
 run-conf-script ()
 {
     # shellcheck disable=SC2016
@@ -4427,6 +4931,10 @@ run-conf-script ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# run-service()
+#
 run-service ()
 {
     # shellcheck disable=SC2016
@@ -4439,6 +4947,10 @@ run-service ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# setup-domain()
+#
 setup-domain ()
 {
     # shellcheck disable=SC2016
@@ -4469,6 +4981,10 @@ setup-domain ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# source-daylight()
+#
 source-daylight ()
 {
     local daylightPath; daylightPath=$(command -v daylight.sh) || return
@@ -4477,6 +4993,10 @@ source-daylight ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# source-service-environment-file()
+#
 source-service-environment-file ()
 {
     # shellcheck disable=SC2016
@@ -4543,6 +5063,10 @@ start-service ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# sync-add-service()
+#
 sync-add-service ()
 {
 	key=$1
@@ -4556,6 +5080,10 @@ sync-add-service ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# sync-create-unit-name()
+#
 sync-create-unit-name () 
 { 
     key=$1;
@@ -4564,6 +5092,10 @@ sync-create-unit-name ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# sync-daylight-gen-run-script()
+#
 sync-daylight-gen-run-script ()
 {
     cat <<- "EOT"
@@ -4631,6 +5163,10 @@ sync-daylight-gen-run-script ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# sync-daylight-gen-unit-file()
+#
 sync-daylight-gen-unit-file ()
 {
     cat <<- "EOT"
@@ -4652,6 +5188,10 @@ sync-daylight-gen-unit-file ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# sync-daylight-install-service()
+#
 sync-daylight-install-service ()
 {
 	local svc=sync-daylight
@@ -4665,6 +5205,10 @@ sync-daylight-install-service ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# sync-follow-service()
+#
 sync-follow-service ()
 {
 	key=$1
@@ -4675,6 +5219,10 @@ sync-follow-service ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# sync-remove-service()
+#
 sync-remove-service ()
 {
 	key=$1
@@ -4685,6 +5233,10 @@ sync-remove-service ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# sync-run-service()
+#
 sync-run-service ()
 {
 	key=$1
@@ -4695,10 +5247,10 @@ sync-run-service ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 # Start a systemd service.
 # On failure, run journalctl to look at what happened.
-###
+#
 sys-start ()
 {
     # shellcheck disable=SC2016
@@ -4736,9 +5288,9 @@ untar-to-temp-folder ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 # Pretty self-explanatory. A useful function to bounce VMs
-###
+#
 update-and-restart ()
 {
     if (( EUID != 0 )); then
@@ -4752,7 +5304,7 @@ update-and-restart ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 # @deprecated - Please use dylt if possible
 #
 # Generate a run script for the watch-daylight.service
@@ -4790,7 +5342,7 @@ watch-daylight-gen-run-script ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 # @deprecated - Please use dylt if possible
 #
 watch-daylight-gen-unit-file ()
@@ -4814,7 +5366,7 @@ watch-daylight-gen-unit-file ()
 }
 
 
-###
+#-------------------------------------------------------------------------------
 # @deprecated - Please use dylt if possible
 #
 watch-daylight-install-service ()
@@ -4831,6 +5383,10 @@ watch-daylight-install-service ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# yesno()
+#
 yesno ()
 {
     # shellcheck disable=SC2016
@@ -4847,6 +5403,10 @@ yesno ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# zabbly-add-package-repo()
+#
 zabbly-add-package-repo ()
 {
 	sh -c 'cat <<EOT >/etc/apt/sources.list.d/zabbly-incus-lts-6.0.sources
@@ -4890,6 +5450,10 @@ zabbly-get-fingerprint ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# zabbly-init()
+#
 zabbly-init ()
 {
     # shellcheck disable=SC2016
@@ -4915,6 +5479,10 @@ zabbly-init ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# zabbly-save-key()
+#
 zabbly-save-key ()
 {
 	mkdir -p /etc/apt/keyrings/						# confirm folder exists
@@ -4930,6 +5498,10 @@ zabbly-save-key ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# zabbly-validate-fingerprint()
+#
 zabbly-validate-fingerprint ()
 {
     local fgValid='4EFC 5906 96CB 15B8 7C73  A3AD 82CC 8797 C838 DCFD'
