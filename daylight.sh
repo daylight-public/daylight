@@ -5,6 +5,8 @@
 #
 # activate-flask-app()
 #
+# Activate a Flask application as a systemd service
+#
 activate-flask-app ()
 {
     # shellcheck disable=SC2016
@@ -17,7 +19,9 @@ activate-flask-app ()
 
 #-------------------------------------------------------------------------------
 # 
-# activate-svc() 
+# activate-svc()
+#
+# Enable and start a systemd service unit, with optional timer
 #
 activate-svc ()
 {
@@ -56,6 +60,8 @@ activate-svc ()
 # 
 # activate-vm()
 #
+# Launch an LXC image as a container and run finishing touches
+#
 activate-vm ()
 {
     # shellcheck disable=SC2016
@@ -78,7 +84,9 @@ activate-vm ()
 #-------------------------------------------------------------------------------
 #
 # add-container-user
-# 
+#
+# Add a user to an LXC container with id mapping and SSH access
+#
 add-container-user ()
 {
     # shellcheck disable=SC2016
@@ -127,6 +135,8 @@ add-container-user ()
 #
 # add-rayray()
 #
+# Add the rayray user to the system
+#
 add-rayray ()
 {
     (( $# == 0 )) || { printf 'Usage: add-rayray\n' >&2; return 1; }
@@ -143,6 +153,8 @@ add-rayray ()
 #-------------------------------------------------------------------------------
 #
 # add-rayray-debian()
+#
+# Create the rayray user on Debian-based systems
 #
 add-rayray-debian ()
 {
@@ -166,6 +178,8 @@ add-rayray-debian ()
 #
 # add-ssh-to-container()
 #
+# Add an SSH proxy device to an LXC container
+#
 add-ssh-to-container ()
 {
     # shellcheck disable=SC2016
@@ -181,6 +195,8 @@ add-ssh-to-container ()
 #-------------------------------------------------------------------------------
 #
 # add-superuser()
+#
+# Add a superuser with sudo2 group, SSH key, and shadow id mapping
 #
 add-superuser ()
 {
@@ -208,6 +224,8 @@ add-superuser ()
 #-------------------------------------------------------------------------------
 #
 # add-to-bashrc()
+#
+# Add a daylight() function alias to .bashrc
 #
 add-to-bashrc ()
 {
@@ -275,8 +293,8 @@ add-user ()
 #
 # add-user-to-idmap ()
 #
-# 
-# 
+# Append a user's uid/gid to an LXC container's id map
+#
 add-user-to-idmap ()
 {
     # shellcheck disable=SC2016
@@ -297,6 +315,8 @@ add-user-to-idmap ()
 #-------------------------------------------------------------------------------
 #
 # add-user-to-shadow-ids ()
+#
+# Update /etc/subuid and /etc/subgid for a user's container mapping
 #
 # incus has some tricky stuff around user ids and shadow ids, that has
 # something to do with making sure that uid/gid 0 on the host don't
@@ -327,6 +347,8 @@ add-user-to-shadow-ids ()
 #
 # cat-conf-script()
 #
+# Print a configuration script from the S3 dist bucket
+#
 cat-conf-script ()
 {
     # shellcheck disable=SC2016
@@ -345,6 +367,8 @@ cat-conf-script ()
 #-------------------------------------------------------------------------------
 #
 # create-flask-app()
+#
+# Create an nginx site, cert, and directory for a Flask application
 #
 create-flask-app ()
 {
@@ -391,7 +415,11 @@ create-github-user-access-token ()
 
 #-------------------------------------------------------------------------------
 #
+#-------------------------------------------------------------------------------
+#
 # create-home-filesystem ()
+#
+# Create a loop device-backed home filesystem for a container user
 #
 # This appears to be a @legacy function, centered on creating a loop device on
 # the host system, mounting the loop device, and then sharing the loop device
@@ -508,8 +536,12 @@ create-lxd-user-data ()
 }
 
 
+#-------------------------------------------------------------------------------
 #
-# Take a vm name, and a base image, and generate a service for publishing that image.
+# create-publish-image-service()
+#
+# Create a systemd service to publish a VM image
+#
 # TODO complete this function
 create-publish-image-service ()
 {
@@ -527,7 +559,9 @@ create-publish-image-service ()
 
 #-------------------------------------------------------------------------------
 #
-# create-pubbo-service ()
+# create-pubbo-service()
+#
+# Create a service to expose a file over a Unix socket via pubbo
 #
 # `pubbo` is a simple app that makes a file available over a Unix socket.
 # Since Unix sockets already act like files, making a file available as
@@ -609,6 +643,11 @@ EOT
 	restart-nginx
 }
 
+#-------------------------------------------------------------------------------
+#
+# create-service-from-dist-script()
+#
+# Create a one-shot service from a dist conf script
 #
 # Given the name of the script in $dist/conf/scripts, create a one-off service
 # Beging by downloading dist and extracting conf.
@@ -636,6 +675,8 @@ create-service-from-dist-script ()
 #
 # create-static-website()
 #
+# Create an nginx site, cert, and directory for a static website
+#
 create-static-website ()
 {
     # shellcheck disable=SC2016
@@ -661,6 +702,8 @@ create-static-website ()
 #
 # create-sudo2-group()
 #
+# Create the sudo2 group with passwordless sudo privileges
+#
 create-sudo2-group ()
 {
     sudo addgroup --gid 2000 sudo2
@@ -671,6 +714,8 @@ create-sudo2-group ()
 #-------------------------------------------------------------------------------
 #
 # create-temp-file()
+#
+# Create a temporary file with optional template and folder
 #
 create-temp-file ()
 {
@@ -695,6 +740,8 @@ create-temp-file ()
 #
 # create-temp-folder()
 #
+# Create a temporary directory with optional template
+#
 create-temp-folder ()
 {
     # shellcheck disable=SC2016
@@ -712,6 +759,11 @@ create-temp-folder ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# delete-lxd-instance()
+#
+# Safely delete an LXD instance if it exists
 #
 # lxd does not have a nice way of safely deleting a VM if it does not exist; you end up with
 # a non-zero RC. This function simply checks that the VM exists before foricbly deleting it.
@@ -732,6 +784,8 @@ delete-lxd-instance ()
 #
 # download-app()
 #
+# Download an app tarball from the S3 dist bucket
+#
 download-app ()
 {
     # shellcheck disable=SC2016
@@ -746,8 +800,11 @@ download-app ()
 }
 
 
+#-------------------------------------------------------------------------------
 #
-# Download daylight script from the specified branch
+# download-daylight()
+#
+# Download daylight.sh from a GitHub branch
 #
 download-daylight ()
 {
@@ -762,6 +819,9 @@ download-daylight ()
     curl --location --silent --output-dir "$dstFolder" --remote-name "$url"
 }
 
+#-------------------------------------------------------------------------------
+#
+# download-dist()
 #
 # Download the entire dist folder from S3 to /tmp/dist
 #
@@ -777,7 +837,12 @@ download-dist ()
 }
 
 
-# ------------------------------------------------------------------------------
+#-------------------------------------------------------------------------------
+#
+# detect-platform()
+#
+# Detect the OS and architecture as a platform string
+#
 detect-platform ()
 {
     (( $# == 0 )) || { printf 'Usage: detect-platform\n' >&2; return 1; }
@@ -843,6 +908,12 @@ download-dylt ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# download-flask-app()
+#
+# Download a Flask app tarball from the S3 dist bucket
+#
 download-flask-app ()
 {
     # shellcheck disable=SC2016
@@ -857,8 +928,12 @@ download-flask-app ()
 }
 
 
+#-------------------------------------------------------------------------------
 #
-# Download a flask service from S3
+# download-flask-service()
+#
+# Download a Flask service tarball from S3
+#
 # TODO Either finish this function, or delete it because it doesn't do anything different from download-svc
 download-flask-service ()
 {
@@ -969,6 +1044,8 @@ download-shr-tarball ()
 #
 # download-svc()
 #
+# Download a service tarball from the S3 dist bucket
+#
 download-svc ()
 {
     # shellcheck disable=SC2016
@@ -986,6 +1063,8 @@ download-svc ()
 #
 # download-to-temp-dir()
 #
+# Download and extract an S3 tarball to a temporary directory
+#
 download-to-temp-dir ()
 {
     # shellcheck disable=SC2016
@@ -1002,6 +1081,8 @@ download-to-temp-dir ()
 #-------------------------------------------------------------------------------
 #
 # download-vm()
+#
+# Download a VM tarball from the S3 dist bucket
 #
 download-vm ()
 {
@@ -1036,6 +1117,8 @@ ec ()
 #
 # edit-daylight()
 #
+# Edit daylight.sh in vim and optionally push changes
+#
 edit-daylight ()
 {
     local daylightPath; daylightPath=$(command -v daylight.sh)
@@ -1051,6 +1134,8 @@ edit-daylight ()
 #-------------------------------------------------------------------------------
 #
 # emit-os-arch-vars()
+#
+# Print HOSTTYPE, MACHTYPE, and OSTYPE environment variables
 #
 emit-os-arch-vars ()
 {
@@ -1122,7 +1207,12 @@ etcd-create-release-name ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# etcd-download-latest()
+#
 # Download the latest etcd release
+#
 etcd-download-latest ()
 {
     # shellcheck disable=SC2016
@@ -1133,7 +1223,11 @@ etcd-download-latest ()
 }
 
 
-# Download a release of etcd from the specified URL.
+#-------------------------------------------------------------------------------
+#
+# etcd-download()
+#
+# Download a release of etcd from the specified URL
 #
 # @Note this function changes the name of the release file to 
 # etcd-release.tar.gz. This guarantees a consistent file name,
@@ -1163,7 +1257,12 @@ etcd-download ()
 }
 
 
-# Generate an etcd script to join an existing cluster, using a heredoc
+#-------------------------------------------------------------------------------
+#
+# etcd-gen-join-script()
+#
+# Generate an etcd script to join an existing cluster
+#
 # template.
 etcd-gen-join-script ()
 {
@@ -1194,7 +1293,12 @@ etcd-gen-join-script ()
 }
 
 
-# Generate an etcd script to join an new cluster, using a heredoc
+#-------------------------------------------------------------------------------
+#
+# etcd-gen-run-script()
+#
+# Generate an etcd script to start a new cluster
+#
 # template.
 etcd-gen-run-script ()
 {
@@ -1247,7 +1351,11 @@ etcd-gen-run-script ()
     # initial_state=$initialState \
     # envsubst <"$runEtcdScriptTmplPath"
 
-# Generate a systemd etcd unit file a from the heredoc template
+#-------------------------------------------------------------------------------
+#
+# etcd-gen-unit-file()
+#
+# Generate a systemd unit file for etcd
 #
 # This is very boilerplate. All the goodness is in the run.sh
 # script references in ExecStart
@@ -1272,7 +1380,12 @@ etcd-gen-unit-file ()
 	EOT
 }
 
-# Dynamically get the version number for the latest etcd release.
+#-------------------------------------------------------------------------------
+#
+# etcd-get-latest-version()
+#
+# Get the latest etcd release version tag
+#
 etcd-get-latest-version ()
 {
 	local tag; tag=$(github-release-get-latest-tag etcd-io etcd) || return
@@ -1284,7 +1397,12 @@ etcd-get-latest-version ()
 }
 
 
-# Install an etcd release tarball into the specified folder
+#-------------------------------------------------------------------------------
+#
+# etcd-install-latest()
+#
+# Install the latest etcd release to a folder
+#
 etcd-install-latest ()
 {
 	# parse github args
@@ -1311,7 +1429,12 @@ etcd-install-latest ()
 }
 
 
-# Install an etcd release tarball into the specified folder
+#-------------------------------------------------------------------------------
+#
+# etcd-install-release()
+#
+# Extract an etcd release tarball to an install folder
+#
 # @note am I really wrapping a simple tar --extract?
 etcd-install-release ()
 {
@@ -1325,6 +1448,12 @@ etcd-install-release ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# etcd-install-service()
+#
+# Install etcd as a systemd service
+#
 # @Note this logic is elsewhere in this script. Maybe it can be extracted 
 # to build this function
 etcd-install-service ()
@@ -1347,6 +1476,12 @@ etcd-install-service ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# etcd-setup-data-dir()
+#
+# Set up the etcd data directory with proper ownership
+#
 # etcd needs a data directory set up, and chown'd to the sysuser. Otherwise it 
 # would be owned by root which is problematic.
 #
@@ -1372,6 +1507,8 @@ etcd-setup-data-dir ()
 #-------------------------------------------------------------------------------
 #
 # gen-completion-script()
+#
+# Generate a bash completion script from a list of subcommands
 #
 gen-completion-script () {
     # shellcheck disable=SC2016
@@ -1418,6 +1555,8 @@ gen-completion-script () {
 #-------------------------------------------------------------------------------
 #
 # gen-completion-script-2()
+#
+# Generate a bash completion script with flexible CLI options
 #
 gen-completion-script-2 ()
 {
@@ -1521,6 +1660,8 @@ gen-completion-script-2 ()
 #
 # gen-daylight-completion-script()
 #
+# Generate and install a bash completion script for daylight.sh
+#
 gen-daylight-completion-script () {
 	# shellcheck disable=SC2016
 	(( $# >= 0 && $# <= 1 )) || { printf 'Usage: gen-daylight-completion-script [$folder] []\n' >&2; return 1; }
@@ -1544,6 +1685,8 @@ gen-daylight-completion-script () {
 #-------------------------------------------------------------------------------
 #
 # gen-nginx-flask()
+#
+# Generate an nginx config for a Flask app behind a Unix socket
 #
 gen-nginx-flask ()
 {
@@ -1586,6 +1729,8 @@ EOD
 #-------------------------------------------------------------------------------
 #
 # gen-nginx-static()
+#
+# Generate an nginx config for a static website
 #
 gen-nginx-static ()
 {
@@ -1632,8 +1777,11 @@ server
 EOD
 }
 
-# Necessary Ugliness! Generate a systemd unit file for a simple one-shot service
-# Used by multiple other functions which generate services
+#-------------------------------------------------------------------------------
+#
+# generate-unit-file()
+#
+# Generate a systemd oneshot unit file
 #
 generate-unit-file ()
 {
@@ -1763,7 +1911,12 @@ get-linux-version-codename ()
 }
 
 
-# Parse `systemctl cat` for the given service and return the value for the given key
+#-------------------------------------------------------------------------------
+#
+# get-service-file-value()
+#
+# Parse a value from a systemd service file
+#
 get-service-file-value ()
 {
     # shellcheck disable=SC2016
@@ -1783,8 +1936,12 @@ get-service-file-value ()
 }
 
 
-# Extract the environment file path from the service definition
-# aka the 'EnvironmentFile' value
+#-------------------------------------------------------------------------------
+#
+# get-service-environment-file()
+#
+# Get the EnvironmentFile path from a systemd service
+#
 get-service-environment-file ()
 {
     # shellcheck disable=SC2016
@@ -1795,8 +1952,12 @@ get-service-environment-file ()
 }
 
 
-# Extract the executable command line definition from the service definition
-# aka the 'ExecStart' value
+#-------------------------------------------------------------------------------
+#
+# get-service-exec-start()
+#
+# Get the ExecStart command from a systemd service
+#
 get-service-exec-start ()
 {
     # shellcheck disable=SC2016
@@ -1807,8 +1968,12 @@ get-service-exec-start ()
 }
 
 
-# Extract the working directory from the service definition
-# aka the 'WorkingDirectory' value
+#-------------------------------------------------------------------------------
+#
+# get-service-working-directory()
+#
+# Get the WorkingDirectory from a systemd service
+#
 get-service-working-directory ()
 {
     # shellcheck disable=SC2016
@@ -2470,7 +2635,11 @@ github-release-get-data ()
 }
 
 
-# Dynamically get the latest release version tag of a repo
+#-------------------------------------------------------------------------------
+#
+# github-release-get-latest-tag()
+#
+# Get the latest release tag from a GitHub repo
 #
 github-release-get-latest-tag ()
 {
@@ -2738,6 +2907,12 @@ github-release-select-platform ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# github-test-repo()
+#
+# Test if a GitHub repo exists
+#
 # Simple attempt to get info for a repo
 # If it does not succeed, it could mean the org or repo are nonexistent or misspelled
 # But it could also mean that the repo is non-public and requires a token for authentication
@@ -2763,6 +2938,12 @@ github-test-repo ()
 
 
 # @deprecated - use github-test-repo and pass a token
+#
+#-------------------------------------------------------------------------------
+#
+# github-test-repo-with-auth()
+#
+# Test if a GitHub repo exists with authentication
 #
 # Simple attempt to get info for a repo
 # If it does not succeed, it could mean the org or repo are nonexistent or misspelled
@@ -3282,7 +3463,11 @@ incus-api-versions ()
 #
 # incus-config-snapshots $instanceName $schedule $expiry [$pattern]
 # 
-# Configure snapshots for an incus container
+#-------------------------------------------------------------------------------
+#
+# incus-config-snapshots()
+#
+# Configure automatic snapshots for an incus container
 #
 # `incus snapshot --help` && incus docs for more info on the incus arg syntax
 #
@@ -3426,9 +3611,12 @@ incus-remove-file ()
 }
 
 
-# Initialize an alpine VM with daylight's requirements
-# - install packages
-# - create rayray user & group
+#-------------------------------------------------------------------------------
+#
+# init-alpine()
+#
+# Initialize an Alpine Linux container with daylight's requirements
+#
 init-alpine ()
 {
     apk update
@@ -3646,10 +3834,12 @@ install-dylt ()
 #   - Download the tarball of the latest release
 #   - Install the release in the specified install folder
 #   - Setup the data directory
-#   - Generate the systemd unit file
-#   - Generate a run script specifying the DNS SRV name for the cluster
-#   - Setup permissions
-#   - Enable + start the service
+#-------------------------------------------------------------------------------
+#
+# install-etcd()
+#
+# Install etcd from GitHub releases as a systemd service
+#
 install-etcd ()
 {
     # shellcheck disable=SC2016
@@ -3821,9 +4011,11 @@ install-service ()
 }
 
 
+#-------------------------------------------------------------------------------
 #
-# Take a script, and turn it into a systemd service, by creating a service folder, copying the script there, and
-# generating a unit file.
+# install-service-from-script()
+#
+# Install a systemd service from a script file
 #
 install-service-from-script ()
 {
@@ -3859,9 +4051,11 @@ install-service-from-script ()
 }
 
 
+#-------------------------------------------------------------------------------
 #
-# Take a script, and turn it into a systemd service, by creating a service folder, copying the script there, and
-# generating a unit file.
+# install-service-from-command()
+#
+# Install a systemd service from a command
 #
 install-service-from-command ()
 {
@@ -3889,8 +4083,11 @@ install-service-from-command ()
 }
 
 
+#-------------------------------------------------------------------------------
 #
-# I'm thinking this might have to be part of daylight.
+# install-shellscript-part-handlers()
+#
+# Install cloud-init part-handler scripts
 #
 install-shellscript-part-handlers ()
 {
@@ -3998,9 +4195,11 @@ install-venv ()
 }
 
 
+#-------------------------------------------------------------------------------
 #
-# Given a vm name, a base, and an optional imageRepo, create an instance and publish it.
-# This assumes the vm init scripts are in $dist/conf/vm/$vm
+# install-vm()
+#
+# Install a VM from a config folder and publish it
 #
 install-vm ()
 {
@@ -4465,7 +4664,11 @@ pullAppInfo ()
 }
 
 #
-# Download and source the latest daylight.sh from github. Crucial for debugging.
+#-------------------------------------------------------------------------------
+#
+# pull-daylight()
+#
+# Download and source the latest daylight.sh from GitHub
 #
 # DEPRECATED - use download-daylight instead
 #
@@ -4534,9 +4737,11 @@ pull-git-repo ()
 }
 
 
+#-------------------------------------------------------------------------------
 #
-# Given a vm name, a base, and an optional imageRepo, create an instance and publish it.
-# This assumes the vm init scripts are in $dist/conf/vm/$vm
+# pull-image()
+#
+# Pull a VM image from S3
 #
 pull-image ()
 {
@@ -5010,9 +5215,11 @@ source-service-environment-file ()
 }
 
 
+#-------------------------------------------------------------------------------
 #
-# Given a service name, and a list of parameters, this enables and starts an instance of the 
-# indexed service for every parameter.
+# start-indexed-service()
+#
+# Start templated systemd service instances for each parameter
 #
 start-indexed-service ()
 {
@@ -5030,10 +5237,12 @@ start-indexed-service ()
 }
 
 
+#-------------------------------------------------------------------------------
 #
-# Start and enable a systemd service.
-# If a .timer file is present, the .timer gets enabled and started instead of the .service unit file.
-# This function supports both regular and indexed services
+# start-service()
+#
+# Enable and start a systemd service, with optional timer
+#
 start-service ()
 {
     # shellcheck disable=SC2016
@@ -5275,7 +5484,12 @@ uninstall-etcd ()
 }
 
 
-# untar (and unzip if necessary) a .tar or .tgz to a new temp folder.
+#-------------------------------------------------------------------------------
+#
+# untar-to-temp-folder()
+#
+# Extract a tar archive to a temporary directory
+#
 untar-to-temp-folder ()
 {
     # shellcheck disable=SC2016
@@ -5540,8 +5754,11 @@ if [[ ! -f /opt/bin/daylight.sh  &&  -t 0 ]]; then
 fi
 
 
+#-------------------------------------------------------------------------------
 #
-# If daylight is invoked as a command, well all right then
+# main()
+#
+# Dispatch daylight.sh subcommands when invoked as a command
 #
 main ()
 {
