@@ -954,6 +954,8 @@ download-flask-service ()
 #
 # download-public-key()
 #
+# Download a public key from S3 by name
+#
 download-public-key ()
 {
     # shellcheck disable=SC2016
@@ -1152,6 +1154,8 @@ emit-os-arch-vars ()
 #-------------------------------------------------------------------------------
 #
 # emit-vars()
+#
+# Emit variable names and values as null-delimited output
 #
 emit-vars ()
 {
@@ -1823,6 +1827,8 @@ EOD
 #
 # get-bucket()
 #
+# Get the S3 bucket name for this host
+#
 get-bucket ()
 {
     local bucket; bucket=$(aws sts get-caller-identity --query 'Account' --output text) || return
@@ -1834,6 +1840,8 @@ get-bucket ()
 #-------------------------------------------------------------------------------
 #
 # get-container-ip()
+#
+# Get the IP address of a container
 #
 get-container-ip ()
 {
@@ -1848,6 +1856,8 @@ get-container-ip ()
 #-------------------------------------------------------------------------------
 #
 # get-image-base()
+#
+# Get the base image name from a VM config folder
 #
 get-image-base ()
 {
@@ -1867,6 +1877,8 @@ get-image-base ()
 #
 # get-image-name()
 #
+# Get the image name from a VM config folder
+#
 get-image-name ()
 {
     # shellcheck disable=SC2016
@@ -1883,6 +1895,8 @@ get-image-name ()
 #
 # get-image-repo()
 #
+# Get the image repository from a VM config folder
+#
 get-image-repo ()
 {
     # shellcheck disable=SC2016
@@ -1898,6 +1912,8 @@ get-image-repo ()
 #-------------------------------------------------------------------------------
 #
 # get-linux-version-codename()
+#
+# Get the Debian/Ubuntu version codename
 #
 get-linux-version-codename ()
 {
@@ -1997,6 +2013,8 @@ get-service-working-directory ()
 #
 # getVmName()
 #
+# Get the Incus VM name for an application
+#
 getVmName ()
 {
     # shellcheck disable=SC2016
@@ -2011,6 +2029,8 @@ getVmName ()
 #-------------------------------------------------------------------------------
 #
 # github-app-get-client-id()
+#
+# Get the OAuth client ID for a GitHub App
 #
 github-app-get-client-id ()
 {
@@ -2036,6 +2056,8 @@ github-app-get-client-id ()
 #
 # github-app-get-data()
 #
+# Get GitHub App installation data from the API
+#
 github-app-get-data ()
 {
     # parse github args
@@ -2056,6 +2078,8 @@ github-app-get-data ()
 #-------------------------------------------------------------------------------
 #
 # github-app-get-id()
+#
+# Get the ID of a GitHub App
 #
 github-app-get-id ()
 {
@@ -2080,6 +2104,8 @@ github-app-get-id ()
 #-------------------------------------------------------------------------------
 #
 # github-app-get-info()
+#
+# Get detailed info about a GitHub App
 #
 github-app-get-info ()
 {
@@ -2111,6 +2137,8 @@ github-app-get-info ()
 #-------------------------------------------------------------------------------
 #
 # github-create-flags()
+#
+# Create curl flags from a parsed argument map
 #
 github-create-flags ()
 {
@@ -2152,6 +2180,8 @@ github-create-flags ()
 #
 # github-create-url()
 #
+# Create a full GitHub API URL from a path
+#
 github-create-url ()
 {
     local urlPath=$1
@@ -2170,6 +2200,8 @@ github-create-url ()
 #-------------------------------------------------------------------------------
 #
 # github-create-user-access-token()
+#
+# Create a GitHub user access token via API
 #
 github-create-user-access-token ()
 {
@@ -2234,6 +2266,8 @@ github-create-user-access-token ()
 #-------------------------------------------------------------------------------
 #
 # github-curl()
+#
+# Make an authenticated request to the GitHub API
 #
 github-curl ()
 {
@@ -2349,6 +2383,8 @@ dylt-legacy-platform ()
 #-------------------------------------------------------------------------------
 #
 # github-download-latest-release()
+#
+# Download the latest release asset from a GitHub repository
 #
 github-download-latest-release ()
 {
@@ -2498,6 +2534,8 @@ github-get-release-package-info ()
 #
 # github-parse-args()
 #
+# Parse common GitHub API arguments into an associative array
+#
 github-parse-args ()
 {
     # shellcheck disable=SC2016
@@ -2544,6 +2582,8 @@ github-parse-args ()
 #
 # github-release-create-url-path()
 #
+# Create a URL path for a GitHub release
+#
 github-release-create-url-path ()
 {
     # parse github args
@@ -2576,6 +2616,8 @@ github-release-create-url-path ()
 #-------------------------------------------------------------------------------
 #
 # github-release-download()
+#
+# Download a release asset from a GitHub repository
 #
 github-release-download ()
 {
@@ -2611,6 +2653,8 @@ github-release-download ()
 #
 # github-release-download-latest()
 #
+# Download the latest release asset for a named package
+#
 github-release-download-latest ()
 {
     # parse github args
@@ -2636,6 +2680,8 @@ github-release-download-latest ()
 #-------------------------------------------------------------------------------
 #
 # github-release-get-data()
+#
+# Get release data from a GitHub repository
 #
 github-release-get-data ()
 {
@@ -2698,6 +2744,8 @@ github-release-get-latest-tag ()
 #
 # github-release-get-package-data()
 #
+# Get raw asset data for a named release package
+#
 github-release-get-package-data ()
 {
     # parse github args
@@ -2728,6 +2776,8 @@ github-release-get-package-data ()
 #-------------------------------------------------------------------------------
 #
 # github-release-get-package-info()
+#
+# Get structured package info for a named release asset
 #
 github-release-get-package-info ()
 {
@@ -2773,6 +2823,8 @@ github-release-get-package-info ()
 #-------------------------------------------------------------------------------
 #
 # github-release-install()
+#
+# Download and install a GitHub release asset
 #
 github-release-install ()
 {
@@ -2838,6 +2890,8 @@ github-release-install-latest ()
 #
 # github-release-list()
 #
+# List releases for a GitHub repository
+#
 github-release-list ()
 {
 	# parse github args
@@ -2863,6 +2917,8 @@ github-release-list ()
 #-------------------------------------------------------------------------------
 #
 # github-release-list-platforms()
+#
+# List available platforms for a release
 #
 github-release-list-platforms ()
 {
@@ -2893,6 +2949,8 @@ github-release-list-platforms ()
 #
 # github-release-select()
 #
+# Select a release from a list of choices
+#
 github-release-select ()
 {
     # parse github args
@@ -2916,6 +2974,8 @@ github-release-select ()
 #-------------------------------------------------------------------------------
 #
 # github-release-select-platform()
+#
+# Select a platform for a release download
 #
 github-release-select-platform ()
 {
@@ -2995,6 +3055,8 @@ github-test-repo-with-auth ()
 #
 # go-service-gen-nginx-domain-file()
 #
+# Generate an nginx server block for a Go service domain
+#
 go-service-gen-nginx-domain-file ()
 {
     # shellcheck disable=SC2016
@@ -3022,6 +3084,8 @@ go-service-gen-nginx-domain-file ()
 #-------------------------------------------------------------------------------
 #
 # go-service-gen-run-script()
+#
+# Generate a run script for a Go service
 #
 go-service-gen-run-script ()
 {
@@ -3065,6 +3129,8 @@ go-service-gen-run-script ()
 #
 # go-service-gen-stop-script()
 #
+# Generate a stop script for a Go service
+#
 go-service-gen-stop-script ()
 {
     # shellcheck disable=SC2016
@@ -3095,6 +3161,8 @@ go-service-gen-stop-script ()
 #-------------------------------------------------------------------------------
 #
 # go-service-gen-unit-file()
+#
+# Generate a systemd unit file for a Go service
 #
 go-service-gen-unit-file ()
 {
@@ -3129,6 +3197,9 @@ go-service-gen-unit-file ()
 #-------------------------------------------------------------------------------
 #
 # go-service-install()
+#
+# @note bigpickle no sure
+# Install a Go service from a GitHub release onto an Incus VM
 #
 go-service-install ()
 {
@@ -3277,6 +3348,8 @@ go-service-install ()
 #
 # go-service-uninstall()
 #
+# Uninstall a Go service from an Incus VM
+#
 go-service-uninstall ()
 {
 	# shellcheck disable=SC2016
@@ -3400,6 +3473,8 @@ EOT
 #
 # hello()
 #
+# Print a greeting message
+#
 hello ()
 {
     printf "Hello!\n"
@@ -3409,6 +3484,8 @@ hello ()
 #-------------------------------------------------------------------------------
 #
 # incus-api-call()
+#
+# Call the Incus API and return filtered JSON output
 #
 incus-api-call ()
 {
@@ -3438,6 +3515,8 @@ incus-api-call ()
 #
 # incus-api-curl()
 #
+# Call the Incus API via curl and return raw output
+#
 incus-api-curl ()
 {
     # shellcheck disable=SC2016
@@ -3460,6 +3539,8 @@ incus-api-curl ()
 #
 # incus-api-instances()
 #
+# List Incus instance names via the API
+#
 incus-api-instances ()
 {
     # shellcheck disable=SC2016
@@ -3477,6 +3558,8 @@ incus-api-instances ()
 #-------------------------------------------------------------------------------
 #
 # incus-api-versions()
+#
+# List available Incus API versions
 #
 incus-api-versions ()
 {
@@ -3520,6 +3603,8 @@ incus-config-snapshots ()
 #
 # incus-create-profiles()
 #
+# Create Incus resource limit profiles
+#
 incus-create-profiles ()
 {
     # create small profile from docstring
@@ -3542,6 +3627,8 @@ EOT
 #
 # incus-create-ssh-profile()
 #
+# Create an Incus profile with an SSH proxy device
+#
 incus-create-ssh-profile ()
 {
 	# shellcheck disable=SC2016
@@ -3556,6 +3643,8 @@ incus-create-ssh-profile ()
 #-------------------------------------------------------------------------------
 #
 # incus-create-www-profile()
+#
+# Create an Incus profile with HTTP/S proxy devices
 #
 incus-create-www-profile ()
 {
@@ -3573,6 +3662,9 @@ incus-create-www-profile ()
 #-------------------------------------------------------------------------------
 #
 # incus-install()
+#
+# @note bigpickle no sure
+# Install Incus from zabbly or snap package sources
 #
 incus-install ()
 {
@@ -3606,6 +3698,8 @@ incus-pull-file ()
 #
 # incus-push-file()
 #
+# Push a file into an Incus instance
+#
 incus-push-file ()
 {
 	# shellcheck disable=SC2016
@@ -3628,6 +3722,8 @@ incus-push-file ()
 #-------------------------------------------------------------------------------
 #
 # incus-remove-file()
+#
+# Remove a file from an Incus instance
 #
 incus-remove-file ()
 {
@@ -3671,6 +3767,9 @@ init-alpine ()
 #-------------------------------------------------------------------------------
 #
 # init-lxd()
+#
+# @note bigpickle no sure
+# Initialize LXD with BTRFS storage, id mapping, and proxy profiles
 #
 init-lxd ()
 {
@@ -3718,6 +3817,9 @@ init-lxd ()
 #
 # init-nginx()
 #
+# @note bigpickle no sure
+# Initialize nginx with configuration
+#
 init-nginx ()
 {
     :
@@ -3736,6 +3838,8 @@ init-nginx ()
 #-------------------------------------------------------------------------------
 #
 # init-rayray()
+#
+# Initialize the rayray user environment
 #
 init-rayray ()
 {
@@ -3761,6 +3865,9 @@ init-rayray ()
 #-------------------------------------------------------------------------------
 #
 # init-rpi()
+#
+# @note bigpickle no sure
+# Initialize a Raspberry Pi system
 #
 init-rpi ()
 {
@@ -3797,6 +3904,8 @@ init-rpi ()
 #
 # install-app()
 #
+# Copy application files to an install destination
+#
 install-app ()
 {
     # shellcheck disable=SC2016
@@ -3814,6 +3923,8 @@ install-app ()
 #-------------------------------------------------------------------------------
 #
 # install-awscli()
+#
+# Install and configure the AWS CLI
 #
 install-awscli ()
 {
@@ -3892,6 +4003,8 @@ install-etcd ()
 #
 # install-flask-app()
 #
+# Install a Flask app as a systemd service
+#
 install-flask-app ()
 {
     # shellcheck disable=SC2016
@@ -3917,6 +4030,8 @@ install-flask-app ()
 #
 # install-fresh-daylight-svc()
 #
+# Install a fresh daylight systemd service
+#
 install-fresh-daylight-svc ()
 {
     repo=https://raw.githubusercontent.com/daylight-public/daylight/main
@@ -3936,6 +4051,8 @@ install-fresh-daylight-svc ()
 #
 # install-gnome-keyring()
 #
+# Install and configure the GNOME keyring
+#
 install-gnome-keyring ()
 {
     sudo apt-get install libsecret-1-0 libsecret-1-dev
@@ -3947,6 +4064,8 @@ install-gnome-keyring ()
 #-------------------------------------------------------------------------------
 #
 # install-latest-httpie()
+#
+# Install the latest version of HTTPie
 #
 install-latest-httpie ()
 {
@@ -3961,6 +4080,8 @@ install-latest-httpie ()
 #
 # install-mssql-tools()
 #
+# Install SQL Server command-line tools
+#
 install-mssql-tools ()
 {
     curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
@@ -3974,6 +4095,8 @@ install-mssql-tools ()
 #
 # install-pubbo()
 #
+# Install the pubbo utility
+#
 install-pubbo ()
 {
     [[ -d "/opt/bin/" ]] || { echo "Non-existent folder: /opt/bin/" >&2; return 1; }
@@ -3984,6 +4107,8 @@ install-pubbo ()
 #-------------------------------------------------------------------------------
 #
 # install-public-key()
+#
+# Install an SSH public key for a user
 #
 install-public-key ()
 {
@@ -4007,6 +4132,8 @@ install-public-key ()
 #-------------------------------------------------------------------------------
 #
 # install-python()
+#
+# Install Python 3 with pip, setuptools, and wheel from deadsnakes PPA
 #
 install-python ()
 {
@@ -4136,6 +4263,9 @@ install-shellscript-part-handlers ()
 #
 # install-shr-token()
 #
+# @note bigpickle no sure
+# Register a self-hosted runner token with etcd
+#
 install-shr-token ()
 {
     # shellcheck disable=SC2016
@@ -4177,6 +4307,8 @@ install-shr-token ()
 #
 # install-svc()
 #
+# Install a service from a tarball
+#
 install-svc ()
 {
     # shellcheck disable=SC2016
@@ -4210,6 +4342,8 @@ install-svc ()
 #-------------------------------------------------------------------------------
 #
 # install-venv()
+#
+# Create and install a Python virtual environment
 #
 install-venv ()
 {
@@ -4295,6 +4429,8 @@ install-vm ()
 #
 # is-debian()
 #
+# Check if the host OS is Debian-based
+#
 is-debian ()
 {
     (( $# == 0 )) || { printf 'Usage: is-debian\n' >&2; return 1; }
@@ -4318,6 +4454,8 @@ is-debian ()
 #
 # list-apps()
 #
+# List application tarballs in the S3 dist bucket
+#
 list-apps ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -4325,6 +4463,8 @@ list-apps ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
 # list-bash-funcs()
 #
 # List all bash functions in a bash script, sorted
@@ -4372,6 +4512,8 @@ list-bash-funcs ()
 #
 # list-conf-scripts()
 #
+# List configuration scripts from the S3 conf bucket
+#
 list-conf-scripts ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -4387,6 +4529,8 @@ list-conf-scripts ()
 #
 # list-git-repos()
 #
+# List git repositories from etcd
+#
 list-git-repos () 
 { 
 	# shellcheck disable=SC2016
@@ -4401,6 +4545,8 @@ list-git-repos ()
 #-------------------------------------------------------------------------------
 #
 # list-host-public-keys()
+#
+# List SSH public keys installed on the host
 #
 list-host-public-keys ()
 {
@@ -4424,6 +4570,8 @@ list-host-public-keys ()
 #
 # list-public-keys()
 #
+# List SSH public keys
+#
 list-public-keys ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -4437,6 +4585,8 @@ list-public-keys ()
 #
 # list-services()
 #
+# List systemd services managed by daylight
+#
 list-services ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -4447,6 +4597,8 @@ list-services ()
 #-------------------------------------------------------------------------------
 #
 # list-shr-entries()
+#
+# List self-hosted runner registrations from etcd
 #
 list-shr-entries () 
 { 
@@ -4462,6 +4614,8 @@ list-shr-entries ()
 #
 # list-vms()
 #
+# List Incus VM instances
+#
 list-vms ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -4472,6 +4626,8 @@ list-vms ()
 #-------------------------------------------------------------------------------
 #
 # lxd-dump-id-map()
+#
+# Dump the UID/GID mapping for a container
 #
 lxd-dump-id-map ()
 {
@@ -4489,6 +4645,8 @@ lxd-dump-id-map ()
 #
 # lxd-instance-exists()
 #
+# Check if an LXD instance exists
+#
 lxd-instance-exists ()
 {
     # shellcheck disable=SC2016
@@ -4501,6 +4659,8 @@ lxd-instance-exists ()
 #-------------------------------------------------------------------------------
 #
 # lxd-set-id-map()
+#
+# Set UID/GID mapping on a container and restart it
 #
 lxd-set-id-map ()
 {
@@ -4518,6 +4678,8 @@ lxd-set-id-map ()
 #-------------------------------------------------------------------------------
 #
 # lxd-share-folder()
+#
+# Share a host folder with a container via disk device
 #
 lxd-share-folder ()
 {
@@ -4537,6 +4699,8 @@ lxd-share-folder ()
 #
 # pgql-add-repo()
 #
+# Add the PostgreSQL APT repository
+#
 pgql-add-repo ()
 {
     local versionCodeName; versionCodeName=$(get-linux-version-codename) || return
@@ -4550,6 +4714,8 @@ pgql-add-repo ()
 #-------------------------------------------------------------------------------
 #
 # pgql-install-client()
+#
+# Install the PostgreSQL client
 #
 pgql-install-client ()
 {
@@ -4574,6 +4740,8 @@ pgql-install-client ()
 #
 # pgql-install-repo-key()
 #
+# Import the PostgreSQL APT repository signing key
+#
 pgql-install-repo-key ()
 {
     apt update -y
@@ -4590,6 +4758,8 @@ pgql-install-repo-key ()
 #
 # prep-filesystem()
 #
+# Prepare the daylight filesystem structure
+#
 prep-filesystem ()
 {
     mkdir -p /etc/nginx/streams.d/
@@ -4603,6 +4773,8 @@ prep-filesystem ()
 #-------------------------------------------------------------------------------
 #
 # prep-service()
+#
+# Prepare a service folder structure and install it
 #
 prep-service ()
 {
@@ -4620,6 +4792,8 @@ prep-service ()
 #
 # print-os-arch-vars()
 #
+# Print OS and architecture variables
+#
 print-os-arch-vars ()
 {
     print-vars HOSTTYPE MACHTYPE OSTYPE
@@ -4629,6 +4803,8 @@ print-os-arch-vars ()
 #-------------------------------------------------------------------------------
 #
 # print-vars()
+#
+# Print shell variables matching a given prefix
 #
 print-vars ()
 {
@@ -4641,6 +4817,8 @@ print-vars ()
 #-------------------------------------------------------------------------------
 #
 # pull-app()
+#
+# Download and install an application from S3
 #
 pull-app ()
 {
@@ -4663,6 +4841,8 @@ pull-app ()
 #-------------------------------------------------------------------------------
 #
 # pullAppInfo()
+#
+# Pull application metadata from etcd
 #
 pullAppInfo ()
 {
@@ -4721,6 +4901,8 @@ pull-daylight ()
 #
 # pull-flask-app()
 #
+# Download and install a Flask app from S3
+#
 pull-flask-app ()
 {
     # shellcheck disable=SC2016
@@ -4736,6 +4918,8 @@ pull-flask-app ()
 #-------------------------------------------------------------------------------
 #
 # pull-git-repo()
+#
+# Clone or pull a git repository
 #
 pull-git-repo ()
 {
@@ -4855,6 +5039,8 @@ pull-image ()
 #
 # pull-ssh-tarball()
 #
+# Download SSH key tarball from S3
+#
 pull-ssh-tarball ()
 {
     local bucket; bucket=$(get-bucket) || return
@@ -4867,6 +5053,8 @@ pull-ssh-tarball ()
 #-------------------------------------------------------------------------------
 #
 # pull-svc()
+#
+# Download and install a service from S3
 #
 pull-svc ()
 {
@@ -4884,6 +5072,8 @@ pull-svc ()
 #
 # pull-vm()
 #
+# Pull VM config and install files from S3
+#
 pull-vm ()
 {
     # shellcheck disable=SC2016
@@ -4899,6 +5089,8 @@ pull-vm ()
 #-------------------------------------------------------------------------------
 #
 # pull-webapp()
+#
+# Download and install a webapp from S3
 #
 pull-webapp ()
 {
@@ -4922,6 +5114,8 @@ pull-webapp ()
 #
 # push-app()
 #
+# Push an application tarball to S3
+#
 push-app ()
 {
     # shellcheck disable=SC2016
@@ -4944,6 +5138,8 @@ push-app ()
 #
 # push-daylight()
 #
+# Push daylight.sh to the S3 dist bucket
+#
 push-daylight ()
 {
     # shellcheck disable=SC2016
@@ -4961,6 +5157,8 @@ push-daylight ()
 #-------------------------------------------------------------------------------
 #
 # push-flask-app()
+#
+# Push a Flask app tarball to S3
 #
 push-flask-app ()
 {
@@ -4984,6 +5182,8 @@ push-flask-app ()
 #
 # push-svc()
 #
+# Push a service tarball to S3
+#
 push-svc ()
 {
     # shellcheck disable=SC2016
@@ -5003,6 +5203,8 @@ push-svc ()
 #-------------------------------------------------------------------------------
 #
 # push-webapp()
+#
+# Push a webapp tarball to S3
 #
 push-webapp ()
 {
@@ -5061,6 +5263,8 @@ read-kvs ()
 #-------------------------------------------------------------------------------
 #
 # replace-nginx-conf()
+#
+# Replace nginx.conf with a standardized configuration
 #
 replace-nginx-conf ()
 {
@@ -5143,6 +5347,8 @@ EOT
 #
 # restart-nginx()
 #
+# Test nginx config and restart the service
+#
 restart-nginx ()
 {
     if ! nginx -t; then
@@ -5156,6 +5362,8 @@ restart-nginx ()
 #-------------------------------------------------------------------------------
 #
 # run-conf-script()
+#
+# Download and run a configuration script from S3
 #
 run-conf-script ()
 {
@@ -5176,6 +5384,8 @@ run-conf-script ()
 #
 # run-service()
 #
+# Run a service in the foreground with its environment
+#
 run-service ()
 {
     # shellcheck disable=SC2016
@@ -5191,6 +5401,8 @@ run-service ()
 #-------------------------------------------------------------------------------
 #
 # setup-domain()
+#
+# Set up nginx and certbot for a domain
 #
 setup-domain ()
 {
@@ -5226,6 +5438,8 @@ setup-domain ()
 #
 # source-daylight()
 #
+# Source the daylight.sh script
+#
 source-daylight ()
 {
     local daylightPath; daylightPath=$(command -v daylight.sh) || return
@@ -5237,6 +5451,8 @@ source-daylight ()
 #-------------------------------------------------------------------------------
 #
 # source-service-environment-file()
+#
+# Source the environment file for a service
 #
 source-service-environment-file ()
 {
@@ -5312,6 +5528,8 @@ start-service ()
 #
 # sync-add-service()
 #
+# Enable and start a sync service as a systemd unit
+#
 sync-add-service ()
 {
 	key=$1
@@ -5329,6 +5547,8 @@ sync-add-service ()
 #
 # sync-create-unit-name()
 #
+# Generate a systemd unit name for a sync service
+#
 sync-create-unit-name () 
 { 
     key=$1;
@@ -5340,6 +5560,8 @@ sync-create-unit-name ()
 #-------------------------------------------------------------------------------
 #
 # sync-daylight-gen-run-script()
+#
+# Generate a run script for a sync-daylight service
 #
 sync-daylight-gen-run-script ()
 {
@@ -5412,6 +5634,8 @@ sync-daylight-gen-run-script ()
 #
 # sync-daylight-gen-unit-file()
 #
+# Generate a systemd unit file for sync-daylight
+#
 sync-daylight-gen-unit-file ()
 {
     cat <<- "EOT"
@@ -5437,6 +5661,8 @@ sync-daylight-gen-unit-file ()
 #
 # sync-daylight-install-service()
 #
+# Install a sync-daylight systemd service
+#
 sync-daylight-install-service ()
 {
 	local svc=sync-daylight
@@ -5454,6 +5680,8 @@ sync-daylight-install-service ()
 #
 # sync-follow-service()
 #
+# Follow logs for a sync service
+#
 sync-follow-service ()
 {
 	key=$1
@@ -5468,6 +5696,8 @@ sync-follow-service ()
 #
 # sync-remove-service()
 #
+# Disable and remove a sync systemd service
+#
 sync-remove-service ()
 {
 	key=$1
@@ -5481,6 +5711,8 @@ sync-remove-service ()
 #-------------------------------------------------------------------------------
 #
 # sync-run-service()
+#
+# Start a sync-daylight service
 #
 sync-run-service ()
 {
@@ -5658,6 +5890,8 @@ watch-daylight-install-service ()
 #
 # yesno()
 #
+# Prompt the user for a yes/no answer
+#
 yesno ()
 {
     # shellcheck disable=SC2016
@@ -5677,6 +5911,8 @@ yesno ()
 #-------------------------------------------------------------------------------
 #
 # zabbly-add-package-repo()
+#
+# Add the zabbly Incus package repository
 #
 zabbly-add-package-repo ()
 {
@@ -5731,6 +5967,8 @@ zabbly-get-fingerprint ()
 #
 # zabbly-init()
 #
+# Initialize the zabbly Incus package repository
+#
 zabbly-init ()
 {
     # shellcheck disable=SC2016
@@ -5760,6 +5998,8 @@ zabbly-init ()
 #
 # zabbly-save-key()
 #
+# Download and save the zabbly GPG key
+#
 zabbly-save-key ()
 {
 	mkdir -p /etc/apt/keyrings/						# confirm folder exists
@@ -5778,6 +6018,8 @@ zabbly-save-key ()
 #-------------------------------------------------------------------------------
 #
 # zabbly-validate-fingerprint()
+#
+# Validate the zabbly GPG key fingerprint
 #
 zabbly-validate-fingerprint ()
 {
