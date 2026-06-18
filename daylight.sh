@@ -72,7 +72,7 @@ activate-vm ()
     local instanceName=${3:-$name}
 
     # Create the image, using the instance name
-    lxc launch "$name" "$instanceName" || return
+    incus launch "$name" "$instanceName" || return
     # Run the finsihing-touches script
     if [[ -f "$srcFolder/finishing-touches.sh" ]]; then
         # shellcheck disable=SC1091
@@ -111,23 +111,23 @@ add-container-user ()
     # Setup ownership in the home dir
     local uid; uid=$(id --user "$username") || return
     local gid; gid=$(id --group "$username") || return
-    # lxc exec "$container" -- chown -R "$uid:$gid" "/home/$username" || return
+    # incus exec "$container" -- chown -R "$uid:$gid" "/home/$username" || return
 
     # Create group for the user, then add user: no home, set uid+gid -- and add to sudo2
-    lxc exec "$container" -- addgroup --gid "$gid" "$username" || return
-    lxc exec "$container" -- adduser --disabled-password --gecos '' --uid "$uid" --gid "$gid" "$username" || return
-    lxc exec "$container" -- bash -l -c 'source /usr/bin/daylight.sh && { getent group sudo2 >/dev/null || create-sudo2-group; }' 
-    lxc exec "$container" -- adduser "$username" sudo2 || return
+    incus exec "$container" -- addgroup --gid "$gid" "$username" || return
+    incus exec "$container" -- adduser --disabled-password --gecos '' --uid "$uid" --gid "$gid" "$username" || return
+    incus exec "$container" -- bash -l -c 'source /usr/bin/daylight.sh && { getent group sudo2 >/dev/null || create-sudo2-group; }' 
+    incus exec "$container" -- adduser "$username" sudo2 || return
     
     # Push the public key to the container, and invoke the public key setup function on the container
     local publicKeyName="${publicKeyPath##*/}"
-    lxc file push "$publicKeyPath" "$container/tmp/$publicKeyName" || return
-    lxc exec "$container" -- bash -l -c "source /usr/bin/daylight.sh && install-public-key /home/$username /tmp/$publicKeyName" || return
+    incus file push "$publicKeyPath" "$container/tmp/$publicKeyName" || return
+    incus exec "$container" -- bash -l -c "source /usr/bin/daylight.sh && install-public-key /home/$username /tmp/$publicKeyName" || return
     
     # Setup the .bashrc so it sources daylight.sh
-    lxc exec "$container" -- sh -c "printf 'source %s\n' \"$(command -v daylight.sh)\" | sudo tee --append \"/home/$username/.bashrc\""
+    incus exec "$container" -- sh -c "printf 'source %s\n' \"$(command -v daylight.sh)\" | sudo tee --append \"/home/$username/.bashrc\""
 
-    lxc exec "$container" -- chown -R "$username:$username" "/home/$username"
+    incus exec "$container" -- chown -R "$username:$username" "/home/$username"
 }
 
 
@@ -188,7 +188,7 @@ add-ssh-to-container ()
     local container=$1
     local port=${2:-'22'}
 
-    lxc config device add "$container" "ssh-$port" proxy listen=tcp:0.0.0.0:"$port" connect=tcp:127.0.0.1:22
+    incus config device add "$container" "ssh-$port" proxy listen=tcp:0.0.0.0:"$port" connect=tcp:127.0.0.1:22
 }
 
 
@@ -755,6 +755,27 @@ create-temp-folder ()
 			template="$template.XXXXXX"
 		fi
         mktemp --directory --tmpdir "$template"
+    fi
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# delete-incus-instance()
+#
+# Safely delete an Incus instance if it exists
+#
+# incus does not have a nice way of safely deleting a VM if it does not exist; you end up with
+# a non-zero RC. This function simply checks that the VM exists before foricbly deleting it.
+#
+delete-incus-instance ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: delete-incus-instance $vm\n' >&2; return 1; }
+    local vm=$1
+
+    if incus info "$vm" >/dev/null 2>&1; then
+        incus delete --force "$vm" 2>/dev/null || return
     fi
 }
 
@@ -1849,7 +1870,7 @@ get-container-ip ()
     (( $# == 1 )) || { printf 'Usage: get-container-ip $container\n' >&2; return 1; }
     local container=$1
 
-    lxc query "/1.0/containers/$container/state" | jq -r '.network.eth0.addresses[] | select(.family=="inet").address'
+    incus query "/1.0/containers/$container/state" | jq -r '.network.eth0.addresses[] | select(.family=="inet").address'
 }
 
 
@@ -3661,6 +3682,24 @@ incus-create-www-profile ()
 
 #-------------------------------------------------------------------------------
 #
+# incus-dump-id-map()
+#
+# Dump the UID/GID mapping for an instance
+#
+incus-dump-id-map ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: incus-dump-id-map $container\n' >&2; return 1; }
+    local container=$1
+
+    local idMapPath; idMapPath=$(create-temp-file "$container.idmap.XXXXXX") || return
+    incus query "/1.0/containers/$container" | jq -r '.expanded_config["incus.idmap"] // empty' | awk NF > "$idMapPath"
+    printf '%s' "$idMapPath"
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # incus-install()
 #
 # @note bigpickle no sure
@@ -3671,6 +3710,21 @@ incus-install ()
 	apt-get update -y
 	apt-get upgrade -y
 	apt-get install incus -y
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# incus-instance-exists()
+#
+# Check if an Incus instance exists
+#
+incus-instance-exists ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: incus-instance-exists $container\n' >&2; return 1; }
+    local name=$1
+    incus query "/1.0/instances/$name" >/dev/null 2>&1
 }
 
 
@@ -3742,6 +3796,45 @@ incus-remove-file ()
 
 #-------------------------------------------------------------------------------
 #
+# incus-set-id-map()
+#
+# Set UID/GID mapping on an instance and restart it
+#
+incus-set-id-map ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: incus-set-id-map $container $idMapPath\n' >&2; return 1; }
+    local container=$1
+    local idMapPath=$2
+
+    incus config set "$container" incus.idmap - < <(sort "$idMapPath" | uniq)
+    incus restart "$container" 2>/dev/null || incus start "$container"
+    incus exec "$container" -- cloud-init status --wait
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# incus-share-folder()
+#
+# Share a host folder with an instance via disk device
+#
+incus-share-folder ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: incus-share-folder $container $share $srcDir $dstDir\n' >&2; return 1; }
+    local container=$1
+    incus-instance-exists  "$container" || { printf 'Non-existent container: %s\n' "$container"; return 1; }
+    local share=$2
+    local srcDir=$3
+    [[ -d "$srcDir" ]] || { echo "Non-existent folder: $srcDir" >&2; return 1; }
+    local dstDir=$4
+    incus config device add "$container" "$share" disk source="$srcDir" path="$dstDir"
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # init-alpine()
 #
 # Initialize an Alpine Linux container with daylight's requirements
@@ -3761,6 +3854,55 @@ init-alpine ()
     # Add sudo + doas support for rayray
     echo 'permit nopass rayray' >/etc/doas.d/rayray.conf
     echo 'rayray ALL = (root) NOPASSWD: ALL' >/etc/sudoers.d/01-rayray
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# init-incus()
+#
+# @note opencode nosure - review these steps to see if they are correct for incus
+# Initialize Incus with BTRFS storage, id mapping, and proxy profiles
+#
+init-incus ()
+{
+    # Remove the packaged lxc/d since it causes problems
+    apt-get remove -y lxd lxd-client liblxc-common liblxc-dev liblxc1 lxc-dev lxcfs nova-compute-lxc
+    # Setup subuid+subgid to allow for mapping ubuntu
+    add-user-to-shadow-ids ubuntu
+    # Setup /dev/xvdf as a btrfs volume, then bind mount it onto the incus images folder
+    [[ -b "/dev/xvdf" ]] || { echo "Non-existent device: /dev/xvdf" >&2; return 1; }
+    mkfs -t btrfs /dev/xvdf || return
+    mkdir -p /mnt/data/incus || return
+    mount /dev/xvdf /mnt/data/incus || return
+    mkdir /mnt/data/incus/images || return
+    # Install the incus snap
+    snap install incus || return
+    # Initialize incus with btrfs and use the volume on /dev/xvdg for incus stuff
+    [[ -b "/dev/xvdg" ]] || { echo "Non-existent device: /dev/xvdg" >&2; return 1; }
+    incus admin init --auto --storage-backend btrfs --storage-create-device /dev/xvdg --storage-pool default || return
+    # Bind mount the images folder from above and restart incus
+    mount -o bind /mnt/data/incus/images /var/snap/incus/common/incus/images || return
+    snap restart incus || return
+    # Setup xvdh to be the volume for instance home dirs
+    [[ -b "/dev/xvdh" ]] || { echo "Non-existent device: /dev/xvdh" >&2; return 1; }
+    mkfs -t ext4 /dev/xvdh
+    mkdir -p /mnt/home
+    mount /dev/xvdh /mnt/home
+    chown -R ubuntu:ubuntu /mnt/home
+    # profile: map ubuntu from host to container
+    incus profile create map-ubuntu || return
+    local uid; uid=$(id --user ubuntu) || return
+    local gid; gid=$(id --group ubuntu) || return
+    incus profile set map-ubuntu incus.idmap - < <(printf 'uid %d %d\ngid %d %d\n' "$uid" "$uid" "$gid" "$gid") || return
+    # profile: serve HTTP/S
+    incus profile create www || return
+    incus profile device add www https proxy listen=tcp:0.0.0.0:443 connect=tcp:127.0.0.1:443 || return
+    incus profile device add www http proxy listen=tcp:0.0.0.0:80 connect=tcp:127.0.0.1:80 || return
+# }
+
+    # install the shell script handlers ... clunky but it'll do for now
+    aws s3 cp --recursive --exclude "*" --include "shell_script_per_*.py" "s3://$bucket/conf/scripts" /usr/bin
 }
 
 
@@ -4395,14 +4537,14 @@ install-vm ()
     local instanceName; instanceName=$(mktemp --dry-run "$imageName-XXXXXXXX") || return
     local instance="$imageRepo:$instanceName"
     # Launch an instance with the new user data
-    lxc init "$imageBase" "$instance" || return
-    lxc config set "$instance" user.user-data - <"$userDataPath" || return
-    lxc start "$instance" || return
-    lxc exec "$instance" -- cloud-init status --wait || return
+    incus init "$imageBase" "$instance" || return
+    incus config set "$instance" user.user-data - <"$userDataPath" || return
+    incus start "$instance" || return
+    incus exec "$instance" -- cloud-init status --wait || return
      # Publish the instance as an instance
-    lxc stop "$instance" || return
-    lxc publish "$instance" "$imageRepo:" --alias "$imageName" || return
-    lxc delete "$instance" || return
+    incus stop "$instance" || return
+    incus publish "$instance" "$imageRepo:" --alias "$imageName" || return
+    incus delete "$instance" || return
     # # Download all the dists ... or maybe just the right one.
     # download-dist || return
     # # Create user-data for the desired VM
@@ -4414,13 +4556,13 @@ install-vm ()
     # # Delete the instance if it exists (lxd does not provide a cleaner, RC=0 solution)
     # delete-lxd-instance "$vm"
     # # Launch an instance with the new user data
-    # lxc init "$base" "$vm" || return
-    # lxc config set "$vm" user.user-data - <"$userDataPath" || return
-    # lxc start "$vm" || return
-    # lxc exec "$vm" -- cloud-init status --wait || return
+    # incus init "$base" "$vm" || return
+    # incus config set "$vm" user.user-data - <"$userDataPath" || return
+    # incus start "$vm" || return
+    # incus exec "$vm" -- cloud-init status --wait || return
     # # Publish the instance as an image
-    # lxc stop "$vm" || return
-    # lxc publish "$vm" "$imageRepo:" --alias "$vm" || return
+    # incus stop "$vm" || return
+    # incus publish "$vm" "$imageRepo:" --alias "$vm" || return
     # [[ -f "$userDataPath" ]] || { echo "Non-existent path: $userDataPath" >&2; return 1; }
 }
 
@@ -5005,14 +5147,14 @@ pull-image ()
     local instanceName; instanceName=$(mktemp --dry-run "$imageName-XXXXXXXX") || return
     local instance="$imageRepo:$instanceName"
     # Launch an instance with the new user data
-    lxc init "$base" "$instance" || return
-    lxc config set "$instance" user.user-data - <"$userDataPath" || return
-    lxc start "$instance" || return
-    lxc exec "$instance" -- cloud-init status --wait || return
+    incus init "$base" "$instance" || return
+    incus config set "$instance" user.user-data - <"$userDataPath" || return
+    incus start "$instance" || return
+    incus exec "$instance" -- cloud-init status --wait || return
      # Publish the instance as an instance
-    lxc stop "$instance" || return
-    lxc publish --public "$instance" "$imageRepo:" --alias "$imageName" || return
-    lxc delete "$instance" || return
+    incus stop "$instance" || return
+    incus publish --public "$instance" "$imageRepo:" --alias "$imageName" || return
+    incus delete "$instance" || return
     # # Download all the dists ... or maybe just the right one.
     # download-dist || return
     # # Create user-data for the desired VM
@@ -5024,13 +5166,13 @@ pull-image ()
     # # Delete the instance if it exists (lxd does not provide a cleaner, RC=0 solution)
     # delete-lxd-instance "$vm"
     # # Launch an instance with the new user data
-    # lxc init "$base" "$vm" || return
-    # lxc config set "$vm" user.user-data - <"$userDataPath" || return
-    # lxc start "$vm" || return
-    # lxc exec "$vm" -- cloud-init status --wait || return
+    # incus init "$base" "$vm" || return
+    # incus config set "$vm" user.user-data - <"$userDataPath" || return
+    # incus start "$vm" || return
+    # incus exec "$vm" -- cloud-init status --wait || return
     # # Publish the instance as an image
-    # lxc stop "$vm" || return
-    # lxc publish "$vm" "$imageRepo:" --alias "$vm" || return
+    # incus stop "$vm" || return
+    # incus publish "$vm" "$imageRepo:" --alias "$vm" || return
     # [[ -f "$userDataPath" ]] || { echo "Non-existent path: $userDataPath" >&2; return 1; }
 }
 
@@ -6093,6 +6235,7 @@ main ()
             create-publish-image-service)             create-publish-image-service "$@";;
             create-service-from-dist-script)          create-service-from-dist-script "$@";;
             create-static-website)                    create-static-website "$@";;
+            delete-incus-instance)                   delete-incus-instance "$@";;
             delete-lxd-instance)                      delete-lxd-instance "$@";;
             download-app)                             download-app "$@";;
             download-daylight)                        download-daylight "$@";;
@@ -6148,11 +6291,16 @@ main ()
             hello)                                    hello "$@";;
             incus-config-snapshots)                   incus-config-snapshots "$@";;
             incus-create-profiles)                    incus-create-profiles "$@";;
+            incus-dump-id-map)                        incus-dump-id-map "$@";;
             incus-install)                            incus-install "$@";;
+            incus-instance-exists)                    incus-instance-exists "$@";;
             incus-pull-file)                          incus-pull-file "$@";;
             incus-push-file)                          incus-push-file "$@";;
             incus-remove-file)                        incus-remove-file "$@";;
+            incus-set-id-map)                         incus-set-id-map "$@";;
+            incus-share-folder)                       incus-share-folder "$@";;
             init-alpine)                              init-alpine "$@";;
+            init-incus)                               init-incus "$@";;
             init-lxd)                                 init-lxd "$@";;
             init-nginx)                               init-nginx "$@";;
             init-rayray)                              init-rayray "$@";;
