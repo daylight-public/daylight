@@ -1,0 +1,9 @@
+[Unit]
+Description=Nightly release for %i
+
+[Service]
+Type=oneshot
+User=rayray
+WorkingDirectory=/opt/svc/nightly-release/%i
+EnvironmentFile=/opt/svc/nightly-release/%i/env
+ExecStart=/opt/svc/nightly-release/%i/bin/run.sh

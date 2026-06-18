@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer for nightly release of %i
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=nightly-release@%i.service
+
+[Install]
+WantedBy=timers.target
