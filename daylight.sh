@@ -107,25 +107,6 @@ add-container-user ()
 }
 
 
-is-debian ()
-{
-    (( $# == 0 )) || { printf 'Usage: is-debian\n' >&2; return 1; }
-    
-    # Check if /etc/os-release exists
-    [[ -f /etc/os-release ]] || return 1
-    
-    # Source the os-release file
-    source /etc/os-release
-    
-    # Check if ID is debian or ID_LIKE contains debian
-    if [[ "$ID" == "debian" ]] || [[ "$ID_LIKE" == *"debian"* ]]; then
-        return 0
-    fi
-    
-    return 1
-}
-
-
 add-rayray ()
 {
     (( $# == 0 )) || { printf 'Usage: add-rayray\n' >&2; return 1; }
@@ -3713,6 +3694,25 @@ install-vm ()
     # lxc stop "$vm" || return
     # lxc publish "$vm" "$imageRepo:" --alias "$vm" || return
     # [[ -f "$userDataPath" ]] || { echo "Non-existent path: $userDataPath" >&2; return 1; }
+}
+
+
+is-debian ()
+{
+    (( $# == 0 )) || { printf 'Usage: is-debian\n' >&2; return 1; }
+    
+    # Check if /etc/os-release exists
+    [[ -f /etc/os-release ]] || return 1
+    
+    # Source the os-release file
+    source /etc/os-release
+    
+    # Check if ID is debian or ID_LIKE contains debian
+    if [[ "$ID" == "debian" ]] || [[ "$ID_LIKE" == *"debian"* ]]; then
+        return 0
+    fi
+    
+    return 1
 }
 
 
