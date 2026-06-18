@@ -16,6 +16,7 @@ activate-flask-app ()
     activate-svc "flask@" "$name"
 }
 
+
 #-------------------------------------------------------------------------------
 # 
 # activate-svc()
@@ -54,6 +55,7 @@ activate-svc ()
     fi
 }
 
+
 #-------------------------------------------------------------------------------
 # 
 # activate-vm()
@@ -77,6 +79,7 @@ activate-vm ()
         source "$srcFolder/finishing-touches.sh"
     fi
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -127,6 +130,7 @@ add-container-user ()
     lxc exec "$container" -- chown -R "$username:$username" "/home/$username"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # add-rayray()
@@ -144,6 +148,7 @@ add-rayray ()
     
     add-rayray-debian || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -168,6 +173,7 @@ add-rayray-debian ()
     init-rayray || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # add-ssh-to-container()
@@ -184,6 +190,7 @@ add-ssh-to-container ()
 
     lxc config device add "$container" "ssh-$port" proxy listen=tcp:0.0.0.0:"$port" connect=tcp:127.0.0.1:22
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -212,6 +219,7 @@ add-superuser ()
     # Update /etc/subuid and /etc/subgid with the new user
     add-user-to-shadow-ids "$username"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -249,6 +257,7 @@ EOF
     printf 'Then type: %s --help\n' "$funcName"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # add-user ()
@@ -279,6 +288,7 @@ add-user ()
     add-user-to-shadow-ids "$username"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # add-user-to-idmap ()
@@ -300,6 +310,7 @@ add-user-to-idmap ()
     printf 'gid %d %d\n' "$gid" "$gid" >> "$idMapPath"
     lxd-set-id-map "$container" "$idMapPath"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -331,6 +342,7 @@ add-user-to-shadow-ids ()
     sudo systemctl restart snap.lxd.daemon
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # cat-conf-script()
@@ -350,6 +362,7 @@ cat-conf-script ()
     [[ -f "$scriptPath" ]] || { echo "Non-existent path: $scriptPath" >&2; return 1; }
     cat "$scriptPath" || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -377,6 +390,7 @@ create-flask-app ()
     fi
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # create-github-user-access-token()
@@ -399,6 +413,7 @@ create-github-user-access-token ()
     # shellcheck source=/dev/null
     source <(python3 -m parse_query_string --names access_token refresh_token --output env <<<"$s")
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -453,6 +468,7 @@ create-home-filesystem ()
     printf '%s' "$homeDir"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # create-loopback ()
@@ -474,6 +490,7 @@ create-loopback ()
 
     printf '%s' "$path"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -517,6 +534,7 @@ create-lxd-user-data ()
     fi
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # create-publish-image-service()
@@ -536,6 +554,7 @@ create-publish-image-service ()
     local cmd="/usr/bin/daylight.sh install-vm \"$vm\" \"$base\" \"$imageRepo\""
     install-service-from-command "$service" "$cmd"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -623,6 +642,7 @@ EOT
 	restart-nginx
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # create-service-from-dist-script()
@@ -650,6 +670,7 @@ create-service-from-dist-script ()
     install-service-from-script "$serviceScriptPath" "$@"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # create-static-website()
@@ -676,6 +697,7 @@ create-static-website ()
     fi
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # create-sudo2-group()
@@ -687,6 +709,7 @@ create-sudo2-group ()
     sudo addgroup --gid 2000 sudo2
     echo "%sudo2   ALL=(ALL:ALL) NOPASSWD:ALL" | sudo tee --append >/dev/null /etc/sudoers.d/%sudo2
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -735,6 +758,7 @@ create-temp-folder ()
     fi
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # delete-lxd-instance()
@@ -755,6 +779,7 @@ delete-lxd-instance ()
     fi
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # download-app()
@@ -773,6 +798,7 @@ download-app ()
 
     printf '%s' "$tempDir"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -793,6 +819,7 @@ download-daylight ()
     curl --location --silent --output-dir "$dstFolder" --remote-name "$url"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # download-dist()
@@ -809,6 +836,7 @@ download-dist ()
     aws s3 cp --recursive "s3://$bucket/dist" /tmp/dist || return
     find /tmp/dist -type f -name "*.sh" -exec chmod 777 {} \; || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -837,6 +865,7 @@ detect-platform ()
 
     printf '%s-%s' "$os" "$arch"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -879,6 +908,7 @@ download-dylt ()
     fi
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # download-flask-app()
@@ -897,6 +927,7 @@ download-flask-app ()
 
     printf '%s' "$tempDir"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -918,6 +949,7 @@ download-flask-service ()
     printf '%s' "$dir"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # download-public-key()
@@ -935,6 +967,7 @@ download-public-key ()
     local srcFolder; srcFolder=$(download-to-temp-dir "$s3url") || return
     cp "$srcFolder/$name" "./$name"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -963,6 +996,7 @@ detect-runner-platform ()
 
     printf '%s-%s' "$os" "$arch"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1011,6 +1045,7 @@ download-shr-tarball ()
     printf '%s' "$downloadFolder" 
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # download-svc()
@@ -1029,6 +1064,7 @@ download-svc ()
     printf '%s' "$tempDir"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # download-to-temp-dir()
@@ -1046,6 +1082,7 @@ download-to-temp-dir ()
 
     printf '%s' "$tempDir"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1066,6 +1103,7 @@ download-vm ()
     printf '%s' "$tempDir"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # ec ()
@@ -1079,6 +1117,7 @@ ec ()
     local discSrv='hello.dylt.dev'
     /opt/etcd/etcdctl --discovery-srv "$discSrv" "$@"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1097,6 +1136,7 @@ edit-daylight ()
     fi
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # emit-os-arch-vars()
@@ -1108,6 +1148,7 @@ emit-os-arch-vars ()
     emit-vars HOSTTYPE MACHTYPE OSTYPE
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # emit-vars()
@@ -1118,6 +1159,7 @@ emit-vars ()
         printf '%s\0%s\0' "$varname" "${!varname}"
     done
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1148,6 +1190,7 @@ etcd-create-download-url ()
     printf '%s' "$downloadUrl"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # etcd-create-release-name()
@@ -1171,6 +1214,7 @@ etcd-create-release-name ()
     printf '%s' "$releaseName" || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # etcd-download-latest()
@@ -1185,6 +1229,7 @@ etcd-download-latest ()
     local version; version=$(etcd-get-latest-version) || return
     etcd-download --version "$version" "$@"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1218,6 +1263,7 @@ etcd-download ()
     flags+=(--version "$version")
     github-release-download "${flags[@]}" etcd-io etcd "$releaseName" "$downloadFolder"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1253,6 +1299,7 @@ etcd-gen-join-script ()
 	etcd_name=$etcdName \
 	envsubst <"$joinEtcdScriptTmplPath"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1341,6 +1388,7 @@ etcd-gen-unit-file ()
 	EOT
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # etcd-get-latest-version()
@@ -1356,6 +1404,7 @@ etcd-get-latest-version ()
 		printf '%s' "$tag"
 	fi
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1388,6 +1437,7 @@ etcd-install-latest ()
     chown -R rayray:rayray "$installFolder" || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # etcd-install-release()
@@ -1405,6 +1455,7 @@ etcd-install-release ()
     [[ -d "$installFolder" ]] || { printf 'Non-existent folder: %s\n' "$installFolder" >&2; return 1; }
     tar --gunzip --extract --file "$releasePath" --directory "$installFolder" --strip-components=1
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1433,6 +1484,7 @@ etcd-install-service ()
     chown -R rayray:rayray /opt/svc/etcd/ || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # etcd-setup-data-dir()
@@ -1459,6 +1511,7 @@ etcd-setup-data-dir ()
     fi
     chown -R rayray:rayray "$dataDir"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1505,6 +1558,7 @@ gen-completion-script () {
 	complete -F $functionName $cmdName
 	END
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1609,6 +1663,7 @@ gen-completion-script-2 ()
 	fi
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # gen-daylight-completion-script()
@@ -1633,6 +1688,7 @@ gen-daylight-completion-script () {
 	list-bash-funcs "$@" <"$scriptPath" >"$tmpListBashFuncs" || return
 	gen-completion-script "$cmdName" <"$tmpListBashFuncs" >"$path" || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1676,6 +1732,7 @@ server {
 }
 EOD
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1728,6 +1785,7 @@ server
 EOD
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # generate-unit-file()
@@ -1760,6 +1818,7 @@ WantedBy=multi-user.target
 EOD
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # get-bucket()
@@ -1770,6 +1829,7 @@ get-bucket ()
 
     printf '%s' "$bucket"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1783,6 +1843,7 @@ get-container-ip ()
 
     lxc query "/1.0/containers/$container/state" | jq -r '.network.eth0.addresses[] | select(.family=="inet").address'
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1801,6 +1862,7 @@ get-image-base ()
     printf '%s' "$base"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # get-image-name()
@@ -1816,6 +1878,7 @@ get-image-name ()
     printf '%s' "$name"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # get-image-repo()
@@ -1830,6 +1893,7 @@ get-image-repo ()
     local repo="${base%%:*}"
     printf '%s' "$repo"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1855,6 +1919,7 @@ get-linux-version-codename ()
     [[ -t 0 ]] && printf '\n'
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # get-service-file-value()
@@ -1879,6 +1944,7 @@ get-service-file-value ()
 
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # get-service-environment-file()
@@ -1893,6 +1959,7 @@ get-service-environment-file ()
 
     get-service-file-value "$name" 'EnvironmentFile'
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1909,6 +1976,7 @@ get-service-exec-start ()
     get-service-file-value "$name" 'ExecStart'
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # get-service-working-directory()
@@ -1924,6 +1992,7 @@ get-service-working-directory ()
     get-service-file-value "$name" 'WorkingDirectory'
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # getVmName()
@@ -1937,6 +2006,7 @@ getVmName ()
 
     printf '%s' "$user"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1961,6 +2031,7 @@ github-app-get-client-id ()
     printf '%s' "$clientId"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-app-get-data()
@@ -1980,6 +2051,7 @@ github-app-get-data ()
     [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
     github-curl "${flags[@]}" "/apps/$appSlug" || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2003,6 +2075,7 @@ github-app-get-id ()
     local id=${info[id]}
     printf '%s' "$id"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2033,6 +2106,7 @@ github-app-get-info ()
     # shellcheck disable=SC2154
     _info[slug]=${args[2]}
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2073,6 +2147,7 @@ github-create-flags ()
     fi
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-create-url()
@@ -2090,6 +2165,7 @@ github-create-url ()
     local url="$urlBase/$urlPath"
     printf '%s' "$url" || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2154,6 +2230,7 @@ github-create-user-access-token ()
     tokenvar=${args[0]}
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-curl()
@@ -2192,6 +2269,7 @@ github-curl ()
     curl "${flags[@]}" "$url" \
         || { printf 'curl failed inside github-curl\n' >&2; return 1; }
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2243,6 +2321,7 @@ github-curl-post ()
     fi
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # dylt-legacy-platform()
@@ -2265,6 +2344,7 @@ dylt-legacy-platform ()
         *)            printf '%s' "$platform" ;;
     esac
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2299,6 +2379,7 @@ github-download-latest-release ()
     printf '%s' "$releasePath"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-get-release-data()
@@ -2329,6 +2410,7 @@ github-get-release-data ()
 	printf '%s' "$tmpCurl"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-get-release-name-list()
@@ -2353,6 +2435,7 @@ github-get-release-name-list ()
 	# shellcheck disable=SC2034
     read -r -a listVar <"$tmpJq" || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2381,6 +2464,7 @@ github-get-release-package-data ()
     printf '%s' "$tmpJq"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-get-release-package-info()
@@ -2408,6 +2492,7 @@ github-get-release-package-info ()
     info[browser_download_url]=$browser_download_url
     info[filename]=$filename
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2454,6 +2539,7 @@ github-parse-args ()
     done
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-release-create-url-path()
@@ -2485,6 +2571,7 @@ github-release-create-url-path ()
         printf '%s' "$urlPath"
     fi
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2519,6 +2606,7 @@ github-release-download ()
     printf '%s' "$output"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-release-download-latest()
@@ -2544,6 +2632,7 @@ github-release-download-latest ()
     github-release-download "${flags[@]}" "$org" "$repo" "$name" "$downloadFolder" || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-release-get-data()
@@ -2567,6 +2656,7 @@ github-release-get-data ()
     github-create-flags argmap flags token || return
     github-curl "${flags[@]}" "$urlPath" || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2603,6 +2693,7 @@ github-release-get-latest-tag ()
     printf '%s' "$tag"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-release-get-package-data()
@@ -2632,6 +2723,7 @@ github-release-get-package-data ()
       <"$tmpCurl" \
       || return 
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2677,6 +2769,7 @@ github-release-get-package-info ()
     info[urlPath]=${fields[6]}
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-release-install()
@@ -2709,6 +2802,7 @@ github-release-install ()
 	printf '%s' "$installFolder"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-release-install-latest()
@@ -2739,6 +2833,7 @@ github-release-install-latest ()
     github-release-install "${flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" "$downloadFolder"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-release-list()
@@ -2763,6 +2858,7 @@ github-release-list ()
 	|| return
 
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2792,6 +2888,7 @@ github-release-list-platforms ()
     done
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-release-select()
@@ -2815,6 +2912,7 @@ github-release-select ()
 	select name in "${names[@]}"; do break; done
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # github-release-select-platform()
@@ -2835,6 +2933,7 @@ github-release-select-platform ()
         break
     done
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2891,6 +2990,7 @@ github-test-repo-with-auth ()
     github-curl --output /dev/null --token "$token" "$urlPath" || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # go-service-gen-nginx-domain-file()
@@ -2917,6 +3017,7 @@ go-service-gen-nginx-domain-file ()
 	}
 	EOT
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -2959,6 +3060,7 @@ go-service-gen-run-script ()
 	EOT
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # go-service-gen-stop-script()
@@ -2988,6 +3090,7 @@ go-service-gen-stop-script ()
 
 	EOT
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3021,6 +3124,7 @@ go-service-gen-unit-file ()
 	WantedBy=multi-user.target
 	EOT
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3168,6 +3272,7 @@ go-service-install ()
 	read -r -p "Ok? "
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # go-service-uninstall()
@@ -3245,6 +3350,7 @@ go-service-uninstall ()
 	read -r -p "Ok? " _
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # go-upgrade()
@@ -3289,6 +3395,7 @@ go-upgrade ()
 EOT
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # hello()
@@ -3297,6 +3404,7 @@ hello ()
 {
     printf "Hello!\n"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3325,6 +3433,7 @@ incus-api-call ()
     cat "$tmpCurl" | jq -r "$jqexp" || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # incus-api-curl()
@@ -3346,6 +3455,7 @@ incus-api-curl ()
     cat "$tmpCurl"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # incus-api-instances()
@@ -3362,6 +3472,7 @@ incus-api-instances ()
     local jqexp='.metadata[] | ltrimstr("/1.0/instances/")'
     incus-api-call "$path" "$jqexp" || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3404,6 +3515,7 @@ incus-config-snapshots ()
         snapshots.pattern="$pattern"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # incus-create-profiles()
@@ -3425,6 +3537,7 @@ config:
 EOT
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # incus-create-ssh-profile()
@@ -3438,6 +3551,7 @@ incus-create-ssh-profile ()
     incus profile create www || return
     incus profile device add www ssh proxy listen="tcp:0.0.0.0:$sshPort" connect=tcp:127.0.0.1:22 || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3455,6 +3569,7 @@ incus-create-www-profile ()
     incus profile device add www https proxy listen="tcp:0.0.0.0:$httpsPort" connect=tcp:127.0.0.1:443 || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # incus-install()
@@ -3465,6 +3580,7 @@ incus-install ()
 	apt-get upgrade -y
 	apt-get install incus -y
 }
+
 
 #-------------------------------------------------------------------------------
 # 
@@ -3484,6 +3600,7 @@ incus-pull-file ()
 	local remotePath="$tmpFolder/$filename"
 	printf '%s' "$remotePath"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3507,6 +3624,7 @@ incus-push-file ()
 	incus file push "$srcPath" "$vm$dstPath"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # incus-remove-file()
@@ -3524,6 +3642,7 @@ incus-remove-file ()
 		incus exec "$vm" -- bash -c "rm $dstPath_q" || return
 	fi
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3547,6 +3666,7 @@ init-alpine ()
     echo 'permit nopass rayray' >/etc/doas.d/rayray.conf
     echo 'rayray ALL = (root) NOPASSWD: ALL' >/etc/sudoers.d/01-rayray
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3593,6 +3713,7 @@ init-lxd ()
     aws s3 cp --recursive --exclude "*" --include "shell_script_per_*.py" "s3://$bucket/conf/scripts" /usr/bin
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # init-nginx()
@@ -3610,6 +3731,7 @@ init-nginx ()
     # Check that the certbot files are where they need to be
     # If they are, copy them to /etc/letsencrypt
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3634,6 +3756,7 @@ init-rayray ()
     # make rayray:rayray owner of everything in home folder
     chown -R rayray:rayray /home/rayray/ || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3669,6 +3792,7 @@ init-rpi ()
     install-dylt /opt/bin/ || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # install-app()
@@ -3685,6 +3809,7 @@ install-app ()
     # rsync it where it needs to go
     rsync --archive "$srcFolder/" "$dstFolder"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3703,6 +3828,7 @@ install-awscli ()
     # This command needs to be run as rayray, since we want to set the rayray user's default region
     su rayray --login --command "aws configure set default.region $defaultRegion" || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3761,6 +3887,7 @@ install-etcd ()
     etcd-install-service "$discSvr" "$name" "$ip"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # install-flask-app()
@@ -3785,6 +3912,7 @@ install-flask-app ()
     mkdir -p "$dstFolder/log" >/dev/null || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # install-fresh-daylight-svc()
@@ -3803,6 +3931,7 @@ install-fresh-daylight-svc ()
     systemctl start fresh-daylight.timer
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # install-gnome-keyring()
@@ -3813,6 +3942,7 @@ install-gnome-keyring ()
     make -C /usr/share/doc/git/contrib/credential/libsecret
     git config --global credential.helper /usr/share/doc/git/contrib/credential/libsecret/git-credential-libsecret
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3826,6 +3956,7 @@ install-latest-httpie ()
     apt install -y httpie
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # install-mssql-tools()
@@ -3838,6 +3969,7 @@ install-mssql-tools ()
     sudo ACCEPT_EULA=Y apt-get install -y mssql-tools
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # install-pubbo()
@@ -3847,6 +3979,7 @@ install-pubbo ()
     [[ -d "/opt/bin/" ]] || { echo "Non-existent folder: /opt/bin/" >&2; return 1; }
     github-release-install dylt-dev pubbo linux_amd64 /opt/bin/
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3869,6 +4002,7 @@ install-public-key ()
     sudo chmod 600 "$homeFolder/.ssh/authorized_keys"
     sudo chown -R "$username:$username" "$homeFolder"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -3910,6 +4044,7 @@ install-service ()
     fi
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # install-service-from-script()
@@ -3949,6 +4084,7 @@ install-service-from-script ()
     printf '%s' "$service"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # install-service-from-command()
@@ -3980,6 +4116,7 @@ install-service-from-command ()
     printf '%s' "$service"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # install-shellscript-part-handlers()
@@ -3993,6 +4130,7 @@ install-shellscript-part-handlers ()
     cp "$srcFolder"/scripts/shell_script_per_*.py /usr/bin
     # chown rayray:rayray /usr/bin/shell_script_per_*.py
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4034,6 +4172,7 @@ install-shr-token ()
     ./svc.sh start
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # install-svc()
@@ -4067,6 +4206,7 @@ install-svc ()
     printf '%s' "$dstFolder"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # install-venv()
@@ -4087,6 +4227,7 @@ install-venv ()
     $pipPath install wheel >/dev/null || return
     $pipPath install --requirement "$srcFolder/requirements.txt" >/dev/null || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4149,6 +4290,7 @@ install-vm ()
     # [[ -f "$userDataPath" ]] || { echo "Non-existent path: $userDataPath" >&2; return 1; }
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # is-debian()
@@ -4170,6 +4312,7 @@ is-debian ()
     
     return 1
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4224,6 +4367,7 @@ list-bash-funcs ()
 	done | sort
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # list-conf-scripts()
@@ -4238,6 +4382,7 @@ list-conf-scripts ()
     ls -1 "$scriptDir"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # list-git-repos()
@@ -4251,6 +4396,7 @@ list-git-repos ()
     shrPath="$shrHome/$repo/$repo";
     git -C "$shrPath" remote --verbose
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4273,6 +4419,7 @@ list-host-public-keys ()
     done < <(find "$keyFolder" -maxdepth 1 -name '*.pub')
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # list-public-keys()
@@ -4285,6 +4432,7 @@ list-public-keys ()
     aws s3 cp "$s3url" - | tar -tzf - | while read -r f; do [[ $f =~ .*/$ ]] || printf '%s\n' "${f##*/}"; done
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # list-services()
@@ -4294,6 +4442,7 @@ list-services ()
     local bucket; bucket=$(get-bucket) || return
     aws s3api list-objects --bucket "$bucket" --prefix 'dist/svc' --query 'Contents[].Key' | jq -r '.[] | match("^dist/svc/(.*)\\.tgz$").captures[0].string'
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4308,6 +4457,7 @@ list-shr-entries ()
     ( cd "$shrHome" && find . -mindepth 1 -maxdepth 1 -type d -regex '^\./[A-Za-z0-9].*$' )
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # list-vms()
@@ -4317,6 +4467,7 @@ list-vms ()
     local bucket; bucket=$(get-bucket) || return
     aws s3api list-objects --bucket "$bucket" --prefix 'dist/vm' --query 'Contents[].Key[]' | jq -r '.[] | match("^dist/vm/(.*)\\.tgz$").captures[0].string' || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4333,6 +4484,7 @@ lxd-dump-id-map ()
     printf '%s' "$idMapPath"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # lxd-instance-exists()
@@ -4344,6 +4496,7 @@ lxd-instance-exists ()
     local name=$1
     lxc query "/1.0/instances/$name" >/dev/null 2>&1
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4360,6 +4513,7 @@ lxd-set-id-map ()
     lxc restart "$container" 2>/dev/null || lxc start "$container"
     lxc exec "$container" -- cloud-init status --wait
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4378,6 +4532,7 @@ lxd-share-folder ()
     lxc config device add "$container" "$share" disk source="$srcDir" path="$dstDir"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # pgql-add-repo()
@@ -4390,6 +4545,7 @@ pgql-add-repo ()
     local aptListdPath="/etc/apt/sources.list.d/pgdg.list"
     sh -c "echo 'deb [signed-by=$signedBy] $aptUrl $versionCodeName-pgdg main' >$aptListdPath"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4413,6 +4569,7 @@ pgql-install-client ()
     apt install "$packageName" -y || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # pgql-install-repo-key()
@@ -4428,6 +4585,7 @@ pgql-install-repo-key ()
          https://www.postgresql.org/media/keys/ACCC4CF8.asc
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # prep-filesystem()
@@ -4440,6 +4598,7 @@ prep-filesystem ()
     mkdir -p /opt/bin/
     mkdir -p /opt/svc/
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4456,6 +4615,7 @@ prep-service ()
     mkdir -p "/opt/svc/$svcName/bin"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # print-os-arch-vars()
@@ -4464,6 +4624,7 @@ print-os-arch-vars ()
 {
     print-vars HOSTTYPE MACHTYPE OSTYPE
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4475,6 +4636,7 @@ print-vars ()
         printf '%s=%s\n' "$varname" "${!varname}"
     done
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4496,6 +4658,7 @@ pull-app ()
     local srcFolder; srcFolder=$(download-app "$name") || return
     install-app "$name" "$srcFolder" "$dstFolder" >/dev/null || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4553,6 +4716,7 @@ pull-daylight ()
     source /usr/bin/daylight.sh
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # pull-flask-app()
@@ -4567,6 +4731,7 @@ pull-flask-app ()
     local srcFolder; srcFolder=$(download-flask-app "$name") || return
     install-flask-app "$name" "$srcFolder" >/dev/null || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4606,6 +4771,7 @@ pull-git-repo ()
      git -C "$repoFolder" clone "$repoUrl" || return;
 # 	cd "$HOME/src/github.com/$account/$repo" || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4684,6 +4850,7 @@ pull-image ()
     # [[ -f "$userDataPath" ]] || { echo "Non-existent path: $userDataPath" >&2; return 1; }
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # pull-ssh-tarball()
@@ -4695,6 +4862,7 @@ pull-ssh-tarball ()
     local sshDir; sshDir=$(download-to-temp-dir "$sshUrl") || return
     printf '%s' "$sshDir"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4711,6 +4879,7 @@ pull-svc ()
     install-svc "$name" "$srcFolder" >/dev/null || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # pull-vm()
@@ -4725,6 +4894,7 @@ pull-vm ()
     install-vm "$name" "$srcFolder"
     activate-vm "$name" "$srcFolder"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4747,6 +4917,7 @@ pull-webapp ()
     tar -xz -C "$dstFolder" --exclude ./**/__pycache__ -f "/tmp/$name.tgz" || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # push-app()
@@ -4768,6 +4939,7 @@ push-app ()
     printf '%s' "$s3url"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # push-daylight()
@@ -4784,6 +4956,7 @@ push-daylight ()
     git commit -m "$message" "$daylightPath" || return
     git push || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4806,6 +4979,7 @@ push-flask-app ()
     printf '%s' "$s3url"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # push-svc()
@@ -4825,6 +4999,7 @@ push-svc ()
     aws s3 cp "$tgzPath" "$s3url" >/dev/null || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # push-webapp()
@@ -4839,6 +5014,7 @@ push-webapp ()
     local s3key; s3key="s3://$(get-bucket)/dist/webapp/$name.tgz" || return
     aws s3 cp "/tmp/$name.tgz" "$s3key" || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4880,6 +5056,7 @@ read-kvs ()
         (( i=i+2 ))
     done
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4961,6 +5138,7 @@ EOT
 	restart-nginx
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # restart-nginx()
@@ -4973,6 +5151,7 @@ restart-nginx ()
     fi
     systemctl restart nginx
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -4992,6 +5171,7 @@ run-conf-script ()
     "$scriptPath" || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # run-service()
@@ -5006,6 +5186,7 @@ run-service ()
     source-service-environment-file "$name"
     bash -ux -c "$(get-service-exec-start "$name")"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -5040,6 +5221,7 @@ setup-domain ()
         "./sites-enabled/$domain"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # source-daylight()
@@ -5050,6 +5232,7 @@ source-daylight ()
     # shellcheck source=/dev/null
     source "$daylightPath"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -5066,6 +5249,7 @@ source-service-environment-file ()
     source "$(get-service-environment-file "$name")"
     set +a
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -5087,6 +5271,7 @@ start-indexed-service ()
         start-service "$service$i"
     done
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -5122,6 +5307,7 @@ start-service ()
     fi
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # sync-add-service()
@@ -5138,6 +5324,7 @@ sync-add-service ()
 
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # sync-create-unit-name()
@@ -5148,6 +5335,7 @@ sync-create-unit-name ()
     downloadPath=$2;
     systemd-escape --template 'sync-daylight@.service' "$key $downloadPath" || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -5219,6 +5407,7 @@ sync-daylight-gen-run-script ()
 	EOT
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # sync-daylight-gen-unit-file()
@@ -5243,6 +5432,7 @@ sync-daylight-gen-unit-file ()
 	EOT
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # sync-daylight-install-service()
@@ -5259,6 +5449,7 @@ sync-daylight-install-service ()
     sudo systemctl enable "$svcFolder/$svc@.service"
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # sync-follow-service()
@@ -5271,6 +5462,7 @@ sync-follow-service ()
 	unitName=$(sync-create-unit-name "$key" "$downloadPath") || return
 	journalctl --unit "$unitName" --follow  || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -5285,6 +5477,7 @@ sync-remove-service ()
 	systemctl disable "$unitName" || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # sync-run-service()
@@ -5297,6 +5490,7 @@ sync-run-service ()
 	unitName=$(sync-create-unit-name "$key" "$downloadPath") || return
 	systemctl start "$unitName" || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -5312,6 +5506,7 @@ sys-start ()
 
     systemctl restart "$service" || journalctl --unit "$service"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -5330,6 +5525,7 @@ uninstall-etcd ()
     rm -r /opt/svc/etcd/ 2>/dev/null
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # untar-to-temp-folder()
@@ -5346,6 +5542,7 @@ untar-to-temp-folder ()
 
     printf '%s' "$dstFolder"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -5364,6 +5561,7 @@ update-and-restart ()
     apt upgrade -y
     reboot
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -5406,6 +5604,7 @@ watch-daylight-gen-run-script ()
 	EOT
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # watch-daylight-gen-unit-file()
@@ -5434,6 +5633,7 @@ watch-daylight-gen-unit-file ()
 	EOT
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # watch-daylight-install-service()
@@ -5452,6 +5652,7 @@ watch-daylight-install-service ()
     sudo systemctl start "$svc"
     chown -R rayray:rayray "$svcFolder/"
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -5472,6 +5673,7 @@ yesno ()
     done
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # zabbly-add-package-repo()
@@ -5489,6 +5691,7 @@ Signed-By: /etc/apt/keyrings/zabbly.asc
 
 EOT'
 }
+
 
 #-------------------------------------------------------------------------------
 #
@@ -5523,6 +5726,7 @@ zabbly-get-fingerprint ()
     || return
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # zabbly-init()
@@ -5551,6 +5755,7 @@ zabbly-init ()
     fi
 }
 
+
 #-------------------------------------------------------------------------------
 #
 # zabbly-save-key()
@@ -5568,6 +5773,7 @@ zabbly-save-key ()
          "$url" \
         || return
 }
+
 
 #-------------------------------------------------------------------------------
 #
