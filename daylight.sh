@@ -4114,6 +4114,56 @@ install-awscli ()
 
 #-------------------------------------------------------------------------------
 #
+# install-build-nightly-svc()
+#
+# Install a systemd indexed service for nightly releases of a repo.
+# Downloads template unit files from the daylight repo and writes a
+# repo-specific run.sh that calls trigger-nightly-release on dispatch.
+# Enables the timer and warns about the missing env file.
+#
+install-build-nightly-svc ()
+{
+    (( $# == 1 )) || { printf 'Usage: install-build-nightly-svc $repo\n' >&2; return 1; }
+    local repo=$1
+    local instance=${repo//\//-}
+    local base="https://raw.githubusercontent.com/daylight-public/daylight/main"
+    local svcDir=/opt/svc/nightly-release
+
+    mkdir -p "$svcDir/$instance/bin"
+    chown -R rayray:rayray "$svcDir"
+
+    curl -s --remote-name --output-dir /etc/systemd/system \
+        "$base/svc/nightly-release/nightly-release@.service"
+    curl -s --remote-name --output-dir /etc/systemd/system \
+        "$base/svc/nightly-release/nightly-release@.timer"
+
+    cat > "$svcDir/$instance/bin/run.sh" <<'RUNEOF'
+#!/usr/bin/env bash
+main ()
+{
+    local svcDir=/opt/svc/nightly-release
+    cd "$svcDir/INSTANCE/repo" || exit 1
+    git pull --ff-only origin main || exit 1
+    source ./sunbeam.sh 2>/dev/null || source ./daylight.sh 2>/dev/null || {
+        printf 'error: no script to source\n'; exit 1
+    }
+    trigger-nightly-release "REPO" || exit 1
+}
+main "$@"
+RUNEOF
+    sed -i "s/INSTANCE/$instance/g; s|REPO|$repo|g" "$svcDir/$instance/bin/run.sh"
+    chmod 755 "$svcDir/$instance/bin/run.sh"
+
+    systemctl enable "nightly-release@$instance.service"
+    systemctl enable "nightly-release@$instance.timer"
+    systemctl start "nightly-release@$instance.timer"
+
+    printf 'NOTE: Create %s/%s/env with GITHUB_PAT=... before timer fires\n' "$svcDir" "$instance"
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # install-dylt ()
 #
 # download the latest dylt binary and install it in the specified folder.
@@ -5607,6 +5657,24 @@ setup-domain ()
 
 #-------------------------------------------------------------------------------
 #
+# sanitize-label()
+#
+# Sanitize a human-readable label for use in a git tag.
+# Spaces become dashes; non-alphanumeric, non-dot, non-underscore,
+# non-hyphen characters are stripped.
+#
+sanitize-label ()
+{
+    (( $# == 1 )) || { printf 'Usage: sanitize-label $label\n' >&2; return 1; }
+    local label=$1
+    label=${label// /-}
+    label=${label//[^a-zA-Z0-9._-]/}
+    printf '%s' "$label"
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # source-daylight()
 #
 # Source the daylight.sh script
@@ -5892,6 +5960,26 @@ sync-run-service ()
 
 	unitName=$(sync-create-unit-name "$key" "$downloadPath") || return
 	systemctl start "$unitName" || return
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# trigger-nightly-release()
+#
+# Trigger a nightly-release GHA workflow for a given repo via workflow_dispatch.
+# Requires $GITHUB_PAT in the environment.
+#
+trigger-nightly-release ()
+{
+    (( $# == 1 )) || { printf 'Usage: trigger-nightly-release $owner/$repo\n' >&2; return 1; }
+    local repo=$1
+    local token=${GITHUB_PAT:?error: GITHUB_PAT not set}
+    curl --fail --silent --show-error -X POST \
+        "https://api.github.com/repos/$repo/actions/workflows/nightly-release.yml/dispatches" \
+        -H "Authorization: Bearer $token" \
+        -H "Accept: application/vnd.github.v3+json" \
+        -d '{"ref": "main"}' || return
 }
 
 
@@ -6337,6 +6425,7 @@ main ()
             init-rpi)                                 init-rpi "$@";;
             install-app)                              install-app "$@";;
             install-awscli)                           install-awscli "$@";;
+            install-build-nightly-svc)                install-build-nightly-svc "$@";;
             install-dylt)                             install-dylt "$@";;
             install-etcd)                             install-etcd "$@";;
             install-flask-app)                        install-flask-app "$@";;
@@ -6383,6 +6472,7 @@ main ()
             replace-nginx-conf)                       replace-nginx-conf "$@";;
             run-conf-script)                          run-conf-script "$@";;
             run-service)                              run-service "$@";;
+            sanitize-label)                           sanitize-label "$@";;
             setup-domain)                             setup-domain "$@";;
             source-daylight)                          source-daylight "$@";;
             source-service-environment-file)          source-service-environment-file "$@";;
@@ -6394,6 +6484,7 @@ main ()
             sync-follow-service)                      sync-follow-service "$@";;
             sync-remove-service)                      sync-remove-service "$@";;
             sync-run-service)                         sync-run-service "$@";;
+            trigger-nightly-release)                  trigger-nightly-release "$@";;
             sys-start)                                sys-start "$@";;
             uninstall-etcd)                           uninstall-etcd "$@";;
             untar-to-temp-folder)                     untar-to-temp-folder "$@";;
