@@ -1129,6 +1129,30 @@ download-vm ()
 
 #-------------------------------------------------------------------------------
 #
+# dylt-legacy-platform()
+#
+# Translate current platform spec into a legacy platform spec
+#
+dylt-legacy-platform ()
+{
+    (( $# == 1 )) || { printf 'Usage: dylt-legacy-platform $canonical_platform\n' >&2; return 1; }
+    local platform=$1
+    case $platform in
+        linux-amd64)  printf 'Linux_x86_64' ;;
+        linux-arm64)  printf 'Linux_arm64'  ;;
+        linux-386)    printf 'Linux_i386'   ;;
+        linux-arm)    printf 'Linux_armv7l' ;;
+        darwin-amd64) printf 'Darwin_x86_64' ;;
+        darwin-arm64) printf 'Darwin_arm64'  ;;
+        windows-amd64) printf 'Windows_x86_64' ;;
+        windows-arm64) printf 'Windows_arm64'  ;;
+        *)            printf '%s' "$platform" ;;
+    esac
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # ec ()
 #
 # Run etcdctl on a cluster specified by --discovery-srv
@@ -2374,30 +2398,6 @@ github-curl-post ()
              "$url" \
         || return
     fi
-}
-
-
-#-------------------------------------------------------------------------------
-#
-# dylt-legacy-platform()
-#
-# Translate current platform spec into a legacy platform spec
-#
-dylt-legacy-platform ()
-{
-    (( $# == 1 )) || { printf 'Usage: dylt-legacy-platform $canonical_platform\n' >&2; return 1; }
-    local platform=$1
-    case $platform in
-        linux-amd64)  printf 'Linux_x86_64' ;;
-        linux-arm64)  printf 'Linux_arm64'  ;;
-        linux-386)    printf 'Linux_i386'   ;;
-        linux-arm)    printf 'Linux_armv7l' ;;
-        darwin-amd64) printf 'Darwin_x86_64' ;;
-        darwin-arm64) printf 'Darwin_arm64'  ;;
-        windows-amd64) printf 'Windows_x86_64' ;;
-        windows-arm64) printf 'Windows_arm64'  ;;
-        *)            printf '%s' "$platform" ;;
-    esac
 }
 
 
