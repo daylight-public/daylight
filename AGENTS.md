@@ -50,9 +50,16 @@ New helper scripts should be placed in `./tools/` by default. This keeps the
 repo root clean and makes the boundary between the main script (`daylight.sh`)
 and auxiliary tooling explicit.
 
-### pushing code changes
+### pushing code changes (issue-driven workflow)
 
-All code changes will be done on new branches, with short names -- 2 or 3 words or terms separated by hyphens. Ask me to approve branch names. After committing and pushing a branch, create a PR for the change, where the body of the PR contains information similar or identical to the plan markdown. Create an issue and link it to the PR. Ask what the issue should be labelled - Bug, Task, or Feature.
+1. Propose an issue title, a short branch name (without issue number), and an issue body (can include markdown)
+2. User confirms or edits each
+3. Create the issue via `gh issue create`
+4. Prepend the issue number to the branch name (e.g. `42-fix-thing`)
+5. Commit, push, create PR with `Closes #N` in the body
+6. Do the work; user merges the PR when ready
+
+Exception: Meta changes to AGENTS.md itself use the `update-agents-md` persistent branch with no issue (see below).
 
 ### download-daylight flags
 
