@@ -43,6 +43,7 @@ All code changes will be done on new branches, with short names -- 2 or 3 words 
 | `--release <tag>` | tag name | Release mode, specific tag |
 | `--release --latest` | — | Same as `--release` with no value |
 | `--latest` alone | — | Error: requires `--release` |
+| `--token <value>` | token | GitHub API token for release mode |
 | `--branch` + `--release` | — | Error: incompatible |
 
 Rules:
@@ -50,10 +51,20 @@ Rules:
 - `--latest` must follow `--release` (either immediately or as a later flag).
 - The destination folder is the first positional argument after all flags.
 - Exactly one of branch mode or release mode must be active. 
+### reminders
+
+- Add `--token` and `--gen-bash-completions` flags to download-daylight
+- Complete the gen-completion-script → gen-completion-script-batch rename
+- Explore externalizing label creation into a separate function
+- Create custom git function for setting URL
+- Use a GitHub App for auth instead of PATs
+- Sort out all the github functions starting with flags/args
+
 ### AGENTS.md changes
 
-AGENTS.md is meta — it holds conventions and reminders. Changes to it don't need issues, labels, or approval. Use the `update-agents-md` persistent branch:
+AGENTS.md is meta — it holds conventions and reminders. Changes to it don't
+need issues, labels, or approval. Use the `update-agents-md` persistent branch:
 
 - Check it out from `main`, push commits to it over time
 - Open a PR against `main` when there's a batch ready (no issue link needed)
-- Self-merge, then rebase `update-agents-md` onto fresh `main` 
+- Self-merge, then rebase `update-agents-md` onto fresh `main`
