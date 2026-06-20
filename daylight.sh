@@ -2470,6 +2470,13 @@ github-curl ()
     local output=${argmap[output]:-$outputDefault}
     # Set url and token, if present
     local url="$urlBase/$urlPath"
+    # Append per_page parameter if requested
+    if [[ -v argmap[per-page] ]]; then
+        local pageSize=${argmap[per-page]}
+        if [[ $url == *\?* ]]; then url+="&per_page=$pageSize"
+        else url+="?per_page=$pageSize"
+        fi
+    fi
     # Can't really parameterize on token -- we need separate curl calls for with token, and without
     local -a flags=(--fail-with-body --location --silent)
     flags+=(--header "Accept: $accept")
@@ -2747,6 +2754,7 @@ github-parse-args ()
             '--accept'   |\
             '--data'     |\
             '--output'   |\
+            '--per-page' |\
             '--token'    |\
             '--platform' |\
             '--version' \
@@ -6548,12 +6556,14 @@ main ()
             github-app-get-client-id)                 github-app-get-client-id "$@";;
             github-app-get-id)                        github-app-get-id "$@";;
             github-create-user-access-token)          github-create-user-access-token "$@";;
+            github-curl)                              github-curl "$@";;
             github-detect-platform)                   github-detect-platform "$@";;
             github-download-latest-release)           github-download-latest-release "$@";;
             github-get-release-name-list)             github-get-release-name-list "$@";;
             github-release-install)                   github-release-install "$@";;
             github-parse-args)                        github-parse-args "$@";;
             github-release-download)                  github-release-download "$@";;
+            github-release-get-data)                  github-release-get-data "$@";;
             github-release-download-latest)           github-release-download-latest "$@";;
             github-release-get-latest-tag)            github-release-get-latest-tag "$@";;
             github-release-select-platform)           github-release-select-platform "$@";;
