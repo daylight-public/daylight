@@ -12,6 +12,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.NIGHTLY_RELEASE_PAT }}
         run: |
+          set -o pipefail
+          mkdir -p /tmp/backfill
+
           # List all nightly releases (tagName only, up to 1000)
           gh release list --repo ${{ github.repository }} --limit 1000 \
             --json tagName,assets \
@@ -34,7 +37,10 @@ jobs:
             }
 
             # Checksum the archive and upload
-            cd /tmp/backfill
+            cd /tmp/backfill || {
+              echo "  failed to cd to /tmp/backfill, skip"
+              continue
+            }
             sha256sum -- *.tar.gz > SHA256SUMS
             gh release upload "$tag" SHA256SUMS --repo ${{ github.repository }} \
               --clobber
