@@ -903,7 +903,7 @@ download-daylight-batch ()
         (( i++ ))
     done
 
-    [[ -n "$dstFolder" ]] || { printf 'Usage: download-daylight-batch [--branch [<name>]] [--release [<tag>]] [--latest] [--] <dstFolder>\n' >&2; return 1; }
+    [[ -n "$dstFolder" ]] || { printf 'Usage: download-daylight-batch [--branch [<name>]] [--release [<tag>]] [--latest] [--token <pat>] [--] <dstFolder>\n' >&2; return 1; }
     [[ -d "$dstFolder" ]] || { printf 'Non-existent folder: %s\n' "$dstFolder" >&2; return 1; }
 
     if (( latest )) && [[ -z "$release" ]]; then
