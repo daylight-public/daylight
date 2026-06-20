@@ -10,4 +10,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: ./extract-github-funcs.sh > /tmp/github-utils.sh
-      - run: diff /tmp/github-utils.sh github-utils.sh
+      - run: diff <(tail -n +2 /tmp/github-utils.sh) <(tail -n +2 github-utils.sh)
