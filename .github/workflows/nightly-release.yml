@@ -44,6 +44,7 @@ jobs:
         run: |
           tar -czf "${{ steps.tag.outputs.ASSET_BASE }}.tar.gz" daylight.sh
           zip "${{ steps.tag.outputs.ASSET_BASE }}.zip" daylight.sh
+          sha256sum "${{ steps.tag.outputs.ASSET_BASE }}.tar.gz" "${{ steps.tag.outputs.ASSET_BASE }}.zip" > SHA256SUMS
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -52,6 +53,7 @@ jobs:
           files: |
             ${{ steps.tag.outputs.ASSET_BASE }}.tar.gz
             ${{ steps.tag.outputs.ASSET_BASE }}.zip
+            SHA256SUMS
           body: "Daylight release — ${{ steps.tag.outputs.TAG }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
