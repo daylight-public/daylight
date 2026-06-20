@@ -28,4 +28,13 @@ When new functions are added to daylight.sh they should be added to the main cas
 
 ### pushing code changes
 
-All code changes will be done on new branches, with short names -- 2 or 3 words or terms separated by hyphens. Ask me to approve branch names. After committing and pushing a branch, create a PR for the change, where the body of the PR contains information similar or identical to the plan markdown. Create an issue and link it to the PR. Ask what the issue should be labelled - Bug, Task, or Feature. 
+All code changes will be done on new branches, with short names -- 2 or 3 words or terms separated by hyphens. Ask me to approve branch names. After committing and pushing a branch, create a PR for the change, where the body of the PR contains information similar or identical to the plan markdown. Create an issue and link it to the PR. Ask what the issue should be labelled - Bug, Task, or Feature.
+
+### AGENTS.md changes
+
+AGENTS.md is meta — it holds conventions and reminders. Changes to it don't need issues, labels, or approval. Use the `update-agents-md` branch:
+
+- Commit directly to `update-agents-md`
+- PR against `main` with no issue link
+- Self-merge at any time (rebase first if needed to resolve conflicts)
+- After merge, delete the branch and recreate from fresh `main` 
