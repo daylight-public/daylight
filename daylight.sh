@@ -2912,16 +2912,15 @@ github-release-get-data ()
 github-release-get-latest-tag ()
 {
     command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq" >&2; return 1; }
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-get-latest-version [flags] $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    
     # parse github args
     local -A argmap=()
     local nargs=0
     github-parse-args argmap nargs "$@" || return
     shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: github-release-get-latest-tag [flags] $org $repo\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
     
     releasesUrlPath=$(github-release-create-url-path "$org" "$repo")
     # build flags for github-curl
