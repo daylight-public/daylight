@@ -5976,7 +5976,7 @@ trigger-nightly-release ()
     local repo=$1
     local token=${GITHUB_PAT:?error: GITHUB_PAT not set}
     curl --fail --silent --show-error -X POST \
-        "https://api.github.com/repos/$repo/actions/workflows/nightly-release.yml/dispatches" \
+        "https://api.github.com/repos/$repo/actions/workflows/release-daylight.yml/dispatches" \
         -H "Authorization: Bearer $token" \
         -H "Accept: application/vnd.github.v3+json" \
         -d '{"ref": "main"}' || return
