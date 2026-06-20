@@ -17,7 +17,7 @@ jobs:
 
           # List all nightly releases (tagName only, up to 1000)
           gh release list --repo ${{ github.repository }} --limit 1000 \
-            --json tagName,assets \
+            --json tagName \
             --jq '.[] | select(.tagName | startswith("nightly-")) | .tagName' |
           while IFS= read -r tag; do
             echo "=== $tag ==="
