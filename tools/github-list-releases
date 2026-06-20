@@ -6,7 +6,7 @@ github-list-releases ()
 {
 	# shellcheck disable=SC2016
 	[[ -f "./daylight.sh" ]] || { echo "Non-existent path: ./daylight.sh" >&2; return 1; }
-	source ./daylight.sh || return
+	source ../daylight.sh || return
 	# parse github args
 	local -A argmap=()
 	local nargs=0
