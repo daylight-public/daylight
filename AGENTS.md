@@ -44,6 +44,12 @@ When new functions are added to daylight.sh they should be added to the main cas
 
 Audit internal functions (`github-curl`, `github-release-get-data`, `create-temp-folder`, etc.) that are not in the case statement but could benefit from being callable via `daylight.sh <func>`. Add them as needed.
 
+### tools/
+
+New helper scripts should be placed in `./tools/` by default. This keeps the
+repo root clean and makes the boundary between the main script (`daylight.sh`)
+and auxiliary tooling explicit.
+
 ### pushing code changes
 
 All code changes will be done on new branches, with short names -- 2 or 3 words or terms separated by hyphens. Ask me to approve branch names. After committing and pushing a branch, create a PR for the change, where the body of the PR contains information similar or identical to the plan markdown. Create an issue and link it to the PR. Ask what the issue should be labelled - Bug, Task, or Feature.
@@ -71,6 +77,7 @@ Rules:
 - Exactly one of branch mode or release mode must be active. 
 ### reminders
 
+- Audit github-utils.sh infrastructure (extract-github-funcs.sh, workflows, nightly-release-legacy, docs) — evaluate whether still needed given the move to GHA workflows
 - Add `--token` and `--gen-bash-completions` flags to download-daylight
 - Complete the gen-completion-script → gen-completion-script-batch rename
 - Explore externalizing label creation into a separate function
