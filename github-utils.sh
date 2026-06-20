@@ -1,4 +1,4 @@
-# github-utils.sh -- generated from daylight.sh on Thu Jun 18 19:43:25 UTC 2026. Do not edit directly.
+# github-utils.sh -- generated from daylight.sh on Sat Jun 20 03:30:04 PM UTC 2026. Do not edit directly.
 
 #-------------------------------------------------------------------------------
 #
@@ -259,12 +259,16 @@ github-curl ()
     local -a flags=(--fail-with-body --location --silent)
     flags+=(--header "Accept: $accept")
     flags+=(--output "$output")
-    [[ -v argmap[data] ]] && flags+=(--data "$(printf "'%s'" "${argmap[data]}")")
+    [[ -v argmap[data] ]] && flags+=(--data "${argmap[data]}")
     local tokenVal
     if [[ -v argmap[token] ]]; then
         tokenVal=${argmap[token]}
     elif [[ -n "${GITHUB_TOKEN-}" ]]; then
         tokenVal=$GITHUB_TOKEN
+    elif [[ -n "${GH_TOKEN-}" ]]; then
+        tokenVal=$GH_TOKEN
+    elif type gh &>/dev/null; then
+        tokenVal=$(gh auth token 2>/dev/null) || tokenVal=''
     fi
     [[ -n "$tokenVal" ]] && flags+=(--header "Authorization: Bearer $tokenVal")
     curl "${flags[@]}" "$url" \
