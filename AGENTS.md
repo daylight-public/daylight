@@ -30,6 +30,26 @@ When new functions are added to daylight.sh they should be added to the main cas
 
 All code changes will be done on new branches, with short names -- 2 or 3 words or terms separated by hyphens. Ask me to approve branch names. After committing and pushing a branch, create a PR for the change, where the body of the PR contains information similar or identical to the plan markdown. Create an issue and link it to the PR. Ask what the issue should be labelled - Bug, Task, or Feature.
 
+### download-daylight flags
+
+`download-daylight` uses a custom flag parser (not `github-parse-args`) for branch/release selection.
+
+| Flag | Value | Behavior |
+|---|---|---|
+| (none) | — | Branch mode, defaults to `main` |
+| `--branch` | (no value) | Branch mode, defaults to `main` |
+| `--branch <name>` | branch name | Branch mode, specific branch |
+| `--release` | (no value) | Release mode, latest release |
+| `--release <tag>` | tag name | Release mode, specific tag |
+| `--release --latest` | — | Same as `--release` with no value |
+| `--latest` alone | — | Error: requires `--release` |
+| `--branch` + `--release` | — | Error: incompatible |
+
+Rules:
+- Flags are parsed in order. The optional value after `--branch` or `--release` is consumed only if it doesn't start with `--`.
+- `--latest` must follow `--release` (either immediately or as a later flag).
+- The destination folder is the first positional argument after all flags.
+- Exactly one of branch mode or release mode must be active. 
 ### AGENTS.md changes
 
 AGENTS.md is meta — it holds conventions and reminders. Changes to it don't need issues, labels, or approval. Use the `update-agents-md` persistent branch:

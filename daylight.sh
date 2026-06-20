@@ -823,21 +823,158 @@ download-app ()
 
 #-------------------------------------------------------------------------------
 #
+# download-daylight-batch()
+#
+# Download daylight.sh from a GitHub branch or release
+#
+download-daylight-batch ()
+{
+    # shellcheck disable=SC2016
+    local branch="" release="" latest=0
+    local -a pass=()
+    local dstFolder=""
+
+    local args=("$@")
+    local i=0
+    while (( i < $# )); do
+        case "${args[i]}" in
+            --branch)
+                if [[ -n "$release" ]]; then
+                    printf 'Error: --branch and --release are incompatible\n' >&2
+                    return 1
+                fi
+                if (( i+1 < $# )) && [[ "${args[i+1]}" != --* ]]; then
+                    branch=${args[i+1]}
+                    (( i++ ))
+                else
+                    branch=main
+                fi
+                ;;
+            --release)
+                if [[ -n "$branch" ]]; then
+                    printf 'Error: --branch and --release are incompatible\n' >&2
+                    return 1
+                fi
+                if (( i+1 < $# )) && [[ "${args[i+1]}" != --* ]]; then
+                    release=${args[i+1]}
+                    (( i++ ))
+                else
+                    release=latest
+                fi
+                ;;
+            --latest)
+                latest=1
+                ;;
+            --token)
+                if (( i+1 < $# )); then
+                    pass+=("${args[i]}" "${args[i+1]}")
+                    (( i++ ))
+                else
+                    printf 'Error: --token requires a value\n' >&2
+                    return 1
+                fi
+                ;;
+            --)
+                (( i++ ))
+                break
+                ;;
+            --*)
+                printf 'Unknown flag: %s\n' "${args[i]}" >&2
+                return 1
+                ;;
+            *)
+                if [[ -z "$dstFolder" ]]; then
+                    dstFolder=${args[i]}
+                else
+                    printf 'Unexpected argument: %s\n' "${args[i]}" >&2
+                    return 1
+                fi
+                ;;
+        esac
+        (( i++ ))
+    done
+
+    while (( i < $# )); do
+        if [[ -z "$dstFolder" ]]; then
+            dstFolder=${args[i]}
+        else
+            pass+=("${args[i]}")
+        fi
+        (( i++ ))
+    done
+
+    [[ -n "$dstFolder" ]] || { printf 'Usage: download-daylight-batch [--branch [<name>]] [--release [<tag>]] [--latest] [--] <dstFolder>\n' >&2; return 1; }
+    [[ -d "$dstFolder" ]] || { printf 'Non-existent folder: %s\n' "$dstFolder" >&2; return 1; }
+
+    if (( latest )) && [[ -z "$release" ]]; then
+        printf 'Error: --latest requires --release\n' >&2
+        return 1
+    fi
+    if [[ -z "$branch" && -z "$release" ]]; then
+        branch=main
+    fi
+
+    local org=daylight-public
+    local repo=daylight
+
+    if [[ -n "$release" ]]; then
+        local tag json assetName tmpDir releasePath checksumFile
+        local checksumName=SHA256SUMS
+
+        if [[ "$release" == "latest" ]]; then
+            tag=$(github-release-get-latest-tag "${pass[@]}" "$org" "$repo") || return
+        else
+            tag=$release
+        fi
+
+        tmpDir=$(create-temp-folder) || return
+
+        json=$(github-release-get-data --version "$tag" "${pass[@]}" "$org" "$repo") || return
+        assetName=$(printf '%s' "$json" | jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .name' | head -1) || {
+            printf 'No tar.gz asset found in release %s\n' "$tag" >&2
+            rm -rf "$tmpDir"
+            return 1
+        }
+
+        releasePath=$(github-release-download --version "$tag" "${pass[@]}" "$org" "$repo" "$assetName" "$tmpDir") || {
+            rm -rf "$tmpDir"
+            return 1
+        }
+
+        checksumFile=$(github-release-download --version "$tag" "${pass[@]}" "$org" "$repo" "$checksumName" "$tmpDir") || {
+            printf 'SHA256SUMS not found in release %s — cannot verify integrity\n' "$tag" >&2
+            rm -rf "$tmpDir"
+            return 1
+        }
+
+        if ! (cd "$tmpDir" && grep -F "$assetName" "$checksumName" | sha256sum -c -); then
+            printf 'Checksum verification failed for %s\n' "$assetName" >&2
+            rm -rf "$tmpDir"
+            return 1
+        fi
+
+        tar -xzf "$releasePath" -C "$dstFolder" daylight.sh || {
+            rm -rf "$tmpDir"
+            return 1
+        }
+
+        rm -rf "$tmpDir"
+    else
+        local url="https://raw.githubusercontent.com/$org/$repo/$branch/daylight.sh"
+        curl --location --silent --fail --output-dir "$dstFolder" --remote-name "$url" || return
+    fi
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # download-daylight()
 #
-# Download daylight.sh from a GitHub branch
+# Download daylight.sh with optional interactive prompts
 #
 download-daylight ()
 {
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: download-daylight $branch $dstFolder\n' >&2; return 1; }
-    local branch=$1
-    local dstFolder=$2
-    [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
-    local org=daylight-public
-    local repo=daylight
-    url="https://raw.githubusercontent.com/$org/$repo/$branch/daylight.sh"
-    curl --location --silent --output-dir "$dstFolder" --remote-name "$url"
+    download-daylight-batch "$@" || return
 }
 
 
@@ -6375,6 +6512,7 @@ main ()
             delete-lxd-instance)                      delete-lxd-instance "$@";;
             download-app)                             download-app "$@";;
             download-daylight)                        download-daylight "$@";;
+            download-daylight-batch)                  download-daylight-batch "$@";;
             download-dist)                            download-dist "$@";;
             download-dylt)                            download-dylt "$@";;
             download-flask-app)                       download-flask-app "$@";;
