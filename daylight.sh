@@ -2337,7 +2337,7 @@ github-curl ()
     local -a flags=(--fail-with-body --location --silent)
     flags+=(--header "Accept: $accept")
     flags+=(--output "$output")
-    [[ -v argmap[data] ]] && flags+=(--data "$(printf "'%s'" "${argmap[data]}")")
+    [[ -v argmap[data] ]] && flags+=(--data "${argmap[data]}")
     local tokenVal
     if [[ -v argmap[token] ]]; then
         tokenVal=${argmap[token]}
@@ -5972,14 +5972,22 @@ sync-run-service ()
 #
 trigger-nightly-release ()
 {
-    (( $# == 1 )) || { printf 'Usage: trigger-nightly-release $owner/$repo\n' >&2; return 1; }
+    (( $# >= 1 && $# <= 2 )) || { printf 'Usage: trigger-nightly-release $owner/$repo [$label]\n' >&2; return 1; }
     local repo=$1
+    local label=$2
     local token=${GITHUB_PAT:?error: GITHUB_PAT not set}
-    curl --fail --silent --show-error -X POST \
-        "https://api.github.com/repos/$repo/actions/workflows/release-daylight.yml/dispatches" \
-        -H "Authorization: Bearer $token" \
-        -H "Accept: application/vnd.github.v3+json" \
-        -d '{"ref": "main"}' || return
+    local data
+
+    if [[ -n "$label" ]]; then
+        label=$(sanitize-label "$label") || return
+        data=$(printf '{"ref":"main","inputs":{"label":"%s"}}' "$label")
+    else
+        data='{"ref":"main"}'
+    fi
+
+    github-curl --data "$data" \
+        --token "$token" \
+        "/repos/$repo/actions/workflows/release-daylight.yml/dispatches" || return
 }
 
 
