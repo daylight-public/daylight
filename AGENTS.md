@@ -32,9 +32,8 @@ All code changes will be done on new branches, with short names -- 2 or 3 words 
 
 ### AGENTS.md changes
 
-AGENTS.md is meta — it holds conventions and reminders. Changes to it don't need issues, labels, or approval. Use the `update-agents-md` branch:
+AGENTS.md is meta — it holds conventions and reminders. Changes to it don't need issues, labels, or approval. Use the `update-agents-md` persistent branch:
 
-- Commit directly to `update-agents-md`
-- PR against `main` with no issue link
-- Self-merge at any time (rebase first if needed to resolve conflicts)
-- After merge, delete the branch and recreate from fresh `main` 
+- Check it out from `main`, push commits to it over time
+- Open a PR against `main` when there's a batch ready (no issue link needed)
+- Self-merge, then rebase `update-agents-md` onto fresh `main` 
