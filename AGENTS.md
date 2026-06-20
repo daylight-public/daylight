@@ -26,6 +26,10 @@ download-shr-tarball ()
 daylight.sh has a main case statement which dispactches command line arguments to their appropriate function. This lets daylight.sh be called in oneliners without requiring it be sourced and then used interactively.
 When new functions are added to daylight.sh they should be added to the main case and properly alphabetized.
 
+#### Reminder
+
+Audit internal functions (`github-curl`, `github-release-get-data`, `create-temp-folder`, etc.) that are not in the case statement but could benefit from being callable via `daylight.sh <func>`. Add them as needed.
+
 ### pushing code changes
 
 All code changes will be done on new branches, with short names -- 2 or 3 words or terms separated by hyphens. Ask me to approve branch names. After committing and pushing a branch, create a PR for the change, where the body of the PR contains information similar or identical to the plan markdown. Create an issue and link it to the PR. Ask what the issue should be labelled - Bug, Task, or Feature.
