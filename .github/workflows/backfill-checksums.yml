@@ -1,0 +1,51 @@
+name: Backfill SHA256SUMS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Backfill SHA256SUMS for all nightly releases
+        env:
+          GH_TOKEN: ${{ secrets.NIGHTLY_RELEASE_PAT }}
+        run: |
+          set -o pipefail
+          mkdir -p /tmp/backfill
+
+          # List all nightly releases (tagName only, up to 1000)
+          gh release list --repo ${{ github.repository }} --limit 1000 \
+            --json tagName,assets \
+            --jq '.[] | select(.tagName | startswith("nightly-")) | .tagName' |
+          while IFS= read -r tag; do
+            echo "=== $tag ==="
+
+            # Skip if SHA256SUMS already exists for this release
+            if gh release view "$tag" --repo ${{ github.repository }} \
+              --json assets --jq '.assets[].name' | grep -qx 'SHA256SUMS'; then
+              echo "  already has SHA256SUMS, skip"
+              continue
+            fi
+
+            # Download the .tar.gz asset for this release
+            gh release download "$tag" --repo ${{ github.repository }} \
+              --pattern '*.tar.gz' --dir /tmp/backfill || {
+              echo "  no tar.gz found, skip"
+              continue
+            }
+
+            # Checksum the archive and upload
+            cd /tmp/backfill || {
+              echo "  failed to cd to /tmp/backfill, skip"
+              continue
+            }
+            sha256sum -- *.tar.gz > SHA256SUMS
+            gh release upload "$tag" SHA256SUMS --repo ${{ github.repository }} \
+              --clobber
+
+            # Clean up for next iteration
+            rm -rf /tmp/backfill/*
+            echo "  uploaded"
+          done
