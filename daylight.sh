@@ -2343,6 +2343,10 @@ github-curl ()
         tokenVal=${argmap[token]}
     elif [[ -n "${GITHUB_TOKEN-}" ]]; then
         tokenVal=$GITHUB_TOKEN
+    elif [[ -n "${GH_TOKEN-}" ]]; then
+        tokenVal=$GH_TOKEN
+    elif type gh &>/dev/null; then
+        tokenVal=$(gh auth token 2>/dev/null) || tokenVal=''
     fi
     [[ -n "$tokenVal" ]] && flags+=(--header "Authorization: Bearer $tokenVal")
     curl "${flags[@]}" "$url" \
@@ -4158,7 +4162,7 @@ RUNEOF
     systemctl enable "nightly-release@$instance.timer"
     systemctl start "nightly-release@$instance.timer"
 
-    printf 'NOTE: Create %s/%s/env with GITHUB_PAT=... before timer fires\n' "$svcDir" "$instance"
+    printf 'NOTE: Create %s/%s/env with GITHUB_TOKEN=... before timer fires\n' "$svcDir" "$instance"
 }
 
 
@@ -5967,16 +5971,24 @@ sync-run-service ()
 #
 # trigger-nightly-release()
 #
-# Trigger a nightly-release GHA workflow for a given repo via workflow_dispatch.
-# Requires $GITHUB_PAT in the environment.
+# Trigger a GHA workflow for a given repo via workflow_dispatch.
+# Auth is resolved automatically by github-curl (GITHUB_TOKEN → GH_TOKEN → gh auth token).
 #
 trigger-nightly-release ()
 {
-    (( $# >= 1 && $# <= 2 )) || { printf 'Usage: trigger-nightly-release $owner/$repo [$label]\n' >&2; return 1; }
+    (( $# >= 1 && $# <= 3 )) || { printf 'Usage: trigger-nightly-release $owner/$repo [$workflow_name] [$label]\n' >&2; return 1; }
     local repo=$1
-    local label=$2
-    local token=${GITHUB_PAT:?error: GITHUB_PAT not set}
+    local workflow_name=${2:-nightly-release}
+    local label=${3:-''}
     local data
+    workflow_name=${workflow_name%.yml}
+    workflow_name=${workflow_name%.yaml}
+
+    if ! curl -sf -o /dev/null \
+        "https://api.github.com/repos/$repo/actions/workflows/${workflow_name}.yml"; then
+        printf 'error: workflow "%s" not found in %s\n' "$workflow_name" "$repo" >&2
+        return 1
+    fi
 
     if [[ -n "$label" ]]; then
         label=$(sanitize-label "$label") || return
@@ -5986,8 +5998,7 @@ trigger-nightly-release ()
     fi
 
     github-curl --data "$data" \
-        --token "$token" \
-        "/repos/$repo/actions/workflows/release-daylight.yml/dispatches" || return
+        "/repos/$repo/actions/workflows/${workflow_name}.yml/dispatches" || return
 }
 
 

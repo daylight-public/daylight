@@ -1,22 +1,57 @@
-name: Nightly release
+name: Release daylight.sh
 
 on:
   workflow_dispatch:
+    inputs:
+      label:
+        description: 'Optional human-readable label (e.g. fix-oauth-timeout)'
+        required: false
 
 jobs:
   release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Generate tag
+      - name: Generate tag and asset names
         id: tag
-        run: echo "DATE=$(date +'%Y-%m-%d')" >> "$GITHUB_OUTPUT"
-      - name: Generate github-utils.sh
-        run: ./extract-github-funcs.sh > github-utils.sh
+        run: |
+          DATE=$(date +'%Y-%m-%d')
+          TIMESTAMP=$(date +'%H%M%S')
+
+          LABEL="${{ inputs.label || '' }}"
+          LABEL="${LABEL// /-}"
+          LABEL="${LABEL//[^a-zA-Z0-9._-]/}"
+
+          if [ -n "$LABEL" ]; then
+            TAG="nightly-${DATE}-${LABEL}"
+            ASSET_BASE="daylight-${DATE}-${LABEL}"
+            if curl -sf -o /dev/null "https://api.github.com/repos/${{ github.repository }}/git/ref/tags/${TAG}"; then
+              TAG="nightly-${DATE}-${LABEL}-${TIMESTAMP}"
+              ASSET_BASE="daylight-${DATE}-${LABEL}-${TIMESTAMP}"
+            fi
+          else
+            TAG="nightly-${DATE}"
+            ASSET_BASE="daylight-${DATE}"
+            if curl -sf -o /dev/null "https://api.github.com/repos/${{ github.repository }}/git/ref/tags/${TAG}"; then
+              TAG="nightly-${DATE}-${TIMESTAMP}"
+              ASSET_BASE="daylight-${DATE}-${TIMESTAMP}"
+            fi
+          fi
+
+          echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
+          echo "ASSET_BASE=$ASSET_BASE" >> "$GITHUB_OUTPUT"
+      - name: Package daylight.sh
+        run: |
+          tar -czf "${{ steps.tag.outputs.ASSET_BASE }}.tar.gz" daylight.sh
+          zip "${{ steps.tag.outputs.ASSET_BASE }}.zip" daylight.sh
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.DATE }}
+          tag_name: ${{ steps.tag.outputs.TAG }}
           target_commitish: main
-          files: github-utils.sh
-          body: "Nightly release — ${{ steps.tag.outputs.DATE }}"
+          files: |
+            ${{ steps.tag.outputs.ASSET_BASE }}.tar.gz
+            ${{ steps.tag.outputs.ASSET_BASE }}.zip
+          body: "Daylight release — ${{ steps.tag.outputs.TAG }}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
