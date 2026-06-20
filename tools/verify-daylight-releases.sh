@@ -17,9 +17,10 @@ token_args=()
 _positional=()
 while (( $# > 0 )); do
     case $1 in
-        --token) shift; token_args=(--token "$1") ;;
-        -*)      printf 'Unknown flag: %s\n' "$1" >&2; exit 1 ;;
-        *)       _positional+=("$1") ;;
+        --token)        shift; token_args=(--token "$1") ;;
+        --help|-h)      printf 'Usage: verify-daylight-releases.sh [--token <pat>] [subcommand [args]]\n' >&2; exit 0;;
+        -*)             printf 'Unknown flag: %s\n' "$1" >&2; exit 1 ;;
+        *)              _positional+=("$1") ;;
     esac
     shift
 done
@@ -38,6 +39,28 @@ command -v jq &>/dev/null || { printf 'jq is required but was not found\n' >&2; 
 dl()
 {
     "$DAYLIGHT_SH" "$@"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# detect-org-repo()
+#
+# Detect org and repo from git remote, falling back to daylight-public/daylight
+#
+detect-org-repo()
+{
+    local remote_url
+    remote_url=$(git -C "$SCRIPT_DIR" config --get remote.origin.url 2>/dev/null) || {
+        printf 'daylight-public daylight\n'; return
+    }
+    local stripped
+    stripped=$(printf '%s' "$remote_url" | sed -n 's#.*[:/]\([^/]*/[^./]*\)\.git#\1#p')
+    if [[ -n "$stripped" ]]; then
+        printf '%s %s\n' "${stripped%/*}" "${stripped#*/}"
+    else
+        printf 'daylight-public daylight\n'
+    fi
 }
 
 
@@ -168,8 +191,12 @@ main ()
             list-nightly-tags)            list-nightly-tags "$@";;
             verify-all-releases)          verify-all-releases "$@";;
             verify-release)               verify-release "$@";;
-            *)                            verify-all-releases "$cmd" "$@";;
+            *)                            printf 'Unknown subcommand: %s\n' "$cmd" >&2; exit 1;;
         esac
+    else
+        read -r org repo < <(detect-org-repo)
+        printf 'Verifying releases for %s/%s\n' "$org" "$repo"
+        verify-all-releases "$org" "$repo"
     fi
 }
 
