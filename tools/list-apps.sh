@@ -9,7 +9,7 @@ set -u
 ###
 github-list-apps ()
 {
-    source './daylight.sh'
+    source '../daylight.sh'
 
     # shellcheck disable=SC2016
     (( $# == 1 )) || { printf 'Usage: list-apps.sh $org\n' >&2; return 1; }

@@ -241,7 +241,7 @@ set -ux
 
 main ()
 {
-    source "./daylight.sh" || return
+    source "../daylight.sh" || return
 	
     # parse github args
     local -A argmap=()
