@@ -21,6 +21,20 @@ download-shr-tarball ()
 `download-shr-tarball` is the function name.
 "Download" etc is a one or two line description. In rare cases a description will be longer because the function will warrant a longer description. Do not shorten or edit existing descriptions.
 
+Functions that appear in the `main()` case statement should NOT use the `@internal` tag in their comment block — it signifies the function is a helper that lives outside the dispatch table.
+
+```
+#-------------------------------------------------------------------------------
+#
+# dl()
+#
+# @internal
+# Shorthand description of the function goes here on the next line
+#
+```
+
+The `@internal` tag sits alone on its own line between the function name and the description. This makes it trivially grepable (`grep -B3 '^# @internal$'`) while keeping the description readable and adjacent.
+
 #### case statement
 
 daylight.sh has a main case statement which dispactches command line arguments to their appropriate function. This lets daylight.sh be called in oneliners without requiring it be sourced and then used interactively.
