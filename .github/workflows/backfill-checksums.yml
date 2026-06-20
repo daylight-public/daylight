@@ -10,7 +10,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Backfill SHA256SUMS for all nightly releases
         env:
-          GH_TOKEN: ${{ secrets.NIGHTLY_RELEASE_PAT }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -o pipefail
           mkdir -p /tmp/backfill
