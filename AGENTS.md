@@ -50,6 +50,11 @@ New helper scripts should be placed in `./tools/` by default. This keeps the
 repo root clean and makes the boundary between the main script (`daylight.sh`)
 and auxiliary tooling explicit.
 
+Test scripts live in `tools/` and follow the same conventions as other tools
+(comment blocks, case dispatch, `@internal` for helpers). They are manual
+verification tools, not CI. Tests cover shared infrastructure (`github-curl-parse-args`,
+`--token` flag handling, etc.) and can be referenced by dylt tests.
+
 ### pushing code changes (issue-driven workflow)
 
 1. Propose an issue title, a short branch name (without issue number), and an issue body (can include markdown)
