@@ -90,7 +90,7 @@ Rules:
 ### reminders
 
 - Audit github-utils.sh infrastructure (extract-github-funcs.sh, workflows, nightly-release-legacy, docs) — evaluate whether still needed given the move to GHA workflows
-- Add `--token` and `--gen-bash-completions` flags to download-daylight
+- Add `--gen-bash-completions` flag to download-daylight
 - Complete the gen-completion-script → gen-completion-script-batch rename
 - Explore externalizing label creation into a separate function
 - Create custom git function for setting URL
