@@ -19,9 +19,13 @@ run-tests()
         test-token-and-accept
         test-workflow-flag
         test-label-flag
+        test-remote-name-flag
+        test-output-dir-flag
+        test-remote-name-with-output-dir
         test-token-with-positional
         test-double-dash
         test-token-no-value
+        test-output-dir-no-value
         test-no-flags-just-positional
         test-workflow-and-label-with-positional
         test-accept-alone
@@ -161,6 +165,50 @@ test-label-flag()
 
 #-------------------------------------------------------------------------------
 #
+# test-remote-name-flag()
+#
+# Verify --remote-name sets argmap[remote-name]=1, consumes 1 arg
+#
+test-remote-name-flag()
+{
+    parse-check "--remote-name" 1 remote-name 1 --remote-name
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# test-output-dir-flag()
+#
+# Verify --output-dir <path> sets argmap[output-dir]
+#
+test-output-dir-flag()
+{
+    parse-check "--output-dir /tmp" 2 output-dir /tmp --output-dir /tmp
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# test-remote-name-with-output-dir()
+#
+# Verify --remote-name and --output-dir together with a positional
+#
+test-remote-name-with-output-dir()
+{
+    local -a args=(--remote-name --output-dir /tmp pos)
+    local -A arg_A=()
+    local nargs_A=0
+    github-curl-parse-args arg_A nargs_A "${args[@]}"
+    [[ ${arg_A[remote-name]} == "1" ]] || { printf '  FAIL: expected remote-name=1\n'; return 1; }
+    [[ ${arg_A[output-dir]} == "/tmp" ]] || { printf '  FAIL: expected output-dir=/tmp\n'; return 1; }
+    (( nargs_A == 3 )) || { printf '  FAIL: expected nargs=3, got %d\n' "$nargs_A"; return 1; }
+    [[ ${args[@]:nargs_A} == "pos" ]] || { printf '  FAIL: expected remaining: pos, got: %s\n' "${args[@]:nargs_A}"; return 1; }
+    printf '  PASS\n'
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # test-token-with-positional()
 #
 # Verify positional arg after flags is preserved
@@ -206,6 +254,18 @@ test-double-dash()
 test-token-no-value()
 {
     parse-fail-check "--token without value" --token
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# test-output-dir-no-value()
+#
+# Verify --output-dir without a value returns error
+#
+test-output-dir-no-value()
+{
+    parse-fail-check "--output-dir without value" --output-dir
 }
 
 
@@ -273,20 +333,22 @@ test-accept-alone()
 #
 test-all-flags()
 {
-    local -a args=(--token tok --accept app --output out --per-page 50 --platform linux --version v1 --label l --workflow w pos)
+    local -a args=(--token tok --accept app --output out --output-dir /tmp --per-page 50 --platform linux --version v1 --label l --workflow w --remote-name pos)
     local -A arg_A=()
     local nargs_A=0
     github-curl-parse-args arg_A nargs_A "${args[@]}"
-    (( nargs_A == 16 )) || { printf '  FAIL: expected nargs=16, got %d\n' "$nargs_A"; return 1; }
-    [[ ${arg_A[token]} == "tok" ]]    || { printf '  FAIL: expected token=tok\n'; return 1; }
-    [[ ${arg_A[accept]} == "app" ]]   || { printf '  FAIL: expected accept=app\n'; return 1; }
-    [[ ${arg_A[output]} == "out" ]]   || { printf '  FAIL: expected output=out\n'; return 1; }
-    [[ ${arg_A[per-page]} == "50" ]]  || { printf '  FAIL: expected per-page=50\n'; return 1; }
+    (( nargs_A == 19 )) || { printf '  FAIL: expected nargs=19, got %d\n' "$nargs_A"; return 1; }
+    [[ ${arg_A[token]} == "tok" ]]      || { printf '  FAIL: expected token=tok\n'; return 1; }
+    [[ ${arg_A[accept]} == "app" ]]     || { printf '  FAIL: expected accept=app\n'; return 1; }
+    [[ ${arg_A[output]} == "out" ]]     || { printf '  FAIL: expected output=out\n'; return 1; }
+    [[ ${arg_A[output-dir]} == "/tmp" ]] || { printf '  FAIL: expected output-dir=/tmp\n'; return 1; }
+    [[ ${arg_A[per-page]} == "50" ]]    || { printf '  FAIL: expected per-page=50\n'; return 1; }
     [[ ${arg_A[platform]} == "linux" ]] || { printf '  FAIL: expected platform=linux\n'; return 1; }
-    [[ ${arg_A[version]} == "v1" ]]   || { printf '  FAIL: expected version=v1\n'; return 1; }
-    [[ ${arg_A[label]} == "l" ]]      || { printf '  FAIL: expected label=l\n'; return 1; }
-    [[ ${arg_A[workflow]} == "w" ]]   || { printf '  FAIL: expected workflow=w\n'; return 1; }
-    [[ ${args[@]:nargs_A} == "pos" ]] || { printf '  FAIL: expected remaining: pos, got: %s\n' "${args[@]:nargs_A}"; return 1; }
+    [[ ${arg_A[version]} == "v1" ]]     || { printf '  FAIL: expected version=v1\n'; return 1; }
+    [[ ${arg_A[label]} == "l" ]]        || { printf '  FAIL: expected label=l\n'; return 1; }
+    [[ ${arg_A[workflow]} == "w" ]]     || { printf '  FAIL: expected workflow=w\n'; return 1; }
+    [[ ${arg_A[remote-name]} == "1" ]]  || { printf '  FAIL: expected remote-name=1\n'; return 1; }
+    [[ ${args[@]:nargs_A} == "pos" ]]   || { printf '  FAIL: expected remaining: pos, got: %s\n' "${args[@]:nargs_A}"; return 1; }
     printf '  PASS\n'
 }
 
@@ -308,9 +370,13 @@ main ()
             test-token-and-accept)                  test-token-and-accept;;
             test-workflow-flag)                     test-workflow-flag;;
             test-label-flag)                        test-label-flag;;
+            test-remote-name-flag)                  test-remote-name-flag;;
+            test-output-dir-flag)                   test-output-dir-flag;;
+            test-remote-name-with-output-dir)       test-remote-name-with-output-dir;;
             test-token-with-positional)             test-token-with-positional;;
             test-double-dash)                       test-double-dash;;
             test-token-no-value)                    test-token-no-value;;
+            test-output-dir-no-value)               test-output-dir-no-value;;
             test-no-flags-just-positional)          test-no-flags-just-positional;;
             test-workflow-and-label-with-positional) test-workflow-and-label-with-positional;;
             test-accept-alone)                      test-accept-alone;;
