@@ -127,6 +127,7 @@ Rules:
 - Create custom git function for setting URL
 - Use a GitHub App for auth instead of PATs
 - Sort out all the github functions starting with flags/args
+- Nightly release tag format is now consistent with dylt (date dashes, dedup logic). If dylt later enhances with semver support in tags, daylight should adopt the same `v<VERSION>-nightly-` prefix.
 
 ### AGENTS.md changes
 
