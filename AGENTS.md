@@ -55,6 +55,10 @@ Test scripts live in `tools/` and follow the same conventions as other tools
 verification tools, not CI. Tests cover shared infrastructure (`github-curl-parse-args`,
 `--token` flag handling, etc.) and can be referenced by dylt tests.
 
+Test scripts must be executable (`chmod +x`). Name them
+`tools/test-<branchname>.sh` where the branch name includes the issue number
+(e.g. `tools/test-91-trigger-func-changes.sh`).
+
 ### pushing code changes (issue-driven workflow)
 
 1. Propose an issue title, a short branch name (without issue number), and an issue body (can include markdown)
