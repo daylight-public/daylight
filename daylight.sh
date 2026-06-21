@@ -974,7 +974,50 @@ download-daylight-batch ()
 #
 download-daylight ()
 {
-    download-daylight-batch "$@" || return
+    local gen_completions=""
+    local completions_path=""
+    local -a pass_args=()
+    local args=("$@")
+
+    local i=0
+    while (( i < $# )); do
+        case "${args[i]}" in
+            --gen-bash-completions)
+                gen_completions=1
+                if (( i+1 < $# )) && [[ "${args[i+1]}" != --* ]]; then
+                    completions_path=${args[i+1]}
+                    (( i++ ))
+                fi
+                ;;
+            *)
+                pass_args+=("${args[i]}")
+                ;;
+        esac
+        (( i++ ))
+    done
+
+    download-daylight-batch "${pass_args[@]}" || return
+
+    if [[ -z "$gen_completions" ]] && [[ -t 0 ]]; then
+        printf 'Generate bash completions for daylight.sh? [y/N] '
+        local reply
+        read -r reply
+        [[ "$reply" =~ ^[yY] ]] || return 0
+    fi
+
+    # Find dstFolder from pass_args (last positional arg)
+    local dstFolder="${pass_args[${#pass_args[@]}-1]}"
+
+    [[ -n "$dstFolder" ]] || { printf 'error: could not determine destination folder\n' >&2; return 1; }
+
+    local scriptPath="$dstFolder/daylight.sh"
+    [[ -f "$scriptPath" ]] || { printf 'error: %s not found after download\n' "$scriptPath" >&2; return 1; }
+
+    local compPath="${completions_path:-$HOME/bash-completion.d/daylight.sh}"
+    mkdir -p "$(dirname "$compPath")" || return
+
+    bash "$scriptPath" gen-completion-script daylight.sh < <(bash "$scriptPath" list-bash-funcs < "$scriptPath") > "$compPath" || return
+    printf 'Bash completions written to %s\n' "$compPath" >&2
 }
 
 
@@ -1701,19 +1744,17 @@ etcd-setup-data-dir ()
 
 #-------------------------------------------------------------------------------
 #
-# gen-completion-script()
+# gen-completion-script-batch()
 #
-# Generate a bash completion script from a list of subcommands
+# Generate a bash completion script from a list of subcommands on stdin.
+# Outputs to stdout. No interactivity.
 #
-gen-completion-script () {
+gen-completion-script-batch () {
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: cmdName\n' >&2; return 1; }
-    # The incoming list of tokens must come from redirected stdin, so 
-    # this session must not be interactive
-    # Confirm user is not interactive
+    (( $# == 1 )) || { printf 'Usage: gen-completion-script-batch <cmdName>\n' >&2; return 1; }
     if [[ -t 0 ]]; then
-        printf '\nstdin is a terminal; please redirect input from stdin.\n\n';
-        return 0
+        printf 'error: stdin is a terminal; pipe subcommand list from a script or file.\n' >&2;
+        return 1
     fi
     local cmdName=$1
 	local functionName="_$cmdName"
@@ -1748,105 +1789,63 @@ gen-completion-script () {
 
 #-------------------------------------------------------------------------------
 #
-# gen-completion-script-2()
+# gen-completion-script()
 #
-# Generate a bash completion script with flexible CLI options
+# Generate a bash completion script for a given script. Three modes:
+#   0 args  — auto-detect script, install to ~/bash-completion.d, source it
+#   1-2 args — generate to stdout; if stdin is a terminal, the first arg is a
+#              script file path (file-path mode); otherwise it is a name and
+#              the function list comes from stdin (stdin-pipe mode).
+#   Optional second arg: function name (default derived from script name).
 #
-gen-completion-script-2 ()
+gen-completion-script ()
 {
-    # Coming up with a nice CLI experience for a bash-completion-generation
-    # script is trickier than one might think.  The trick is that a very 
-    # important part of any bash completion script is the call to `complete -F 
-    # $functionName $scriptPath at the end.` This `complete -F` call is what
-    # binds the completion function to the script or command.
-    #
-    # Proposed CLI UX
-
-    #
-    # That means that  
-    # This function is a filter. It can operate on a file, or on stdin.
-    # If the caller is piping data in via stdin, the first argument is the name of the script path. The script name will be derived from the path.
-    # If no stdin, the first argument is the name of the script. There is no path to derive a name from, so the name must be explicitly provided.
-    # The second argument is the name of the function. If no function name is provided it will be derived from the script name.
-    # If not provided, the function name will be derived from the name of the file
-    #
-    # The resulting completion script is written to stdout.
-    # To write the output to a file, use redirection.
-    # E.g. gen-completion-script ./daylight.sh >~/.bash_completions.d/daylight.sh
-
     # shellcheck disable=SC2016
     (( $# >= 0 && $# <= 2 )) || { printf 'Usage: gen-completion-script [$scriptPath [$functionName]]\n' >&2
-                                  printf '       gen-completion-script $scriptName [$functionName] < (...script content...)\n' >&2
+                                  printf '       gen-completion-script $scriptName [$functionName] < (...subcommands...)\n' >&2
                                   return 1; }
-    # Confirm user is not interactive
     if [[ -t 0 ]]; then
         printf '\nstdin is a terminal; please redirect input from stdin.\n\n';
         return 0
-    fi    
+    fi
 
     if (( $# == 0 )); then
-        scriptPath=${BASH_SOURCE[0]:-'/opt/bin/daylight.sh'}
-        compScriptFolder=$HOME/bash-completion.d
-		printf 'Creating %s (if necessasry) ...\n' "$compScriptFolder"
+        local scriptPath=${BASH_SOURCE[0]:-'/opt/bin/daylight.sh'}
+        local compScriptFolder=$HOME/bash-completion.d
+        printf 'Creating %s (if necessary) ...\n' "$compScriptFolder"
         mkdir -p "$compScriptFolder/" || return
-        compScriptPath="$compScriptFolder/daylight.sh"
-		printf 'Writing completion script for %s to %s ...\n' "$scriptPath" "$compScriptPath"
-        gen-completion-script "$scriptPath" >"$compScriptPath" || return
-		printf 'Sourcing %s ...\n' "$compScriptPath"
+        local compScriptPath="$compScriptFolder/daylight.sh"
+        printf 'Writing completion script for %s to %s ...\n' "$scriptPath" "$compScriptPath"
+        gen-completion-script-batch "$(basename "$scriptPath")" < <(list-bash-funcs <"$scriptPath") \
+            >"$compScriptPath" || return
+        printf 'Sourcing %s ...\n' "$compScriptPath"
         # shellcheck disable=SC1090
-		source "$compScriptPath" || return
-		printf 'Done - bash completions for %s have been updated.\n' "$compScriptPath"
-    # If stdin is a terminal, a $scriptPath arg is required. $scritpName is optional and will default to the basename of $scriptPath
-	else
-		if [[ -t 0 ]]; then
-			local scriptPath=$1
-			local scriptName; scriptName=$(basename "$scriptPath") || return
-		else
-			scriptName=$1
-		fi
-		if (( $# >= 2 )); then
-			functionName=$2
-		else
-			# The function name is the script name, prepended with _, and with . => -
-			functionName=_${scriptName//./-}
-		fi
-	    # beginning of script
-		cat <<- END
-		$functionName ()
-		{
-		    local curr=\$2
-		    local last=\$3
-
-		    local mainCmds=(\\
-		END
-
-		if [[ -t 0 ]]; then
-			while read -r func; do
-				printf  '        %s \\\n' "$func"
-			done < <(list-funcs)
-		else
-			while read -r func; do
-				printf  '        %s \\\n' "$func"
-			done < <(list-funcs <"$scriptPath")
-		fi
-
-		# end of script
-		cat <<- END
-		    )
-
-		    # Trim everything up to + including the first slash
-		    local lastCmd=\${last##*/}
-		    case "\$lastCmd" in
-		        daylight.sh)
-		            # Typical mapfile + comgen -W idiom
-		            mapfile -t COMPREPLY < <(compgen -W "\${mainCmds[*]}" -- "\$curr")
-		            ;;
-		    esac
-		}
-
-		complete -F $functionName $scriptName
-		END
-	fi
+        source "$compScriptPath" || return
+        printf 'Done - bash completions for %s have been updated.\n' "$compScriptPath"
+    elif [[ -t 0 ]]; then
+        # File-path mode — extract functions from file
+        local scriptPath=$1
+        local scriptName; scriptName=$(basename "$scriptPath") || return
+        local functionName
+        if (( $# >= 2 )); then
+            functionName=$2
+        else
+            functionName=_${scriptName//./-}
+        fi
+        gen-completion-script-batch "$scriptName" < <(list-bash-funcs <"$scriptPath") \
+            | sed "s/^$functionName ()/$functionName ()/" || return
+    else
+        # Stdin-pipe mode — subcommand list comes from stdin
+        local scriptName=$1
+        local functionName
+        if (( $# >= 2 )); then
+            functionName=$2
+        else
+            functionName=_${scriptName//./-}
+        fi
+        gen-completion-script-batch "$scriptName" \
+            | sed "s/^$functionName ()/$functionName ()/" || return
+    fi
 }
 
 
@@ -1868,11 +1867,7 @@ gen-daylight-completion-script () {
 
     local path="$folder/daylight.sh"
     local scriptPath='/opt/bin/daylight.sh'
-	local cmdName=daylight.sh
-	# gen list of bash funcs & write to temp file
-	local tmpListBashFuncs; tmpListBashFuncs=$(mktemp --tmpdir list-bash-funcs.XXXXXX) || return	
-	list-bash-funcs "$@" <"$scriptPath" >"$tmpListBashFuncs" || return
-	gen-completion-script "$cmdName" <"$tmpListBashFuncs" >"$path" || return
+    gen-completion-script "$(basename "$scriptPath")" < <(list-bash-funcs <"$scriptPath") >"$path" || return
 }
 
 
@@ -6589,6 +6584,7 @@ main ()
             etcd-install-latest)                      etcd-install-latest "$@";;
             etcd-setup-data-dir)                      etcd-setup-data-dir "$@";;
             gen-completion-script)                    gen-completion-script "$@";;
+            gen-completion-script-batch)              gen-completion-script-batch "$@";;
             gen-daylight-completion-script)           gen-daylight-completion-script "$@";;
             gen-nginx-flask)                          gen-nginx-flask "$@";;
             gen-nginx-static)                         gen-nginx-static "$@";;
