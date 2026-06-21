@@ -1,5 +1,15 @@
 #! /usr/bin/env bash
 
+# Manual functional test — download daylight.sh, generate completions via
+# the interactive prompt, source them, then verify Tab-completion works:
+#
+#   dst=/tmp/dl-test && mkdir -p "$dst"
+#   bash daylight.sh download-daylight "$dst"
+#   # When prompted: y
+#   source ~/.bash_completion.d/daylight.sh
+#   # In the same shell:  daylight.sh <Tab><Tab>
+#   # Expected: list of dispatchable subcommands completes
+
 SCRIPT_DIR=$(dirname "$(readlink -f "$BASH_SOURCE")")
 DAYLIGHT_SH="$SCRIPT_DIR/../daylight.sh"
 [[ -f "$DAYLIGHT_SH" ]] || { printf 'Cannot find daylight.sh\n' >&2; exit 1; }
