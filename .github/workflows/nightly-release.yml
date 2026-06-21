@@ -40,11 +40,13 @@ jobs:
 
           echo "TAG=$TAG" >> "$GITHUB_OUTPUT"
           echo "ASSET_BASE=$ASSET_BASE" >> "$GITHUB_OUTPUT"
+      - name: Generate github-utils.sh
+        run: ./extract-github-funcs.sh > github-utils.sh
       - name: Package daylight.sh
         run: |
-          tar -czf "${{ steps.tag.outputs.ASSET_BASE }}.tar.gz" daylight.sh
-          zip "${{ steps.tag.outputs.ASSET_BASE }}.zip" daylight.sh
-          sha256sum "${{ steps.tag.outputs.ASSET_BASE }}.tar.gz" "${{ steps.tag.outputs.ASSET_BASE }}.zip" > SHA256SUMS
+          tar -czf "${{ steps.tag.outputs.ASSET_BASE }}.tar.gz" daylight.sh github-utils.sh
+          zip "${{ steps.tag.outputs.ASSET_BASE }}.zip" daylight.sh github-utils.sh
+          sha256sum "${{ steps.tag.outputs.ASSET_BASE }}.tar.gz" "${{ steps.tag.outputs.ASSET_BASE }}.zip" github-utils.sh > SHA256SUMS
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -53,6 +55,7 @@ jobs:
           files: |
             ${{ steps.tag.outputs.ASSET_BASE }}.tar.gz
             ${{ steps.tag.outputs.ASSET_BASE }}.zip
+            github-utils.sh
             SHA256SUMS
           body: "Daylight release — ${{ steps.tag.outputs.TAG }}"
         env:
