@@ -59,6 +59,35 @@ Test scripts must be executable (`chmod +x`). Name them
 `tools/test-<branchname>.sh` where the branch name includes the issue number
 (e.g. `tools/test-91-trigger-func-changes.sh`).
 
+#### test scripts
+
+tools/test-*.sh are manual verification tools (not CI) created alongside
+code changes on the same branch. Follow this structure:
+
+```
+#! /usr/bin/env bash
+SCRIPT_DIR=$(dirname "$(readlink -f "$BASH_SOURCE")")
+source "$SCRIPT_DIR/test-utils.sh" || exit 1
+source "$SCRIPT_DIR/../daylight.sh" || exit 1
+```
+
+- `run-tests()`: declare a `tests` array listing every test function,
+  iterate calling each, track total/passed/failed, return `$failed`
+- Each test function returns 0 on pass, 1 on fail; prints `  PASS`
+  or `  FAIL (...)` with explicit assertions
+- `main()` with case dispatch for each test (allows
+  `bash test-foo.sh test-name`); `*)` prints "Unknown test" and exits 1
+- Guard: `if ! (return 0 2>/dev/null); then main "$@"; fi`
+
+Flag-parsing tests use `fail-check` with a non-existent destination folder
+to verify flag routing without network access. For functions that call
+external services, mock `curl` or the downstream function
+(e.g. `curl() { CURL_ARGS=("$@"); }`) to capture args without real HTTP.
+
+The helper functions `fail-check()` and `pass-check()` live in
+`tools/test-utils.sh` and are shared across all test scripts.
+Existing test files under `tools/` are reference implementations.
+
 ### pushing code changes (issue-driven workflow)
 
 1. Propose an issue title, a short branch name (without issue number), and an issue body (can include markdown)
