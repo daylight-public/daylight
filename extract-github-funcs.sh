@@ -65,7 +65,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         github-get-release-name-list \
         github-get-release-package-data \
         github-get-release-package-info \
-        github-parse-args \
+        github-curl-parse-args \
         github-release-create-url-path \
         github-release-download \
         github-release-download-latest \

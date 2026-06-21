@@ -11,7 +11,7 @@ github-app-get-client-id ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 1 )) || { printf 'Usage: github-app-get-id $appSlug\n' >&2; return 1; }
@@ -36,7 +36,7 @@ github-app-get-data ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 1 )) || { printf 'Usage: github-app-get-data $appSlug\n' >&2; return 1; }
@@ -58,7 +58,7 @@ github-app-get-id ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 1 )) || { printf 'Usage: github-app-get-id $appSlug\n' >&2; return 1; }
@@ -83,7 +83,7 @@ github-app-get-info ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: github-app-get-data $infovar $appSlug\n' >&2; return 1; }
@@ -176,7 +176,7 @@ github-create-user-access-token ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: github-create-user-access-token tokenvar $appslug\n' >&2; return 1; }
@@ -241,7 +241,7 @@ github-curl ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@"
+    github-curl-parse-args argmap nargs "$@"
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# >= 1 && $# <= 2 )) || { printf 'Usage: github-curl [flags] $urlPath [$urlBase]\n' >&2; return 1; }
@@ -287,7 +287,7 @@ github-curl-post ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@"
+    github-curl-parse-args argmap nargs "$@"
     shift "$nargs"
     # shellcheck disable=SC2016
     { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: github-curl-post $urlPath $postData [$urlBase]\n' >&2; return 1; }
@@ -364,7 +364,7 @@ github-download-latest-release ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@"
+    github-curl-parse-args argmap nargs "$@"
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 4 )) || { printf 'Usage: download-latest-release $org $repo $name $downloadFolder\n' >&2; return 1; }
@@ -400,7 +400,7 @@ github-get-release-data ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@"
+    github-curl-parse-args argmap nargs "$@"
     shift "$nargs"
     # shellcheck disable=SC2016
     { (( $# >= 2 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-data [flags] $org $repo [$releaseTag [$platform]]\n' >&2; return 1; }
@@ -500,14 +500,14 @@ github-get-release-package-info ()
 
 #-------------------------------------------------------------------------------
 #
-# github-parse-args()
+# github-curl-parse-args()
 #
 # Parse common GitHub API arguments into an associative array
 #
-github-parse-args ()
+github-curl-parse-args ()
 {
     # shellcheck disable=SC2016
-    (( $# >= 2 )) || { printf 'Usage: github-parse-args infovar nargs [$args]\n' >&2; return 1; }
+    (( $# >= 2 )) || { printf 'Usage: github-curl-parse-args infovar nargs [$args]\n' >&2; return 1; }
     # shellcheck disable=SC2178
     [[ $1 != argmap ]] && { local -n argmap; argmap=$1; }
     # Check that argmap is either an assoc array or a nameref to an assoc array
@@ -525,8 +525,10 @@ github-parse-args ()
             '--data'     |\
             '--output'   |\
             '--token'    |\
+            '--label'    |\
             '--platform' |\
-            '--version' \
+            '--version'  |\
+            '--workflow' \
             )
                 (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
                 argmap["${1##--}"]=$2
@@ -556,7 +558,7 @@ github-release-create-url-path ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# >= 2 )) || { printf 'Usage: github-release-create-url-path $org $repo\n' >&2; return 1; }
@@ -590,7 +592,7 @@ github-release-download ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 4 )) || { printf 'Usage: github-release-download $org $repo $releaseName $downloadFolder\n' >&2; return 1; }
@@ -625,7 +627,7 @@ github-release-download-latest ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 4 )) || { printf 'Usage: github-release-download-latest [$flags] $org $repo $name $downloadFolder\n' >&2; return 1; }
@@ -652,7 +654,7 @@ github-release-get-data ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@"
+    github-curl-parse-args argmap nargs "$@"
     shift "$nargs"
     # shellcheck disable=SC2016
     { (( $# >= 2 )) } || { printf 'Usage: github-release-get-data [flags] $org $repo\n' >&2; return 1; }
@@ -679,7 +681,7 @@ github-release-get-latest-tag ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: github-release-get-latest-tag [flags] $org $repo\n' >&2; return 1; }
@@ -712,7 +714,7 @@ github-release-get-package-data ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 3 )) || { printf 'Usage: github-release-get-package-data $org $repo $name\n' >&2; return 1; }
@@ -744,7 +746,7 @@ github-release-get-package-info ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 4 )) || { printf 'Usage: github-get-release-package-info infovar $org $repo $name\n' >&2; return 1; }
@@ -790,7 +792,7 @@ github-release-install ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-install-latest-release $org $repo $releaseName $installFolder [$downloadFolder]\n' >&2; return 1; }
@@ -826,7 +828,7 @@ github-release-install-latest ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-release-install-latest $org $repo $releaseName $installFolder [$downloadFolder]\n' >&2; return 1; }
@@ -854,7 +856,7 @@ github-release-list ()
 	# parse github args
 	local -A argmap=()
 	local nargs=0
-	github-parse-args argmap nargs "$@"
+	github-curl-parse-args argmap nargs "$@"
 	shift "$nargs"
 	# shellcheck disable=SC2016
 	(( $# == 2 )) || { printf 'Usage: github-release-list [flags] $org $repo\n' >&2; return 1; }
@@ -881,7 +883,7 @@ github-release-list-platforms ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
 	# shellcheck disable=SC2016
 	(( $# = 2 )) || { printf 'Usage: github-release-list [flags] $org $repo\n' >&2; return 1; }
@@ -911,7 +913,7 @@ github-release-select ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
 	# shellcheck disable=SC2016
 	(( $# == 3 )) || { printf 'Usage: github-release-select [flags] name $org $repo\n' >&2; return 1; }
@@ -936,7 +938,7 @@ github-release-select-platform ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
 	# shellcheck disable=SC2016
 	(( $# = 2 )) || { printf 'Usage: github-release-select-platforms [flags] $org $repo' >&2; return 1; }
@@ -963,7 +965,7 @@ github-test-repo ()
     # parse github args
     local -A argmap=()
     local nargs=0
-    github-parse-args argmap nargs "$@" || return
+    github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: github-test-repo $org $repo\n' >&2; return 1; }
