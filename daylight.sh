@@ -6115,6 +6115,52 @@ sync-run-service ()
 
 #-------------------------------------------------------------------------------
 #
+# trigger-nightly-release-batch()
+#
+# Trigger a GHA workflow for a given repo via workflow_dispatch.
+# Requires --workflow; accepts --token (falls back to GITHUB_TOKEN env var)
+# and --label. No interactivity, no token inference.
+#
+trigger-nightly-release-batch ()
+{
+    local -A argmap=()
+    local nargs=0
+    github-curl-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: trigger-nightly-release-batch --workflow <name> [--token <pat>] [--label <label>] $owner/$repo\n' >&2; return 1; }
+    local repo=$1
+
+    local workflow=${argmap[workflow]}
+    [[ -n "$workflow" ]] || { printf 'error: --workflow is required\n' >&2; return 1; }
+
+    local token=${argmap[token]:-${GITHUB_TOKEN:?error: --token not given and GITHUB_TOKEN not set}}
+
+    local wf_name=${workflow%.yml}
+    wf_name=${wf_name%.yaml}
+    if ! curl -sf -o /dev/null \
+        "https://api.github.com/repos/$repo/actions/workflows/${wf_name}.yml"; then
+        printf 'error: workflow "%s" not found in %s\n' "$workflow" "$repo" >&2
+        return 1
+    fi
+
+    local -a flags=(--token "$token")
+    local data
+    if [[ -n "${argmap[label]}" ]]; then
+        local label
+        label=$(sanitize-label "${argmap[label]}") || return
+        data=$(printf '{"ref":"main","inputs":{"label":"%s"}}' "$label")
+    else
+        data='{"ref":"main"}'
+    fi
+    flags+=(--data "$data")
+
+    github-curl "${flags[@]}" "/repos/$repo/actions/workflows/${wf_name}.yml/dispatches" || return
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # trigger-nightly-release()
 #
 # Trigger a GHA workflow for a given repo via workflow_dispatch.
@@ -6122,29 +6168,31 @@ sync-run-service ()
 #
 trigger-nightly-release ()
 {
-    (( $# >= 1 && $# <= 3 )) || { printf 'Usage: trigger-nightly-release $owner/$repo [$workflow_name] [$label]\n' >&2; return 1; }
+    local -A argmap=()
+    local nargs=0
+    github-curl-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: trigger-nightly-release [--workflow <name>] [--token <pat>] [--label <label>] $owner/$repo\n' >&2; return 1; }
     local repo=$1
-    local workflow_name=${2:-nightly-release}
-    local label=${3:-''}
-    local data
-    workflow_name=${workflow_name%.yml}
-    workflow_name=${workflow_name%.yaml}
 
-    if ! curl -sf -o /dev/null \
-        "https://api.github.com/repos/$repo/actions/workflows/${workflow_name}.yml"; then
-        printf 'error: workflow "%s" not found in %s\n' "$workflow_name" "$repo" >&2
-        return 1
+    local workflow=${argmap[workflow]:-nightly-release}
+    local label=${argmap[label]:-''}
+
+    local token
+    if [[ -v argmap[token] ]]; then
+        token=${argmap[token]}
+    elif [[ -n "${GITHUB_TOKEN-}" ]]; then
+        token=$GITHUB_TOKEN
+    elif [[ -n "${GH_TOKEN-}" ]]; then
+        token=$GH_TOKEN
+    elif type gh &>/dev/null; then
+        token=$(gh auth token 2>/dev/null) || token=''
     fi
 
-    if [[ -n "$label" ]]; then
-        label=$(sanitize-label "$label") || return
-        data=$(printf '{"ref":"main","inputs":{"label":"%s"}}' "$label")
-    else
-        data='{"ref":"main"}'
-    fi
-
-    github-curl --data "$data" \
-        "/repos/$repo/actions/workflows/${workflow_name}.yml/dispatches" || return
+    local -a batch_args=(--workflow "$workflow" --token "$token")
+    [[ -n "$label" ]] && batch_args+=(--label "$label")
+    trigger-nightly-release-batch "${batch_args[@]}" "$repo" || return
 }
 
 
@@ -6653,6 +6701,7 @@ main ()
             sync-remove-service)                      sync-remove-service "$@";;
             sync-run-service)                         sync-run-service "$@";;
             trigger-nightly-release)                  trigger-nightly-release "$@";;
+            trigger-nightly-release-batch)            trigger-nightly-release-batch "$@";;
             sys-start)                                sys-start "$@";;
             uninstall-etcd)                           uninstall-etcd "$@";;
             untar-to-temp-folder)                     untar-to-temp-folder "$@";;
