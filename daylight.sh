@@ -833,6 +833,7 @@ download-daylight-batch ()
     local branch="" release="" latest=0
     local -a pass=()
     local dstFolder=""
+    local extract_flag="" extract_dir="" extract_name=""
 
     local args=("$@")
     local i=0
@@ -874,6 +875,39 @@ download-daylight-batch ()
                     return 1
                 fi
                 ;;
+            --output-dir)
+                if (( i+1 < $# )); then
+                    pass+=("${args[i]}" "${args[i+1]}")
+                    (( i++ ))
+                else
+                    printf 'Error: --output-dir requires a value\n' >&2
+                    return 1
+                fi
+                ;;
+            --remote-name)
+                pass+=("${args[i]}")
+                ;;
+            --extract)
+                extract_flag=1
+                ;;
+            --extract-dir)
+                if (( i+1 < $# )); then
+                    extract_dir=${args[i+1]}
+                    (( i++ ))
+                else
+                    printf 'Error: --extract-dir requires a value\n' >&2
+                    return 1
+                fi
+                ;;
+            --extract-name)
+                if (( i+1 < $# )); then
+                    extract_name=${args[i+1]}
+                    (( i++ ))
+                else
+                    printf 'Error: --extract-name requires a value\n' >&2
+                    return 1
+                fi
+                ;;
             --)
                 (( i++ ))
                 break
@@ -903,7 +937,7 @@ download-daylight-batch ()
         (( i++ ))
     done
 
-    [[ -n "$dstFolder" ]] || { printf 'Usage: download-daylight-batch [--branch [<name>]] [--release [<tag>]] [--latest] [--token <pat>] [--] <dstFolder>\n' >&2; return 1; }
+    [[ -n "$dstFolder" ]] || { printf 'Usage: download-daylight-batch [--branch [<name>]] [--release [<tag>]] [--latest] [--token <pat>] [--output-dir <dir>] [--remote-name] [--extract] [--extract-dir <dir>] [--extract-name <name>] [--] <dstFolder>\n' >&2; return 1; }
     [[ -d "$dstFolder" ]] || { printf 'Non-existent folder: %s\n' "$dstFolder" >&2; return 1; }
 
     if (( latest )) && [[ -z "$release" ]]; then
@@ -913,6 +947,8 @@ download-daylight-batch ()
     if [[ -z "$branch" && -z "$release" ]]; then
         branch=main
     fi
+
+    [[ -z "$extract_dir" ]] && extract_dir=$dstFolder
 
     local org=daylight-public
     local repo=daylight
@@ -936,7 +972,7 @@ download-daylight-batch ()
             return 1
         }
 
-        releasePath=$(github-release-download --version "$tag" "${pass[@]}" "$org" "$repo" "$assetName" "$tmpDir") || {
+        releasePath=$(github-release-download --version "$tag" "${pass[@]}" --extract-dir "$extract_dir" --extract-name "${extract_name:-daylight.sh}" "$org" "$repo" "$assetName" "$tmpDir") || {
             rm -rf "$tmpDir"
             return 1
         }
@@ -953,15 +989,13 @@ download-daylight-batch ()
             return 1
         fi
 
-        tar -xzf "$releasePath" -C "$dstFolder" daylight.sh || {
-            rm -rf "$tmpDir"
-            return 1
-        }
-
+        # releasePath now points to the extracted file from github-release-download
         rm -rf "$tmpDir"
     else
         local url="https://raw.githubusercontent.com/$org/$repo/$branch/daylight.sh"
-        curl --location --silent --fail --output-dir "$dstFolder" --remote-name "$url" || return
+        local target="$extract_dir/${extract_name:-daylight.sh}"
+        mkdir -p "$extract_dir"
+        curl --location --silent --fail --output "$target" "$url" || return
     fi
 }
 
@@ -2475,7 +2509,12 @@ github-curl ()
     # Can't really parameterize on token -- we need separate curl calls for with token, and without
     local -a flags=(--fail-with-body --location --silent)
     flags+=(--header "Accept: $accept")
-    flags+=(--output "$output")
+    if [[ -v argmap[remote-name] ]] && ! [[ -v argmap[output] ]]; then
+        flags+=(--remote-name)
+    else
+        flags+=(--output "$output")
+    fi
+    [[ -v argmap[output-dir] ]] && flags+=(--output-dir "${argmap[output-dir]}")
     [[ -v argmap[data] ]] && flags+=(--data "${argmap[data]}")
     local tokenVal
     if [[ -v argmap[token] ]]; then
@@ -2746,20 +2785,26 @@ github-curl-parse-args ()
     shift 2
     while (( $# > 0 )); do
         case $1 in
-            '--accept'   |\
-            '--data'     |\
-            '--output'   |\
-            '--per-page' |\
-            '--token'    |\
-            '--label'    |\
-            '--platform' |\
-            '--version'  |\
-            '--workflow' \
+            '--accept'     |\
+            '--data'       |\
+            '--output'     |\
+            '--output-dir' |\
+            '--per-page'   |\
+            '--token'      |\
+            '--label'      |\
+            '--platform'   |\
+            '--version'    |\
+            '--workflow'   \
             )
                 (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
                 argmap["${1##--}"]=$2
                 ((nargs+=2))
                 shift 2
+                ;;
+            '--remote-name')
+                argmap[remote-name]=1
+                ((nargs++))
+                shift
                 ;;
             '--')
                 shift
@@ -2817,6 +2862,35 @@ github-release-create-url-path ()
 #
 github-release-download ()
 {
+    # Pre-parse extract flags (not handled by github-curl-parse-args)
+    local extract_flag=""
+    local extract_dir=""
+    local extract_name=""
+    local -a rest=()
+    while (( $# > 0 )); do
+        case $1 in
+            --extract)
+                extract_flag=1
+                shift
+                ;;
+            --extract-dir)
+                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
+                extract_dir=$2
+                shift 2
+                ;;
+            --extract-name)
+                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
+                extract_name=$2
+                shift 2
+                ;;
+            *)
+                rest+=("$1")
+                shift
+                ;;
+        esac
+    done
+    set -- "${rest[@]}"
+
     # parse github args
     local -A argmap=()
     local nargs=0
@@ -2828,6 +2902,7 @@ github-release-download ()
     local repo=$2
     local name=$3
     local downloadFolder=${4%%/}
+    [[ -z "$extract_dir" ]] && extract_dir=$downloadFolder
 
     # Get release info
     local -a flags=()
@@ -2841,7 +2916,40 @@ github-release-download ()
     local output="$downloadFolder/$filename"
     flags+=(--accept "$accept" --output "$output")
     github-curl "${flags[@]}" "$urlPath" || return
-    printf '%s' "$output"
+
+    if [[ -n "$extract_flag" || -n "$extract_dir" || -n "$extract_name" ]]; then
+        [[ -f "$output" ]] || { printf 'Archive not found: %s\n' "$output" >&2; return 1; }
+        local extractTmp; extractTmp=$(mktemp -d) || return
+        local extractedFile
+        case "$filename" in
+            *.tar.gz|*.tgz)
+                tar -xzf "$output" -C "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
+                ;;
+            *.zip)
+                unzip -o "$output" -d "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
+                ;;
+            *)
+                printf 'Cannot extract: unknown format %s\n' "$filename" >&2
+                rm -rf "$extractTmp"
+                return 1
+                ;;
+        esac
+        # Find the single extracted file/dir (first entry, stripping leading ./)
+        extractedFile=$(find "$extractTmp" -mindepth 1 -maxdepth 1 | head -1) || true
+        if [[ -n "$extractedFile" ]]; then
+            local targetPath="${extract_dir}/${extract_name:-$(basename "$extractedFile")}"
+            mkdir -p "$extract_dir"
+            mv "$extractedFile" "$targetPath" || { rm -rf "$extractTmp"; return 1; }
+            printf '%s' "$targetPath"
+        else
+            printf 'Nothing found inside archive\n' >&2
+            rm -rf "$extractTmp"
+            return 1
+        fi
+        rm -rf "$extractTmp"
+    else
+        printf '%s' "$output"
+    fi
 }
 
 

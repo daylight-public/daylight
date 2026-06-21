@@ -1,4 +1,4 @@
-# github-utils.sh -- generated from daylight.sh on Sat Jun 20 15:37:54 UTC 2026. Do not edit directly.
+# github-utils.sh -- generated from daylight.sh on Sun Jun 21 04:11:43 AM UTC 2026. Do not edit directly.
 
 #-------------------------------------------------------------------------------
 #
@@ -255,10 +255,22 @@ github-curl ()
     local output=${argmap[output]:-$outputDefault}
     # Set url and token, if present
     local url="$urlBase/$urlPath"
+    # Append per_page parameter if requested
+    if [[ -v argmap[per-page] ]]; then
+        local pageSize=${argmap[per-page]}
+        if [[ $url == *\?* ]]; then url+="&per_page=$pageSize"
+        else url+="?per_page=$pageSize"
+        fi
+    fi
     # Can't really parameterize on token -- we need separate curl calls for with token, and without
     local -a flags=(--fail-with-body --location --silent)
     flags+=(--header "Accept: $accept")
-    flags+=(--output "$output")
+    if [[ -v argmap[remote-name] ]] && ! [[ -v argmap[output] ]]; then
+        flags+=(--remote-name)
+    else
+        flags+=(--output "$output")
+    fi
+    [[ -v argmap[output-dir] ]] && flags+=(--output-dir "${argmap[output-dir]}")
     [[ -v argmap[data] ]] && flags+=(--data "${argmap[data]}")
     local tokenVal
     if [[ -v argmap[token] ]]; then
@@ -521,19 +533,26 @@ github-curl-parse-args ()
     shift 2
     while (( $# > 0 )); do
         case $1 in
-            '--accept'   |\
-            '--data'     |\
-            '--output'   |\
-            '--token'    |\
-            '--label'    |\
-            '--platform' |\
-            '--version'  |\
-            '--workflow' \
+            '--accept'     |\
+            '--data'       |\
+            '--output'     |\
+            '--output-dir' |\
+            '--per-page'   |\
+            '--token'      |\
+            '--label'      |\
+            '--platform'   |\
+            '--version'    |\
+            '--workflow'   \
             )
                 (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
                 argmap["${1##--}"]=$2
                 ((nargs+=2))
                 shift 2
+                ;;
+            '--remote-name')
+                argmap[remote-name]=1
+                ((nargs++))
+                shift
                 ;;
             '--')
                 shift
@@ -589,6 +608,35 @@ github-release-create-url-path ()
 #
 github-release-download ()
 {
+    # Pre-parse extract flags (not handled by github-curl-parse-args)
+    local extract_flag=""
+    local extract_dir=""
+    local extract_name=""
+    local -a rest=()
+    while (( $# > 0 )); do
+        case $1 in
+            --extract)
+                extract_flag=1
+                shift
+                ;;
+            --extract-dir)
+                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
+                extract_dir=$2
+                shift 2
+                ;;
+            --extract-name)
+                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
+                extract_name=$2
+                shift 2
+                ;;
+            *)
+                rest+=("$1")
+                shift
+                ;;
+        esac
+    done
+    set -- "${rest[@]}"
+
     # parse github args
     local -A argmap=()
     local nargs=0
@@ -600,6 +648,7 @@ github-release-download ()
     local repo=$2
     local name=$3
     local downloadFolder=${4%%/}
+    [[ -z "$extract_dir" ]] && extract_dir=$downloadFolder
 
     # Get release info
     local -a flags=()
@@ -613,7 +662,40 @@ github-release-download ()
     local output="$downloadFolder/$filename"
     flags+=(--accept "$accept" --output "$output")
     github-curl "${flags[@]}" "$urlPath" || return
-    printf '%s' "$output"
+
+    if [[ -n "$extract_flag" || -n "$extract_dir" || -n "$extract_name" ]]; then
+        [[ -f "$output" ]] || { printf 'Archive not found: %s\n' "$output" >&2; return 1; }
+        local extractTmp; extractTmp=$(mktemp -d) || return
+        local extractedFile
+        case "$filename" in
+            *.tar.gz|*.tgz)
+                tar -xzf "$output" -C "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
+                ;;
+            *.zip)
+                unzip -o "$output" -d "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
+                ;;
+            *)
+                printf 'Cannot extract: unknown format %s\n' "$filename" >&2
+                rm -rf "$extractTmp"
+                return 1
+                ;;
+        esac
+        # Find the single extracted file/dir (first entry, stripping leading ./)
+        extractedFile=$(find "$extractTmp" -mindepth 1 -maxdepth 1 | head -1) || true
+        if [[ -n "$extractedFile" ]]; then
+            local targetPath="${extract_dir}/${extract_name:-$(basename "$extractedFile")}"
+            mkdir -p "$extract_dir"
+            mv "$extractedFile" "$targetPath" || { rm -rf "$extractTmp"; return 1; }
+            printf '%s' "$targetPath"
+        else
+            printf 'Nothing found inside archive\n' >&2
+            rm -rf "$extractTmp"
+            return 1
+        fi
+        rm -rf "$extractTmp"
+    else
+        printf '%s' "$output"
+    fi
 }
 
 #-------------------------------------------------------------------------------
