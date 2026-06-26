@@ -69,6 +69,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         github-release-create-url-path \
         github-release-download \
         github-release-download-latest \
+        github-release-get-asset-name \
         github-release-get-data \
         github-release-get-latest-tag \
         github-release-get-package-data \

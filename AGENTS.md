@@ -129,6 +129,18 @@ Rules:
 - Sort out all the github functions starting with flags/args
 - Nightly release tag format is now consistent with dylt (date dashes, dedup logic). If dylt later enhances with semver support in tags, daylight should adopt the same `v<VERSION>-nightly-` prefix.
 
+### pre-push hook: auto-install to /opt/bin
+
+`.git/hooks/pre-push` copies `daylight.sh` to `/opt/bin/daylight.sh` on every
+`git push`. This tightens the dev loop — after pushing, source the installed copy
+and new functions are immediately available.
+
+- Runs on every push (pre-push hook)
+- Skips copy if checksums match (no-op)
+- Prints error to stderr on failure, but never blocks the push (exit 0)
+- Hook runs in a subprocess — cannot source into parent shell; prints reminder
+- If you add a new function or modify daylight.sh, push, then `source /opt/bin/daylight.sh`
+
 ### AGENTS.md changes
 
 AGENTS.md is meta — it holds conventions and reminders. Changes to it don't
