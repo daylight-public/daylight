@@ -19,6 +19,26 @@ RELEASE_JSON='{
   ]
 }'
 
+# Release JSON with SHA256SUMS checksum file
+RELEASE_JSON_WITH_SUMS='{
+  "assets": [
+    {"name": "tool-linux-amd64.tar.gz", "content_type": "application/gzip",
+     "url": "https://api.github.com/repos/org/repo/releases/assets/101"},
+    {"name": "SHA256SUMS", "content_type": "text/plain",
+     "url": "https://api.github.com/repos/org/repo/releases/assets/102"}
+  ]
+}'
+
+# Release JSON with .sha256 checksum file
+RELEASE_JSON_WITH_DOT_SHA256='{
+  "assets": [
+    {"name": "tool-linux-amd64.tar.gz", "content_type": "application/gzip",
+     "url": "https://api.github.com/repos/org/repo/releases/assets/103"},
+    {"name": "tool-linux-amd64.tar.gz.sha256", "content_type": "text/plain",
+     "url": "https://api.github.com/repos/org/repo/releases/assets/104"}
+  ]
+}'
+
 # Release with no .tar.gz (fallback to .zip)
 RELEASE_JSON_NO_TAR='{
   "assets": [
@@ -53,6 +73,12 @@ run-tests()
         test-download-output-dir-default-temp
         test-download-extract-single
         test-download-extract-multi
+        test-download-latest-extract-flags
+        test-verify-checksum-auto-detect
+        test-verify-checksum-dot-sha256
+        test-verify-checksum-no-checksum
+        test-verify-checksum-mismatch
+        test-verify-flag-forwarded
     )
     local total=0 passed=0 failed=0
     for t in "${tests[@]}"; do
@@ -500,6 +526,245 @@ test-download-extract-multi()
 }
 
 
+test-download-latest-extract-flags()
+{
+    github-release-get-latest-tag()
+    {
+        printf 'v1.0.0'
+    }
+
+    github-release-download()
+    {
+        printf '%s\n' "$@"
+        printf 'extracted-file-path'
+    }
+
+    local result
+    result=$(github-release-download-latest --extract --extract-dir /tmp/extracted --extract-name myapp --asset-name app.tar.gz dylt-dev bettywhitelist 2>&1) || {
+        printf '  FAIL: github-release-download-latest --extract failed\n'
+        return 1
+    }
+
+    local found_extract=0 found_dir=0 found_name=0
+    while IFS= read -r line; do
+        [[ "$line" == "--extract" ]] && found_extract=1
+        [[ "$line" == "--extract-dir" ]] && found_dir=1
+        [[ "$line" == "--extract-name" ]] && found_name=1
+    done <<< "$result"
+
+    (( found_extract == 1 )) || { printf '  FAIL: --extract not passed to github-release-download\n'; return 1; }
+    (( found_dir == 1 )) || { printf '  FAIL: --extract-dir not passed to github-release-download\n'; return 1; }
+    (( found_name == 1 )) || { printf '  FAIL: --extract-name not passed to github-release-download\n'; return 1; }
+    printf '  PASS\n'
+}
+
+
+test-verify-checksum-auto-detect()
+{
+    local tmpDir; tmpDir=$(mktemp -d) || return 1
+
+    # Create a fake asset in the download folder
+    local assetName="tool-linux-amd64.tar.gz"
+    echo "fake tarball content" > "$tmpDir/$assetName"
+
+    # Compute the expected checksum
+    local expectedHash
+    expectedHash=$(cd "$tmpDir" && sha256sum "$assetName" | awk '{print $1}')
+
+    github-release-get-data()
+    {
+        printf '%s' "$RELEASE_JSON_WITH_SUMS"
+    }
+
+    github-curl()
+    {
+        local output=""
+        local i; for ((i=1; i<=$#; i++)); do
+            if [[ "${!i}" == "--output" ]] && (( i+1 <= $# )); then
+                local j=$((i+1))
+                output="${!j}"
+            fi
+        done
+        if [[ -n "$output" ]]; then
+            mkdir -p "$(dirname "$output")"
+            printf '%s  %s\n' "$expectedHash" "$assetName" > "$output"
+        fi
+        return 0
+    }
+
+    local result
+    result=$(github-release-verify-checksum org repo "$assetName" "$tmpDir" 2>&1) || {
+        printf '  FAIL: verification failed:\n  %s\n' "$result"
+        rm -rf "$tmpDir"
+        return 1
+    }
+
+    [[ -f "$tmpDir/SHA256SUMS" ]] || {
+        printf '  FAIL: checksum file was not downloaded\n'
+        rm -rf "$tmpDir"
+        return 1
+    }
+
+    rm -rf "$tmpDir"
+    printf '  PASS\n'
+}
+
+
+test-verify-checksum-dot-sha256()
+{
+    local tmpDir; tmpDir=$(mktemp -d) || return 1
+
+    local assetName="tool-linux-amd64.tar.gz"
+    echo "fake content" > "$tmpDir/$assetName"
+
+    local expectedHash
+    expectedHash=$(cd "$tmpDir" && sha256sum "$assetName" | awk '{print $1}')
+
+    github-release-get-data()
+    {
+        printf '%s' "$RELEASE_JSON_WITH_DOT_SHA256"
+    }
+
+    local curlOutput=""
+    github-curl()
+    {
+        local output=""
+        local i; for ((i=1; i<=$#; i++)); do
+            if [[ "${!i}" == "--output" ]] && (( i+1 <= $# )); then
+                local j=$((i+1))
+                output="${!j}"
+            fi
+        done
+        if [[ -n "$output" ]]; then
+            mkdir -p "$(dirname "$output")"
+            printf '%s  %s\n' "$expectedHash" "$assetName" > "$output"
+        fi
+        return 0
+    }
+
+    local result
+    result=$(github-release-verify-checksum org repo "$assetName" "$tmpDir" 2>&1) || {
+        printf '  FAIL: verification failed:\n  %s\n' "$result"
+        rm -rf "$tmpDir"
+        return 1
+    }
+
+    [[ -f "$tmpDir/tool-linux-amd64.tar.gz.sha256" ]] || {
+        printf '  FAIL: checksum file was not downloaded\n'
+        rm -rf "$tmpDir"
+        return 1
+    }
+
+    rm -rf "$tmpDir"
+    printf '  PASS\n'
+}
+
+
+test-verify-checksum-no-checksum()
+{
+    local tmpDir; tmpDir=$(mktemp -d) || return 1
+
+    github-release-get-data()
+    {
+        printf '%s' "$RELEASE_JSON"
+    }
+
+    local result
+    result=$(github-release-verify-checksum org repo tool-linux-amd64.tar.gz "$tmpDir" 2>&1) || {
+        printf '  FAIL: should warn not fail when no checksum file\n  %s\n' "$result"
+        rm -rf "$tmpDir"
+        return 1
+    }
+
+    [[ "$result" == *"Warning"* ]] || {
+        printf '  FAIL: expected warning, got:\n  %s\n' "$result"
+        rm -rf "$tmpDir"
+        return 1
+    }
+
+    rm -rf "$tmpDir"
+    printf '  PASS\n'
+}
+
+
+test-verify-checksum-mismatch()
+{
+    local tmpDir; tmpDir=$(mktemp -d) || return 1
+
+    local assetName="tool-linux-amd64.tar.gz"
+    echo "fake content" > "$tmpDir/$assetName"
+
+    github-release-get-data()
+    {
+        printf '%s' "$RELEASE_JSON_WITH_SUMS"
+    }
+
+    github-curl()
+    {
+        local output=""
+        local i; for ((i=1; i<=$#; i++)); do
+            if [[ "${!i}" == "--output" ]] && (( i+1 <= $# )); then
+                local j=$((i+1))
+                output="${!j}"
+            fi
+        done
+        if [[ -n "$output" ]]; then
+            # Write a bad checksum that won't match
+            printf 'badhash  tool-linux-amd64.tar.gz\n' > "$output"
+        fi
+        return 0
+    }
+
+    local result
+    result=$(github-release-verify-checksum org repo "$assetName" "$tmpDir" 2>&1) && {
+        printf '  FAIL: should have failed on checksum mismatch\n'
+        rm -rf "$tmpDir"
+        return 1
+    }
+
+    [[ "$result" == *"failed"* ]] || {
+        printf '  FAIL: expected error message about failure, got:\n  %s\n' "$result"
+        rm -rf "$tmpDir"
+        return 1
+    }
+
+    rm -rf "$tmpDir"
+    printf '  PASS\n'
+}
+
+
+test-verify-flag-forwarded()
+{
+    github-release-get-latest-tag()
+    {
+        printf 'v1.0.0'
+    }
+
+    github-release-download()
+    {
+        printf '%s\n' "$@"
+        printf 'some-output-path'
+    }
+
+    local result
+    result=$(github-release-download-latest --verify org repo 2>&1) || {
+        printf '  FAIL: github-release-download-latest --verify failed\n'
+        return 1
+    }
+
+    local found_verify=0
+    while IFS= read -r line; do
+        [[ "$line" == "--verify" ]] && found_verify=1
+    done <<< "$result"
+
+    (( found_verify == 1 )) || {
+        printf '  FAIL: --verify not passed to github-release-download\n'
+        return 1
+    }
+    printf '  PASS\n'
+}
+
+
 main()
 {
     if (( $# >= 1 )); then
@@ -518,7 +783,13 @@ main()
             test-download-output-dir-default-temp)    test-download-output-dir-default-temp;;
             test-download-extract-single)             test-download-extract-single;;
             test-download-extract-multi)              test-download-extract-multi;;
-            *)                                        printf 'Unknown test: %s\n' "$cmd" >&2; exit 1;;
+            test-download-latest-extract-flags)       test-download-latest-extract-flags;;
+            test-verify-checksum-auto-detect)          test-verify-checksum-auto-detect;;
+            test-verify-checksum-dot-sha256)           test-verify-checksum-dot-sha256;;
+            test-verify-checksum-no-checksum)          test-verify-checksum-no-checksum;;
+            test-verify-checksum-mismatch)             test-verify-checksum-mismatch;;
+            test-verify-flag-forwarded)                test-verify-flag-forwarded;;
+            *)                                         printf 'Unknown test: %s\n' "$cmd" >&2; exit 1;;
         esac
     else
         run-tests

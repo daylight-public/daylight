@@ -608,11 +608,13 @@ github-release-create-url-path ()
 #
 github-release-download ()
 {
-    # Pre-parse extract and asset-name flags (not handled by github-curl-parse-args)
+    # Pre-parse extract, verify, and asset-name flags (not handled by github-curl-parse-args)
     local extract_flag=""
     local extract_dir=""
+    local extract_dir_set=""
     local extract_name=""
     local asset_name_flag=""
+    local verify_flag=""
     local -a rest=()
     while (( $# > 0 )); do
         case $1 in
@@ -623,6 +625,7 @@ github-release-download ()
             --extract-dir)
                 (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
                 extract_dir=$2
+                extract_dir_set=1
                 shift 2
                 ;;
             --extract-name)
@@ -634,6 +637,10 @@ github-release-download ()
                 (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
                 asset_name_flag=$2
                 shift 2
+                ;;
+            --verify)
+                verify_flag=1
+                shift
                 ;;
             *)
                 rest+=("$1")
@@ -668,7 +675,7 @@ github-release-download ()
     elif (( $# >= 4 )) && [[ -n "$4" ]]; then
         downloadFolder=${4%%/}
     else
-        downloadFolder=$(create-temp-folder) || return
+        downloadFolder=$(create-temp-folder "${repo}.release") || return
     fi
 
     # Auto-detect name if not provided
@@ -691,6 +698,10 @@ github-release-download ()
     local output="$downloadFolder/$filename"
     flags+=(--accept "$accept" --output "$output")
     github-curl "${flags[@]}" "$urlPath" || return
+
+    if [[ -n "$verify_flag" ]]; then
+        github-release-verify-checksum "${flags[@]}" "$org" "$repo" "$name" "$downloadFolder" || return
+    fi
 
     if [[ -n "$extract_flag" || -n "$extract_dir_set" || -n "$extract_name" ]]; then
         [[ -z "$extract_dir" ]] && extract_dir=$downloadFolder
@@ -741,15 +752,37 @@ github-release-download ()
 #
 github-release-download-latest ()
 {
-    # Pre-parse asset-name flag (not handled by github-curl-parse-args)
+    # Pre-parse extract, verify, and asset-name flags (not handled by github-curl-parse-args)
+    local extract_flag=""
+    local extract_dir=""
+    local extract_name=""
     local asset_name_flag=""
+    local verify_flag=""
     local -a rest=()
     while (( $# > 0 )); do
         case $1 in
+            --extract)
+                extract_flag=1
+                shift
+                ;;
+            --extract-dir)
+                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
+                extract_dir=$2
+                shift 2
+                ;;
+            --extract-name)
+                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
+                extract_name=$2
+                shift 2
+                ;;
             --asset-name)
                 (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
                 asset_name_flag=$2
                 shift 2
+                ;;
+            --verify)
+                verify_flag=1
+                shift
                 ;;
             *)
                 rest+=("$1")
@@ -787,9 +820,14 @@ github-release-download-latest ()
     github-create-flags argmap flags token || return
     local version; version=$(github-release-get-latest-tag "${flags[@]}" "$org" "$repo") || return
     flags+=(--version "$version")
-    [[ -n "$name" ]] && flags+=(--asset-name "$name")
-    [[ -n "$downloadFolder" ]] && flags+=(--output-dir "$downloadFolder")
-    github-release-download "${flags[@]}" "$org" "$repo" || return
+    local -a dl_flags=()
+    [[ -n "$name" ]] && dl_flags+=(--asset-name "$name")
+    [[ -n "$downloadFolder" ]] && dl_flags+=(--output-dir "$downloadFolder")
+    [[ -n "$extract_flag" ]] && dl_flags+=(--extract)
+    [[ -n "$extract_dir" ]] && dl_flags+=(--extract-dir "$extract_dir")
+    [[ -n "$extract_name" ]] && dl_flags+=(--extract-name "$extract_name")
+    [[ -n "$verify_flag" ]] && dl_flags+=(--verify)
+    github-release-download "${flags[@]}" "${dl_flags[@]}" "$org" "$repo" || return
 }
 
 #-------------------------------------------------------------------------------
@@ -1141,6 +1179,89 @@ github-release-select-platform ()
         break
     done
 }
+
+#-------------------------------------------------------------------------------
+#
+# github-release-verify-checksum()
+#
+# Verify a downloaded release asset against a checksum file from the same
+# release. Auto-detects the checksum file by trying these names in order:
+#   SHA256SUMS > SHA256SUMS.txt > $assetName.sha256 > checksums.txt
+#
+# The checksum file is downloaded alongside the asset and left in place
+# after verification (pass or fail).
+#
+github-release-verify-checksum ()
+{
+    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq" >&2; return 1; }
+    command -v "sha256sum" >/dev/null || { printf '%s is required, but was not found.\n' "sha256sum" >&2; return 1; }
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-curl-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: github-release-verify-checksum [flags] $org $repo $assetName $downloadFolder\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    local assetName=$3
+    local downloadFolder=$4
+
+    local -a flags
+    github-create-flags argmap flags token version || return
+
+    # Fetch release data
+    local releaseJson
+    releaseJson=$(github-release-get-data "${flags[@]}" "$org" "$repo") || return
+
+    # Candidate checksum names, in priority order
+    local -a candidates=("SHA256SUMS" "SHA256SUMS.txt" "${assetName}.sha256" "checksums.txt")
+
+    # Get list of available asset names
+    local available
+    available=$(printf '%s' "$releaseJson" | jq -r '.assets[].name') || return
+
+    # Find first candidate that exists in the release
+    local checksumName=""
+    local candidate
+    for candidate in "${candidates[@]}"; do
+        if printf '%s' "$available" | grep -qFx "$candidate"; then
+            checksumName=$candidate
+            break
+        fi
+    done
+
+    if [[ -z "$checksumName" ]]; then
+        printf 'Warning: no checksum file found in %s/%s release (tried: %s)\n' \
+            "$org" "$repo" "${candidates[*]}" >&2
+        return 0
+    fi
+
+    # Extract API URL for the checksum asset
+    local csApiUrl
+    csApiUrl=$(printf '%s' "$releaseJson" | jq -r --arg name "$checksumName" '
+        .assets[] | select(.name == $name) | .url' | head -1
+    ) || return
+    local csUrlPath="${csApiUrl#https://api.github.com/}"
+    local csFile="$downloadFolder/$checksumName"
+
+    # Download checksum file (reuse flags array: $2 must be "flags" literal)
+    flags=()
+    github-create-flags argmap flags token || return
+    flags+=(--accept "application/octet-stream" --output "$csFile")
+    github-curl "${flags[@]}" "$csUrlPath" || return
+
+    # Verify
+    if ! (cd "$downloadFolder" && grep -F "$assetName" "$checksumName" | sha256sum -c -); then
+        printf 'Checksum verification failed for %s (checksum file: %s)\n' \
+            "$assetName" "$checksumName" >&2
+        return 1
+    fi
+
+    printf 'Checksum verified for %s (%s)\n' "$assetName" "$checksumName" >&2
+    return 0
+}
+
 
 #-------------------------------------------------------------------------------
 #
