@@ -2860,6 +2860,21 @@ github-release-create-url-path ()
 #
 # Download a release asset from a GitHub repository
 #
+# Flags (function-native, not handled by github-curl-parse-args):
+#   --name <asset>       Asset name to download. If omitted, auto-detect
+#                        (first .tar.gz, then .zip, then first asset)
+#   --extract            Extract the downloaded archive
+#   --extract-dir <dir>  Extraction target directory (default: download folder)
+#   --extract-name <name>
+#                        Rename the extracted content
+#
+# Positional args:
+#   $org    GitHub organization or user
+#   $repo   Repository name
+#
+# github-curl-parse-args flags also accepted:
+#   --token, --version, --output, --output-dir, --remote-name
+#
 github-release-download ()
 {
     # Pre-parse extract flags (not handled by github-curl-parse-args)
@@ -2958,6 +2973,21 @@ github-release-download ()
 # github-release-download-latest()
 #
 # Download the latest release asset for a named package
+#
+# Flags (function-native, not handled by github-curl-parse-args):
+#   --name <asset>       Asset name to download. If omitted, auto-detect
+#                        (first .tar.gz, then .zip, then first asset)
+#   --extract            Extract the downloaded archive
+#   --extract-dir <dir>  Extraction target directory (default: download folder)
+#   --extract-name <name>
+#                        Rename the extracted content
+#
+# Positional args:
+#   $org    GitHub organization or user
+#   $repo   Repository name
+#
+# github-curl-parse-args flags also accepted:
+#   --token, --version, --output, --output-dir, --remote-name
 #
 github-release-download-latest ()
 {
