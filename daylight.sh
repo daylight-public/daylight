@@ -5027,15 +5027,14 @@ install-shr-token ()
     chown -R rayray:rayray "$shrHome"
     if [[ -f ./svc.sh ]] && ./svc.sh status >/dev/null; then
         ./svc.sh uninstall
-        su -c "./config.sh remove --token $shrToken" rayray
+        ./config.sh remove --token "$shrToken"
     fi
-    su -c "./config.sh --unattended \
-          --url $repoUrl \
-          --token $shrToken \
+    ./config.sh --unattended \
+          --url "$repoUrl" \
+          --token "$shrToken" \
           --replace \
           --name ubuntu-dev \
-          --labels $labels" \
-          rayray
+          --labels "$labels"
     # Install the SHR as a service
     ./svc.sh install
     ./svc.sh start
