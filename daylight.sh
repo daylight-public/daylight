@@ -1,6 +1,9 @@
 #! /usr/bin/env bash
- 
 
+# SHR_GRAY=$'\e[90m'
+# SHR_GREEN=$'\e[32m'
+# SHR_RESET=$'\e[0m'
+# SHR_CHECK=$'\u2713'
 #-------------------------------------------------------------------------------
 #
 # activate-flask-app()
@@ -3658,72 +3661,50 @@ github-release-verify-checksum ()
 
 #-------------------------------------------------------------------------------
 #
+# github-shr-create-folder
+#
+# Create parent folder for an shr installation
+github-shr-create-folder ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 && )) || { printf 'Usage: github-shr-create-folder $org $repoName $svcName $uatPath $labels [$version]\n' >&2; return 1; }
+    local org=$1 repoName=$2
+
+    folder=$(github-shr-folder-name "$org" "$repo")
+    mkdir -p "$folder" || return
+    prtinf '%s' "$folder"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# github-shr-folder-name
+#
+# Create parent folder for an shr installation
+github-shr-folder-name ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 && )) || { printf 'Usage: github-shr-folder-name $org $repoName $svcName $uatPath $labels [$version]\n' >&2; return 1; }
+    local org=$1 repoName=$2
+
+    folder="/opt/actions-runner/shr-$org-$repo"
+    printf '%s' "$folder"
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # github-shr-install()
 #
 # End-to-end runner install: device-code auth, tarball download, registration,
-# systemd service install + start, and optional test.
-# Must be run as root (try sudo).
+# systemd service install + start, and verification. Must be run as root.
 #
 github-shr-install ()
 {
-    # shellcheck disable=SC2016
-    (( $# >= 2 && $# <= 4 )) || { printf 'Usage: github-shr-install $org $repoName [$labels] [$version]\n' >&2; return 1; }
-    local org=$1 repoName=$2 labels=${3:-linux} version=${4:-}
-    local appSlug="shrboy"
-    local svcName="shr-$org-$repoName"
-    local shrHome="/opt/actions-runner"
-    local shrFolder="$shrHome/$svcName"
-
     [[ $EUID -eq 0 ]] || { printf 'github-shr-install: must be run as root (try sudo)\n' >&2; return 1; }
 
-    # Device-code flow to get a user access token
-    local clientId
-    clientId=$(github-app-get-client-id "$appSlug") || return
-
-    local deviceCode userCode verificationUri
-    local -a args=()
-    read -r -a args < <(github-curl --data '' \
-        "/login/device/code?client_id=$clientId" \
-        "https://github.com" | jq -r '[.device_code, .user_code, .verification_uri] | @tsv') || {
-        printf 'Device-code flow call failed\n' >&2; return 1; }
-    deviceCode=${args[0]}
-    userCode=${args[1]}
-    verificationUri=${args[2]}
-
-    printf '\nUser Code:     %s\n' "$userCode"
-    printf 'Verification:  %s\n' "$verificationUri"
-    printf 'Go there and enter the code, then press Enter to continue.\n'
-    read -r
-
-    local grantType='urn:ietf:params:oauth:grant-type:device_code'
-    local token
-    token=$(github-curl --data '' \
-        "/login/oauth/access_token?client_id=$clientId&device_code=$deviceCode&grant_type=$grantType" \
-        "https://github.com" | jq -r '.access_token') || {
-        printf 'Failed to exchange device code for access token\n' >&2; return 1; }
-
-    # Save UAT to runner folder
-    mkdir -p "$shrFolder"
-    printf '%s' "$token" > "$shrFolder/.uat"
-    chmod 600 "$shrFolder/.uat"
-
-    # Register the runner
-    github-shr-install-runner "$org" "$repoName" "$svcName" "$shrFolder/.uat" "$labels" ${version:+"$version"} || return
-
-    # Install and start the systemd service
-    cd "$shrFolder" || return
-    ./svc.sh install || return
-    chown -R "$SUDO_USER:$SUDO_USER" "$shrFolder" || return
-    ./svc.sh start || return
-
-    # Optional test
-    printf '\nRun test workflow? (Y/n): '
-    local response; read -r response
-    if [[ "$response" =~ ^[Yy]?$ ]]; then
-        github-shr-test "$org" "$repoName" "$svcName" "$shrFolder/.uat"
-    fi
-
-    printf '\ninfo: Runner %s is registered and running for %s/%s\n' "$svcName" "$org" "$repoName"
+    printf '%sStarting runner service and running verification...%s\n' "$SHR_GRAY" "$SHR_RESET"
+    github-shr-start "$org" "$repoName"
 }
 
 
@@ -3743,18 +3724,22 @@ github-shr-install-runner ()
     local org=$1 repoName=$2 svcName=$3 uatPath=$4 labels=$5 version=${6:-}
 
     local shrHome="/opt/actions-runner"
-    local shrFolder="$shrHome/$svcName"
+    local shrFolder="$(github-shr-create-folder)"
     mkdir -p "$shrFolder"
+    printf '%sDownloading runner tarball...%s\n' "$SHR_GRAY" "$SHR_RESET"
     download-shr-tarball "$shrFolder" "$version"
     cd "$shrFolder" || return
     chown -R rayray:rayray "$shrHome"
     local repoUrl="https://github.com/$org/$repoName"
     local shrToken
+    printf '%sExchanging credential for registration token...%s\n' "$SHR_GRAY" "$SHR_RESET"
     shrToken=$(github-get-shr-token "$org" "$repoName" "$uatPath") || return
     if [[ -f ./svc.sh ]] && ./svc.sh status >/dev/null; then
+        printf '%sRemoving previous runner registration...%s\n' "$SHR_GRAY" "$SHR_RESET"
         ./svc.sh uninstall
         ./config.sh remove --token "$shrToken"
     fi
+    printf '%sRegistering runner...%s\n' "$SHR_GRAY" "$SHR_RESET"
     ./config.sh --unattended \
           --url "$repoUrl" \
           --token "$shrToken" \
@@ -3768,10 +3753,55 @@ github-shr-install-runner ()
 
 #-------------------------------------------------------------------------------
 #
+# github-shr-setup()
+#
+# End-to-end runner install: device-code auth, tarball download, registration,
+# systemd service install + start, and verification. Must be run as root.
+#
+github-shr-setup ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 2 && $# <= 3 )) || { printf 'Usage: github-shr-install $org $repoName [$version]\n' >&2; return 1; }
+    local org=$1 repoName=$2 labels=${3:-linux} version=${4:-}
+    local appSlug="shrboy"
+    local labels="linux"
+    local svcName="shr-$org-$repoName"
+    local shrHome="/opt/actions-runner"
+    local shrFolder="$(github-shr-folder-name)"
+
+    local USER_ACCESS_TOKEN
+    github-create-uat USER_ACCESS_TOKEN "$shrboy"
+    github-shr-save-uat "$shrFolder" "$USER_ACCESS_TOKEN"
+
+    printf '%sDownloading and registering runner...%s\n' "$SHR_GRAY" "$SHR_RESET"
+    github-shr-install-runner "$org" "$repoName" "$svcName" "$shrFolder/.uat" "$labels" ${version:+"$version"} || return
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# github-shr-save-uat()
+#
+# Install and start a self-hosted runner's systemd service, then run a
+# verification workflow. Derives the runner folder from $org-$repoName.
+# Requires sudo.
+#
+github-shr-save-uat ()
+    (( $# == 2 )) || { printf 'Usage: github-shr-save-uat $shrFolder $uat'; return 1; }
+    local shrFolder=$1 uat=$2
+    printf '%sSaving credential...%s\n' "$SHR_GRAY" "$SHR_RESET"
+    mkdir -p "$shrFolder" || { printf 'Unable to create folder (%s)\n' "$shrFolder"
+    printf '%s' "$uat" > "$shrFolder/.uat"
+    chmod 600 "$shrFolder/.uat" || return
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # github-shr-start()
 #
-# Start a registered self-hosted runner's systemd service.
-# Derives the runner folder from $org-$repoName.
+# Install and start a self-hosted runner's systemd service, then run a
+# verification workflow. Derives the runner folder from $org-$repoName.
 # Requires sudo.
 #
 github-shr-start ()
@@ -3783,8 +3813,24 @@ github-shr-start ()
     local shrFolder="/opt/actions-runner/$svcName"
 
     [[ -d "$shrFolder" ]] || { printf 'github-shr-start: runner not found: %s/%s (%s)\n' "$org" "$repoName" "$shrFolder" >&2; return 1; }
+
     cd "$shrFolder" || return
-    sudo ./svc.sh start || return
+    # confirm ./svc.sh exists
+    [[ -f "$shrFolder/svc.sh" ]] || { printf './svc.sh does not exist'; return 1; }
+    printf '%sInstalling systemd service...%s\n' "$SHR_GRAY" "$SHR_RESET"
+    ./svc.sh install 2>/dev/null || true
+    [[ -f "$(pwd)/svc.sh" ]] || echo "$(pwd)/svc.sh not found"
+    # chown -R "$SUDO_USER:$SUDO_USER" "$shrFolder" || return
+    printf '%sStarting runner service...%s\n' "$SHR_GRAY" "$SHR_RESET"
+    [[ -f "$(pwd)/svc.sh" ]] || echo "$(pwd)/svc.sh not found"
+    ./svc.sh start || return
+
+    printf '%sRunning verification workflow...%s\n' "$SHR_GRAY" "$SHR_RESET"
+    if github-shr-test "$org" "$repoName" "$svcName" "$shrFolder/.uat"; then
+        printf '%s%s%s Runner is online and verified for %s/%s\n' "$SHR_GREEN" "$SHR_CHECK" "$SHR_RESET" "$org" "$repoName"
+    else
+        printf 'Warning: runner started but verification workflow failed\n' >&2
+    fi
 }
 
 
@@ -7315,9 +7361,10 @@ main ()
             github-release-download-latest)           github-release-download-latest "$@";;
             github-release-get-latest-tag)            github-release-get-latest-tag "$@";;
             github-release-select-platform)           github-release-select-platform "$@";;
-            github-shr-clean)                          github-shr-clean "$@";;
+            github-shr-clean)                         github-shr-clean "$@";;
             github-shr-install)                       github-shr-install "$@";;
-            github-shr-install-runner)                 github-shr-install-runner "$@";;
+            github-shr-install-runner)                github-shr-install-runner "$@";;
+	    github-shr-setup)                         github-shr-setup "$@";;
             github-shr-start)                         github-shr-start "$@";;
             github-shr-test)                          github-shr-test "$@";;
             github-test-repo)                         github-test-repo "$@";;
