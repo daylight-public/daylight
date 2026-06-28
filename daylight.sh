@@ -396,7 +396,7 @@ create-flask-app ()
 # create-github-user-access-token()
 #
 # @deprecated
-# Use github-create-user-access-token instead
+# Use github-create-uat instead
 #
 create-github-user-access-token ()
 {
@@ -1243,9 +1243,15 @@ detect-runner-platform ()
 #
 download-shr-tarball ()
 {
-    (( $# == 1 )) || { printf 'Usage: download-shr-tarball $targetFolder\n' >&2; return 1; }
+    (( $# >= 1 && $# <= 2 )) || { printf 'Usage: download-shr-tarball $targetFolder [$version]\n' >&2; return 1; }
     local downloadFolder=$1
-    local urlLatestRelease="https://api.github.com/repos/actions/runner/releases/latest"
+    local version=${2:-latest}
+    local urlLatestRelease
+    if [[ $version == latest ]]; then
+        urlLatestRelease="https://api.github.com/repos/actions/runner/releases/latest"
+    else
+        urlLatestRelease="https://api.github.com/repos/actions/runner/releases/tags/v${version#v}"
+    fi
     local platform
     platform=$(detect-runner-platform) || return
     local fileExt="tar.gz"
@@ -2410,11 +2416,11 @@ github-create-url ()
 
 #-------------------------------------------------------------------------------
 #
-# github-create-user-access-token()
+# github-create-uat()
 #
 # Create a GitHub user access token via API
 #
-github-create-user-access-token ()
+github-create-uat ()
 {
     # parse github args
     local -A argmap=()
@@ -2422,7 +2428,7 @@ github-create-user-access-token ()
     github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-create-user-access-token tokenvar $appslug\n' >&2; return 1; }
+    (( $# == 2 )) || { printf 'Usage: github-create-uat tokenvar $appslug\n' >&2; return 1; }
     # shellcheck disable=SC2178
     [[ $1 != tokenvar ]] && { local -n tokenvar; tokenvar=$1; }
     local appSlug=$2
@@ -2759,6 +2765,93 @@ github-get-release-package-info ()
     local filename=${browser_download_url##*/}
     info[browser_download_url]=$browser_download_url
     info[filename]=$filename
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# github-get-shr-token()
+#
+# @internal
+# Redeem a GitHub access token for a self-hosted runner registration token
+#
+github-get-shr-token ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: github-get-shr-token $org $repoName $uatPath\n' >&2; return 1; }
+    local org=$1 repoName=$2 uatPath=$3
+
+    [[ -f "$uatPath" ]] || { printf 'github-get-shr-token: UAT file not found: %s\n' "$uatPath" >&2; return 1; }
+    local token; token=$(< "$uatPath")
+    [[ -n "$token" ]] || { printf 'github-get-shr-token: UAT file is empty: %s\n' "$uatPath" >&2; return 1; }
+
+    local apiUrl="https://api.github.com/repos/$org/$repoName/actions/runners/registration-token"
+    local tmpCurl; tmpCurl=$(create-temp-file curl.get.shr.token.json) || return
+    curl --fail-with-body --location --silent --request POST \
+        --header "Authorization: Bearer $token" \
+        --header "Accept: application/json" \
+        --output "$tmpCurl" \
+        "$apiUrl" || {
+        local httpCode
+        httpCode=$(jq -r '.status // "unknown"' <"$tmpCurl")
+        local msg
+        msg=$(jq -r '.message // "unknown"' <"$tmpCurl")
+        printf 'github-get-shr-token: %s — %s\n' "$httpCode" "$msg" >&2
+        if [[ "$httpCode" == "403" ]]; then
+            printf 'The GitHub App may not be installed on %s/%s.\n' "$org" "$repoName" >&2
+            printf 'Run: github-is-gha-installed %s <app-slug>\n' "$org" >&2
+            printf 'Install at: https://github.com/apps/<app-slug>/installations/new\n' >&2
+        fi
+        return 1
+    }
+    local shrToken
+    shrToken=$(jq -r '.token' <"$tmpCurl")
+    if [[ -z "$shrToken" || "$shrToken" == "null" ]]; then
+        printf 'github-get-shr-token: response did not contain a token\n' >&2
+        jq . <"$tmpCurl" >&2
+        return 1
+    fi
+    printf '%s' "$shrToken"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# github-is-gha-installed()
+#
+# Check whether a GitHub App is installed on an org (or user account).
+# Prints Yes (exit 0) or No (exit 1).
+#
+github-is-gha-installed ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: github-is-gha-installed $org $appSlug $uatPath\n' >&2; return 1; }
+    local org=$1 appSlug=$2 uatPath=$3
+
+    [[ -f "$uatPath" ]] || { printf 'github-is-gha-installed: UAT file not found: %s\n' "$uatPath" >&2; return 1; }
+    local token; token=$(< "$uatPath")
+    [[ -n "$token" ]] || { printf 'github-is-gha-installed: UAT file is empty: %s\n' "$uatPath" >&2; return 1; }
+
+    local tmpCurl; tmpCurl=$(create-temp-file curl.is.gha.installed.json) || return
+
+    curl --fail-with-body --location --silent \
+        --header "Authorization: Bearer $token" \
+        --header "Accept: application/vnd.github+json" \
+        --output "$tmpCurl" \
+        "https://api.github.com/user/installations" || {
+        printf 'github-is-gha-installed: failed to list installations\n' >&2
+        return 1
+    }
+
+    local found
+    found=$(jq -r --arg slug "$appSlug" --arg org "$org" \
+        '.installations[] | select(.app_slug == $slug and ($org == "" or .account.login == $org)) | .id' <"$tmpCurl")
+
+    if [[ -z "$found" ]]; then
+        return 1
+    fi
+
+    return 0
 }
 
 
@@ -3565,6 +3658,261 @@ github-release-verify-checksum ()
 
 #-------------------------------------------------------------------------------
 #
+# github-shr-install()
+#
+# End-to-end runner install: device-code auth, tarball download, registration,
+# systemd service install + start, and optional test.
+# Must be run as root (try sudo).
+#
+github-shr-install ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 2 && $# <= 4 )) || { printf 'Usage: github-shr-install $org $repoName [$labels] [$version]\n' >&2; return 1; }
+    local org=$1 repoName=$2 labels=${3:-linux} version=${4:-}
+    local appSlug="shrboy"
+    local svcName="shr-$org-$repoName"
+    local shrHome="/opt/actions-runner"
+    local shrFolder="$shrHome/$svcName"
+
+    [[ $EUID -eq 0 ]] || { printf 'github-shr-install: must be run as root (try sudo)\n' >&2; return 1; }
+
+    # Device-code flow to get a user access token
+    local clientId
+    clientId=$(github-app-get-client-id "$appSlug") || return
+
+    local deviceCode userCode verificationUri
+    local -a args=()
+    read -r -a args < <(github-curl --data '' \
+        "/login/device/code?client_id=$clientId" \
+        "https://github.com" | jq -r '[.device_code, .user_code, .verification_uri] | @tsv') || {
+        printf 'Device-code flow call failed\n' >&2; return 1; }
+    deviceCode=${args[0]}
+    userCode=${args[1]}
+    verificationUri=${args[2]}
+
+    printf '\nUser Code:     %s\n' "$userCode"
+    printf 'Verification:  %s\n' "$verificationUri"
+    printf 'Go there and enter the code, then press Enter to continue.\n'
+    read -r
+
+    local grantType='urn:ietf:params:oauth:grant-type:device_code'
+    local token
+    token=$(github-curl --data '' \
+        "/login/oauth/access_token?client_id=$clientId&device_code=$deviceCode&grant_type=$grantType" \
+        "https://github.com" | jq -r '.access_token') || {
+        printf 'Failed to exchange device code for access token\n' >&2; return 1; }
+
+    # Save UAT to runner folder
+    mkdir -p "$shrFolder"
+    printf '%s' "$token" > "$shrFolder/.uat"
+    chmod 600 "$shrFolder/.uat"
+
+    # Register the runner
+    github-shr-install-runner "$org" "$repoName" "$svcName" "$shrFolder/.uat" "$labels" ${version:+"$version"} || return
+
+    # Install and start the systemd service
+    cd "$shrFolder" || return
+    ./svc.sh install || return
+    chown -R "$SUDO_USER:$SUDO_USER" "$shrFolder" || return
+    ./svc.sh start || return
+
+    # Optional test
+    printf '\nRun test workflow? (Y/n): '
+    local response; read -r response
+    if [[ "$response" =~ ^[Yy]?$ ]]; then
+        github-shr-test "$org" "$repoName" "$svcName" "$shrFolder/.uat"
+    fi
+
+    printf '\ninfo: Runner %s is registered and running for %s/%s\n' "$svcName" "$org" "$repoName"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# github-shr-install-runner()
+#
+# Register a self-hosted runner via a GitHub App UAT.
+# Downloads the runner, exchanges the UAT for a registration token,
+# and configures the runner. Does NOT start svc.
+# Prints the runner folder path on success.
+#
+github-shr-install-runner ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 5 && $# <= 6 )) || { printf 'Usage: github-shr-install-runner $org $repoName $svcName $uatPath $labels [$version]\n' >&2; return 1; }
+    local org=$1 repoName=$2 svcName=$3 uatPath=$4 labels=$5 version=${6:-}
+
+    local shrHome="/opt/actions-runner"
+    local shrFolder="$shrHome/$svcName"
+    mkdir -p "$shrFolder"
+    download-shr-tarball "$shrFolder" "$version"
+    cd "$shrFolder" || return
+    chown -R rayray:rayray "$shrHome"
+    local repoUrl="https://github.com/$org/$repoName"
+    local shrToken
+    shrToken=$(github-get-shr-token "$org" "$repoName" "$uatPath") || return
+    if [[ -f ./svc.sh ]] && ./svc.sh status >/dev/null; then
+        ./svc.sh uninstall
+        ./config.sh remove --token "$shrToken"
+    fi
+    ./config.sh --unattended \
+          --url "$repoUrl" \
+          --token "$shrToken" \
+          --replace \
+          --name ubuntu-dev \
+          --labels "$labels" \
+	  || return
+    printf '%s' "$shrFolder"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# github-shr-start()
+#
+# Start a registered self-hosted runner's systemd service.
+# Derives the runner folder from $org-$repoName.
+# Requires sudo.
+#
+github-shr-start ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: github-shr-start $org $repoName\n' >&2; return 1; }
+    local org=$1 repoName=$2
+    local svcName="shr-$org-$repoName"
+    local shrFolder="/opt/actions-runner/$svcName"
+
+    [[ -d "$shrFolder" ]] || { printf 'github-shr-start: runner not found: %s/%s (%s)\n' "$org" "$repoName" "$shrFolder" >&2; return 1; }
+    cd "$shrFolder" || return
+    sudo ./svc.sh start || return
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# github-shr-test()
+#
+# Test a self-hosted runner by creating/triggering a test workflow.
+# Uses the REST API with the UAT to create the workflow file, trigger it,
+# and tail the runner log.
+#
+github-shr-test ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 4 )) || { printf 'Usage: github-shr-test $org $repoName $svcName $uatPath\n' >&2; return 1; }
+    local org=$1 repoName=$2 svcName=$3 uatPath=$4
+
+    [[ -f "$uatPath" ]] || { printf 'github-shr-test: UAT file not found: %s\n' "$uatPath" >&2; return 1; }
+    local uat; uat=$(< "$uatPath")
+    [[ -n "$uat" ]] || { printf 'github-shr-test: UAT file is empty: %s\n' "$uatPath" >&2; return 1; }
+
+    local workflowPath=".github/workflows/test-shr.yml"
+    local workflowName="test-shr"
+
+    # Check if workflow exists via GitHub API
+    local exists
+    exists=$(curl --silent --request GET \
+        --header "Authorization: Bearer $uat" \
+        --header "Accept: application/vnd.github+json" \
+        "https://api.github.com/repos/$org/$repoName/contents/$workflowPath" \
+        --write-out '%{http_code}' --output /dev/null)
+
+    if [[ "$exists" != "200" ]]; then
+        printf 'Workflow %s does not exist in %s/%s.\n' "$workflowPath" "$org" "$repoName" >&2
+        printf 'Create it? (Y/n): ' >&2
+        local response; read -r response
+        if [[ "$response" =~ ^[Yy]?$ ]]; then
+            local workflowContent
+            workflowContent=$(printf 'name: test-shr\non: workflow_dispatch\njobs:\n  test:\n    runs-on: [self-hosted, linux]\n    steps:\n      - run: echo "Testing SHR: ${{ github.repository }}"\n')
+            local encoded
+            encoded=$(printf '%s' "$workflowContent" | base64 -w0)
+            local commitMsg="Add test-shr workflow for SHR verification"
+            local payload
+            payload=$(printf '{"message":"%s","content":"%s"}' "$commitMsg" "$encoded")
+
+            curl --silent --request PUT \
+                --header "Authorization: Bearer $uat" \
+                --header "Accept: application/vnd.github+json" \
+                --header "Content-Type: application/json" \
+                --data "$payload" \
+                "https://api.github.com/repos/$org/$repoName/contents/$workflowPath" >/dev/null || {
+                printf 'Failed to create workflow file.\n' >&2
+                return 1
+            }
+            printf 'Workflow created.\n' >&2
+        else
+            printf 'Skipping workflow creation.\n' >&2
+        fi
+    fi
+
+    # Trigger the workflow
+    printf 'Triggering workflow %s...\n' "$workflowName" >&2
+    curl --silent --request POST \
+        --header "Authorization: Bearer $uat" \
+        --header "Accept: application/vnd.github+json" \
+        --header "Content-Type: application/json" \
+        --data '{"ref":"main"}' \
+        "https://api.github.com/repos/$org/$repoName/actions/workflows/$workflowName/dispatches" || {
+        printf 'Failed to trigger workflow.\n' >&2
+        return 1
+    }
+    printf 'Workflow triggered. Watching runner logs...\n' >&2
+
+    # Tail the runner log
+    local logFile
+    logFile=$(ls -t /opt/actions-runner/"$svcName"/_diag/Worker_*.log 2>/dev/null | head -1)
+    if [[ -n "$logFile" ]]; then
+        tail -f "$logFile"
+    else
+        printf 'No runner log found at /opt/actions-runner/%s/_diag/Worker_*.log\n' "$svcName" >&2
+        printf 'Check https://github.com/%s/%s/actions for workflow status.\n' "$org" "$repoName" >&2
+    fi
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# github-shr-clean()
+#
+# Remove a self-hosted runner: stop/uninstall svc, deregister from GitHub,
+# delete runner directory. Derives svcName from $org-$repoName, reads UAT
+# from .uat in the runner folder. Must be run as root (try sudo).
+#
+github-shr-clean ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: github-shr-clean $org $repoName\n' >&2; return 1; }
+    local org=$1 repoName=$2
+    local svcName="shr-$org-$repoName"
+    local shrFolder="/opt/actions-runner/$svcName"
+
+    [[ $EUID -eq 0 ]] || { printf 'github-shr-clean: must be run as root (try sudo)\n' >&2; return 1; }
+
+    local uatPath="$shrFolder/.uat"
+    [[ -f "$uatPath" ]] || { printf 'UAT file not found: %s\n' "$uatPath" >&2; return 1; }
+
+    local reg_token
+    reg_token=$(github-get-shr-token "$org" "$repoName" "$uatPath") || return $?
+
+    if [[ -f "$shrFolder/.service" ]]; then
+        cd "$shrFolder" || return
+        ./svc.sh stop 2>/dev/null || true
+        ./svc.sh uninstall 2>/dev/null || true
+    fi
+
+    if [[ -f "$shrFolder/.runner" ]]; then
+        cd "$shrFolder" 2>/dev/null || true
+        ./config.sh remove --token "$reg_token" || \
+            printf 'Warning: config.sh remove failed — orphaned runner may need manual cleanup\n' >&2
+    fi
+
+    rm -rf "$shrFolder"
+    printf 'info: Cleaned up runner %s for %s/%s\n' "$svcName" "$org" "$repoName"
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # github-test-repo()
 #
 # Test if a GitHub repo exists
@@ -3616,6 +3964,29 @@ github-test-repo-with-auth ()
     local urlPath="/repos/$org/$repo"
     # We don't care about the info, just if we can successfully call the endpoint
     github-curl --output /dev/null --token "$token" "$urlPath" || return
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# github-validate-uat()
+#
+# Validate a user access token for a GitHub App.
+# Checks whether the token can see an installation for the app.
+# Prints a warning with remediation if not.
+#
+github-validate-uat ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 3 )) || { printf 'Usage: github-validate-uat $org $appSlug $uatPath\n' >&2; return 1; }
+    local org=$1 appSlug=$2 uatPath=$3
+
+    [[ -f "$uatPath" ]] || { printf 'github-validate-uat: UAT file not found: %s\n' "$uatPath" >&2; return 1; }
+
+    github-is-gha-installed "$org" "$appSlug" "$uatPath" && return 0
+    printf 'WARNING: %s is not installed on %s.\n' "$appSlug" "$org" >&2
+    printf 'Install it at: https://github.com/apps/%s/installations/new\n' "$appSlug" >&2
+    return 1
 }
 
 
@@ -4995,49 +5366,6 @@ install-shellscript-part-handlers ()
     srcFolder=$(untar-to-temp-folder /tmp/dist/conf.tgz)
     cp "$srcFolder"/scripts/shell_script_per_*.py /usr/bin
     # chown rayray:rayray /usr/bin/shell_script_per_*.py
-}
-
-
-#-------------------------------------------------------------------------------
-#
-# install-shr-token()
-#
-# @note bigpickle no sure
-# Register a self-hosted runner token with etcd
-#
-install-shr-token ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 5 )) || { printf 'Usage: install-shr-token $org $repoName $svcName $shr_access_token $labels\n' >&2; return 1; }
-    org=$1
-    repoName=$2
-    svcName=$3
-    shr_access_token=$4
-    labels=$5
-    # Create SHR folder + download GH SHR tarball
-    local shrHome="/opt/actions-runner"
-    local shrFolder="$shrHome/$svcName"
-    mkdir -p "$shrFolder"
-    download-shr-tarball "$shrFolder"
-    # Redeem SHR Access Token for SHR Registration Token and install the SHR
-    repoUrl="https://github.com/$org/$repoName"
-    apiUrl="https://api.github.com/repos/$org/$repoName/actions/runners/registration-token"
-    shrToken=$(http post "$apiUrl" "Authorization: token $shr_access_token" accept:application/json | jq -r '.token')
-    cd "$shrFolder" || return
-    chown -R rayray:rayray "$shrHome"
-    if [[ -f ./svc.sh ]] && ./svc.sh status >/dev/null; then
-        ./svc.sh uninstall
-        ./config.sh remove --token "$shrToken"
-    fi
-    ./config.sh --unattended \
-          --url "$repoUrl" \
-          --token "$shrToken" \
-          --replace \
-          --name ubuntu-dev \
-          --labels "$labels"
-    # Install the SHR as a service
-    ./svc.sh install
-    ./svc.sh start
 }
 
 
@@ -6972,21 +7300,29 @@ main ()
             get-service-working-directory)            get-service-working-directory "$@";;
             github-app-get-client-id)                 github-app-get-client-id "$@";;
             github-app-get-id)                        github-app-get-id "$@";;
-            github-create-user-access-token)          github-create-user-access-token "$@";;
+            github-create-uat)                        github-create-uat "$@";;
             github-curl)                              github-curl "$@";;
             github-detect-platform)                   github-detect-platform "$@";;
             github-download-latest-release)           github-download-latest-release "$@";;
             github-get-release-name-list)             github-get-release-name-list "$@";;
+            github-get-shr-token)                     github-get-shr-token "$@";;
+            github-is-gha-installed)                  github-is-gha-installed "$@";;
             github-release-install)                   github-release-install "$@";;
-            github-curl-parse-args)                        github-curl-parse-args "$@";;
+            github-curl-parse-args)                   github-curl-parse-args "$@";;
             github-release-download)                  github-release-download "$@";;
             github-release-get-asset-name)            github-release-get-asset-name "$@";;
             github-release-get-data)                  github-release-get-data "$@";;
             github-release-download-latest)           github-release-download-latest "$@";;
             github-release-get-latest-tag)            github-release-get-latest-tag "$@";;
             github-release-select-platform)           github-release-select-platform "$@";;
+            github-shr-clean)                          github-shr-clean "$@";;
+            github-shr-install)                       github-shr-install "$@";;
+            github-shr-install-runner)                 github-shr-install-runner "$@";;
+            github-shr-start)                         github-shr-start "$@";;
+            github-shr-test)                          github-shr-test "$@";;
             github-test-repo)                         github-test-repo "$@";;
             github-test-repo-with-auth)               github-test-repo-with-auth "$@";;
+            github-validate-uat)                      github-validate-uat "$@";;
             go-service-gen-nginx-domain-file)         go-service-gen-nginx-domain-file "$@";;
             go-service-install)                       go-service-install "$@";;
             go-service-uninstall)                     go-service-uninstall "$@";;
@@ -7025,7 +7361,6 @@ main ()
             install-service-from-command)             install-service-from-command "$@";;
             install-service-from-script)              install-service-from-script "$@";;
             install-shellscript-part-handlers)        install-shellscript-part-handlers "$@";;
-            install-shr-token)                        install-shr-token "$@";;
             install-svc)                              install-svc "$@";;
             install-venv)                             install-venv "$@";;
             install-vm)                               install-vm "$@";;
