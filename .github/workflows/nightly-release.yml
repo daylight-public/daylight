@@ -44,8 +44,8 @@ jobs:
         run: ./extract-github-funcs.sh > github-utils.sh
       - name: Package daylight.sh
         run: |
-          tar -czf "${{ steps.tag.outputs.ASSET_BASE }}.tar.gz" daylight.sh github-utils.sh
-          zip "${{ steps.tag.outputs.ASSET_BASE }}.zip" daylight.sh github-utils.sh
+          tar -czf "${{ steps.tag.outputs.ASSET_BASE }}.tar.gz" daylight.sh github-utils.sh svc/
+          zip -r "${{ steps.tag.outputs.ASSET_BASE }}.zip" daylight.sh github-utils.sh svc/
           sha256sum "${{ steps.tag.outputs.ASSET_BASE }}.tar.gz" "${{ steps.tag.outputs.ASSET_BASE }}.zip" github-utils.sh > SHA256SUMS
       - name: Create release
         uses: softprops/action-gh-release@v2
