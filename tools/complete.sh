@@ -81,6 +81,11 @@ _daylight-sh ()
 		github-get-release-package-info \
 		github-get-releases-url-path \
 		github-install-latest-release \
+		github-shr-clean \
+		github-shr-install \
+		github-shr-install-runner \
+		github-shr-start \
+		github-shr-test \
 		github-test-repo \
 		github-test-repo-with-auth \
 		go-service-gen-nginx-domain-file \
@@ -114,7 +119,6 @@ _daylight-sh ()
 		install-service-from-command \
 		install-service-from-script \
 		install-shellscript-part-handlers \
-		install-shr-token \
 		install-svc \
 		install-venv \
 		install-vm \
