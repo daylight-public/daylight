@@ -27,7 +27,7 @@ test-gen-default-index()
 test-install-index()
 {
     local tmpFile; tmpFile=$(mktemp /tmp/daylight-test-index-XXXXXX.html)
-    NGINX_INDEX="$tmpFile" nginx-install-index || {
+    nginx-install-index "$tmpFile" || {
         printf '  FAIL (install-index): function returned non-zero\n'
         rm -f "$tmpFile"
         return 1
@@ -53,7 +53,7 @@ test-init-syntax-failure()
     local badConf; badConf=$(mktemp /tmp/daylight-bad-nginx-conf-XXXXXX)
     printf 'events {} http { server { listen 80; this is not valid nginx config;\n' > "$badConf"
 
-    NGINX_CONF="$badConf" nginx-init >/dev/null 2>&1 && {
+    nginx-init --conf "$badConf" >/dev/null 2>&1 && {
         printf '  FAIL (init-syntax-failure): expected failure but succeeded\n'
         rm -f "$badConf"
         return 1
@@ -112,7 +112,7 @@ NGINX_CONF
     fi
 
     # Run nginx-init against the test server
-    NGINX_CONF="$conf" NGINX_INDEX="$docroot/index.html" NGINX_URL="http://localhost:$port/" nginx-init >/dev/null 2>&1
+    nginx-init --conf "$conf" --index "$docroot/index.html" --url "http://localhost:$port/" >/dev/null 2>&1
     local rc=$?
 
     # Curl the page and check for the emoji

@@ -6057,22 +6057,34 @@ list-vms ()
 #
 nginx-init ()
 {
+    local conf= index= url=
+
+    while (( $# )); do
+        case $1 in
+            --conf)  conf=$2; shift ;;
+            --index) index=$2; shift ;;
+            --url)   url=$2; shift ;;
+            *)       printf 'Unknown flag: %s\n' "$1" >&2; return 1 ;;
+        esac
+        shift
+    done
+
     # nginx -t exits non-zero when /run/nginx.pid is not writable (common
     # without sudo), even when the config is valid. Grepping for "syntax is
     # ok" catches real syntax errors while ignoring that runtime permission
     # issue.
-    if [[ -n "${NGINX_CONF:-}" ]]; then
-        nginx -t -c "$NGINX_CONF" 2>&1 | grep -q 'syntax is ok' || return
+    if [[ -n "$conf" ]]; then
+        nginx -t -c "$conf" 2>&1 | grep -q 'syntax is ok' || return
     else
         nginx -t 2>&1 | grep -q 'syntax is ok' || return
     fi
 
     # Generate and install the default index page with the sun emoji.
-    nginx-install-index || return
+    nginx-install-index "$index" || return
 
     # Verify the page is being served by curling localhost.
-    local url=${NGINX_URL:-http://localhost/}
-    curl -sf "$url" | grep -q '🌞' || {
+    local target=${url:-http://localhost/}
+    curl -sf "$target" | grep -q '🌞' || {
         printf 'Sun emoji not found on default page\n' >&2
         return 1
     }
@@ -6106,7 +6118,7 @@ nginx-gen-default-index ()
 #
 nginx-install-index ()
 {
-    local index=${NGINX_INDEX:-/var/www/html/index.nginx-debian.html}
+    local index=${1:-/var/www/html/index.nginx-debian.html}
     local indexDir; indexDir=$(dirname "$index")
     [[ -d "$indexDir" ]] || mkdir -p "$indexDir" || return
     nginx-gen-default-index > "$index" || return
