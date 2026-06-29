@@ -65,7 +65,7 @@ test-gen-run-script()
 test-install-to()
 {
     local tmpDir
-    tmpDir=$(mktemp -d) || {
+    tmpDir=$(mktemp -d /tmp/daylight-107-XXXXXX) || {
         printf '  FAIL (install-to): failed to create temp dir\n'
         return 1
     }
