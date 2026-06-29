@@ -7401,10 +7401,15 @@ zabbly-validate-fingerprint ()
 }
 
 
-# If this script is being sourced in a terminal, and it does not exist on
-# the host in /opt/bin, then download this script to /opt/bin and install the
-# `fresh-daylight` service which will pull the latest script every hour.
-if [[ ! -f /opt/bin/daylight.sh  &&  -t 0 ]]; then
+#-------------------------------------------------------------------------------
+#
+# hello()
+#
+# Print a greeting and begin setting things up for the host in /opt/bin.
+# TODO: fix internals — mkdir, release download, etc (dedicated issue)
+#
+hello ()
+{
     printf '%s\n' "Hello"
     printf '\n'  
     printf '%s\n' "It's nice to see you."
@@ -7427,7 +7432,7 @@ if [[ ! -f /opt/bin/daylight.sh  &&  -t 0 ]]; then
     fi
     printf '%s\n' Done.
     printf '\n' 
-fi
+}
 
 
 #-------------------------------------------------------------------------------
