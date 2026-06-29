@@ -1794,33 +1794,135 @@ fresh-daylight-gen-run-script ()
     cat <<- 'EOT' | envsubst ''
 	#! /usr/bin/env bash
 
+	# Prevent sourcing — run as a standalone script only
+	if ! (return 0 2>/dev/null); then
+	    main "$@"
+	    exit $?
+	fi
+
+
+	#
+	# get-latest-release-tag()
+	#
+	#from daylight.sh/github-release-get-latest-tag
+	#
+	get-latest-release-tag ()
+	{
+	    command -v jq >/dev/null 2>&1 || { printf 'jq is required but was not found.\n' >&2; exit 1; }
+	    local url=https://api.github.com/repos/daylight-public/daylight/releases/latest
+	    local tmpFile; tmpFile=$(mktemp --tmpdir daylight.tag.XXXXXX) || exit 1
+	    curl --silent --location --fail "$url" >"$tmpFile" || { rm -f "$tmpFile"; exit 1; }
+	    local tag; tag=$(jq -r '.tag_name' <"$tmpFile") || { rm -f "$tmpFile"; exit 1; }
+	    rm -f "$tmpFile"
+	    printf '%s' "$tag"
+	}
+
+
+	#
+	# get-release-asset-name()
+	#
+	# Print the .tar.gz asset name for a release tag
+	#
+	get-release-asset-name ()
+	{
+	    (( $# == 1 )) || { printf 'Usage: get-release-asset-name $tag\n' >&2; return 1; }
+	    local tag=$1
+	    local url="https://api.github.com/repos/daylight-public/daylight/releases/tags/$tag"
+	    local tmpFile; tmpFile=$(mktemp --tmpdir daylight.asset.XXXXXX) || return 1
+	    curl --silent --location --fail "$url" >"$tmpFile" || { rm -f "$tmpFile"; return 1; }
+	    local name; name=$(jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .name' <"$tmpFile" | head -1) || {
+	        rm -f "$tmpFile"
+	        return 1
+	    }
+	    rm -f "$tmpFile"
+	    [[ -n "$name" ]] || { printf 'No .tar.gz asset found in release %s\n' "$tag" >&2; return 1; }
+	    printf '%s' "$name"
+	}
+
+
+	#
+	# download-release-asset()
+	#
+	# Download a release asset to the specified output file
+	#
+	download-release-asset ()
+	{
+	    (( $# == 3 )) || { printf 'Usage: download-release-asset $tag $asset $outputFile\n' >&2; return 1; }
+	    local tag=$1
+	    local asset=$2
+	    local outputFile=$3
+	    local url="https://github.com/daylight-public/daylight/releases/download/$tag/$asset"
+	    curl --silent --location --fail --output "$outputFile" "$url" || return 1
+	}
+
+
+	#
+	# verify-checksum()
+	#
+	#from daylight.sh/download-daylight-batch
+	#
+	verify-checksum ()
+	{
+	    (( $# == 2 )) || { printf 'Usage: verify-checksum $checksumsFile $assetName\n' >&2; return 1; }
+	    local checksumsFile=$1
+	    local assetName=$2
+	    if ! grep -F "$assetName" "$checksumsFile" | sha256sum -c - >/dev/null 2>&1; then
+	        printf 'Checksum verification failed for %s\n' "$assetName" >&2
+	        return 1
+	    fi
+	}
+
+
+	#
+	# main()
+	#
 	main ()
 	{
 	    printf '%s\n' "Checking for daylight.sh update ..."
+
 	    local installPath=/opt/bin/daylight.sh
-
 	    local installFolder; installFolder=$(dirname "$installPath")
-	    if [[ ! -d $installFolder ]]; then
-	        printf 'Folder %s does not exist — creating it\n' "$installFolder" >&2
-	        mkdir -p "$installFolder" || { printf 'Failed to create %s\n' "$installFolder" >&2; exit 1; }
-	    fi
 
+	    # Ensure install folder exists
+	    [[ -d "$installFolder" ]] || mkdir -p "$installFolder" || { printf 'Failed to create %s\n' "$installFolder" >&2; exit 1; }
+
+	    # Get latest release tag
+	    local tag; tag=$(get-latest-release-tag) || exit 1
+	    printf 'Latest release: %s\n' "$tag"
+
+	    # Get asset name
+	    local assetName; assetName=$(get-release-asset-name "$tag") || exit 1
+
+	    # Create temp workspace
 	    local tmpDir; tmpDir=$(mktemp -d) || { printf 'Failed to create temp dir\n' >&2; exit 1; }
+	    local tarball="$tmpDir/$assetName"
+	    local checksumsFile="$tmpDir/SHA256SUMS"
 	    local tmpFile="$tmpDir/daylight.sh"
-	    local url=https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
-	    curl --silent --location --output "$tmpFile" "$url" || {
-	        local rc=$?
-	        printf 'Failed to download daylight.sh (exit %d)\n' $rc >&2
+
+	    # Download tarball and checksums
+	    download-release-asset "$tag" "$assetName" "$tarball" || { rm -rf "$tmpDir"; exit 1; }
+	    printf 'Downloaded %s\n' "$assetName"
+	    download-release-asset "$tag" "SHA256SUMS" "$checksumsFile" || { rm -rf "$tmpDir"; exit 1; }
+
+	    # Verify checksum
+	    verify-checksum "$checksumsFile" "$assetName" || { rm -rf "$tmpDir"; exit 1; }
+	    printf 'Checksum verified\n'
+
+	    # Extract daylight.sh from tarball
+	    tar xzf "$tarball" -C "$tmpDir" daylight.sh 2>/dev/null || {
+	        printf 'Failed to extract daylight.sh from %s\n' "$assetName" >&2
 	        rm -rf "$tmpDir"
-	        exit $rc
+	        exit 1
 	    }
 
+	    # Validate syntax
 	    bash -n "$tmpFile" || {
 	        printf 'Syntax check FAILED — not installing corrupted download\n' >&2
 	        rm -rf "$tmpDir"
 	        exit 1
 	    }
 
+	    # Diff and install
 	    if [[ -f "$installPath" ]]; then
 	        if diff -q "$tmpFile" "$installPath" >/dev/null 2>&1; then
 	            printf 'Already up to date — no changes\n'
@@ -1841,8 +1943,6 @@ fresh-daylight-gen-run-script ()
 	    rm -rf "$tmpDir"
 	    printf 'Done — installed %s\n' "$installPath"
 	}
-
-	main "$@"
 	EOT
 }
 
@@ -5354,10 +5454,42 @@ fresh-daylight-install-to ()
 
 install-fresh-daylight-svc ()
 {
+    local enable_timer=pending
+
+    while (( $# )); do
+        case $1 in
+            --enable-timer)
+                if (( $# > 1 )) && [[ $2 != -* ]]; then
+                    case $2 in
+                        on)  enable_timer=on; shift ;;
+                        off) enable_timer=off; shift ;;
+                        *)   printf 'Unknown value for --enable-timer: %s\n' "$2" >&2; return 1 ;;
+                    esac
+                else
+                    enable_timer=on
+                fi
+                ;;
+            *)
+                printf 'Unknown flag: %s\n' "$1" >&2; return 1 ;;
+        esac
+        shift
+    done
+
     fresh-daylight-install-to /opt/svc/fresh-daylight || return
     systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
-    systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
-    systemctl start fresh-daylight.timer
+
+    if [[ $enable_timer == on ]]; then
+        systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
+        systemctl start fresh-daylight.timer
+    elif [[ $enable_timer == pending ]]; then
+        local reply
+        read -r -n1 -p "Enable hourly timer? (y/N) " reply
+        printf '\n'
+        if [[ $reply == [yY] ]]; then
+            systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
+            systemctl start fresh-daylight.timer
+        fi
+    fi
 }
 
 
