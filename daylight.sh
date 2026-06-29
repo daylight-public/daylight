@@ -4719,6 +4719,30 @@ hello ()
 
 #-------------------------------------------------------------------------------
 #
+# host-init()
+#
+# Packages: install essential packages on a daylight host VM
+#
+host-init ()
+{
+    apt-get update -y
+    apt-get install -y \
+        ca-certificates \
+        curl \
+        git \
+        gnupg \
+        incus \
+        jq \
+        lsb-release \
+        nginx \
+        software-properties-common \
+        ufw \
+        || return
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # incus-api-call()
 #
 # Call the Incus API and return filtered JSON output
@@ -7674,6 +7698,7 @@ main ()
             go-service-uninstall)                     go-service-uninstall "$@";;
             go-upgrade)                               go-upgrade "$@";;
             hello)                                    hello "$@";;
+            host-init)                                host-init "$@";;
             incus-config-snapshots)                   incus-config-snapshots "$@";;
             incus-create-profiles)                    incus-create-profiles "$@";;
             incus-dump-id-map)                        incus-dump-id-map "$@";;
