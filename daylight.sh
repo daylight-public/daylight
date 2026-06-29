@@ -1780,6 +1780,132 @@ etcd-setup-data-dir ()
 
 #-------------------------------------------------------------------------------
 #
+# fresh-daylight-gen-run-script()
+#
+# @internal
+# Generate the run.sh script for the fresh-daylight service. Writes to stdout.
+# Template vars: (none yet — mechanism ready via envsubst)
+#
+fresh-daylight-gen-run-script ()
+{
+    # Validate env vars
+    # (none currently)
+    # Process template with envsubst (empty list = no substitutions for now)
+    cat <<- 'EOT' | envsubst ''
+	#! /usr/bin/env bash
+
+	main ()
+	{
+	    printf '%s\n' "Checking for daylight.sh update ..."
+	    local installPath=/opt/bin/daylight.sh
+
+	    local installFolder; installFolder=$(dirname "$installPath")
+	    if [[ ! -d $installFolder ]]; then
+	        printf 'Folder %s does not exist — creating it\n' "$installFolder" >&2
+	        mkdir -p "$installFolder" || { printf 'Failed to create %s\n' "$installFolder" >&2; exit 1; }
+	    fi
+
+	    local tmpDir; tmpDir=$(mktemp -d) || { printf 'Failed to create temp dir\n' >&2; exit 1; }
+	    local tmpFile="$tmpDir/daylight.sh"
+	    local url=https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
+	    curl --silent --location --output "$tmpFile" "$url" || {
+	        local rc=$?
+	        printf 'Failed to download daylight.sh (exit %d)\n' $rc >&2
+	        rm -rf "$tmpDir"
+	        exit $rc
+	    }
+
+	    bash -n "$tmpFile" || {
+	        printf 'Syntax check FAILED — not installing corrupted download\n' >&2
+	        rm -rf "$tmpDir"
+	        exit 1
+	    }
+
+	    if [[ -f "$installPath" ]]; then
+	        if diff -q "$tmpFile" "$installPath" >/dev/null 2>&1; then
+	            printf 'Already up to date — no changes\n'
+	            rm -rf "$tmpDir"
+	            exit 0
+	        fi
+	        printf 'Changes detected\n'
+	    else
+	        printf 'No existing daylight.sh found — installing\n'
+	    fi
+
+	    cp "$tmpFile" "$installPath" || {
+	        printf 'Failed to copy to %s\n' "$installPath" >&2
+	        rm -rf "$tmpDir"
+	        exit 1
+	    }
+	    chmod 755 "$installPath"
+	    rm -rf "$tmpDir"
+	    printf 'Done — installed %s\n' "$installPath"
+	}
+
+	main "$@"
+	EOT
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# fresh-daylight-gen-service-file()
+#
+# @internal
+# Generate the systemd service file for fresh-daylight. Writes to stdout.
+# Template vars: (none yet — mechanism ready via envsubst)
+#
+fresh-daylight-gen-service-file ()
+{
+    # Validate env vars
+    # (none currently)
+    # Process template with envsubst (empty list = no substitutions for now)
+    cat <<- 'EOT' | envsubst ''
+	[Unit]
+	Description=Download, validate, and conditionally install latest daylight.sh
+
+	[Service]
+	ExecStart=/opt/svc/fresh-daylight/bin/run.sh
+	Type=oneshot
+	User=rayray
+	WorkingDirectory=/opt/svc/fresh-daylight
+
+	[Install]
+	WantedBy=multi-user.target
+	EOT
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# fresh-daylight-gen-timer-file()
+#
+# @internal
+# Generate the systemd timer file for fresh-daylight. Writes to stdout.
+# Template vars: (none yet — mechanism ready via envsubst)
+#
+fresh-daylight-gen-timer-file ()
+{
+    # Validate env vars
+    # (none currently)
+    # Process template with envsubst (empty list = no substitutions for now)
+    cat <<- 'EOT' | envsubst ''
+	[Unit]
+	Description=Timer file for the fresh-daylight service
+
+	[Timer]
+	OnCalendar=hourly
+	Persistent=true
+	Unit=fresh-daylight.service
+
+	[Install]
+	WantedBy=timers.target
+	EOT
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # gen-completion-script-batch()
 #
 # Generate a bash completion script from a list of subcommands on stdin.
@@ -5213,15 +5339,22 @@ install-flask-app ()
 #
 # Install a fresh daylight systemd service
 #
+fresh-daylight-install-to ()
+{
+    (( $# == 1 )) || { printf 'Usage: fresh-daylight-install-to $targetDir\n' >&2; return 1; }
+    local targetDir=$1
+    mkdir -p "$targetDir/bin"
+    fresh-daylight-gen-service-file >"$targetDir/fresh-daylight.service" || return
+    fresh-daylight-gen-timer-file >"$targetDir/fresh-daylight.timer" || return
+    fresh-daylight-gen-run-script >"$targetDir/bin/run.sh" || return
+    chmod 755 "$targetDir/bin/run.sh"
+    chown -R rayray:rayray "$targetDir" 2>/dev/null || true
+}
+
+
 install-fresh-daylight-svc ()
 {
-    repo=https://raw.githubusercontent.com/daylight-public/daylight/main
-    mkdir -p /opt/svc/fresh-daylight/bin 
-    chown -R rayray:rayray /opt/svc/fresh-daylight
-    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.service"
-    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight "$repo/svc/fresh-daylight/fresh-daylight.timer"
-    curl --silent --remote-name --output-dir /opt/svc/fresh-daylight/bin "$repo/svc/fresh-daylight/bin/run.sh"
-    chmod 777 /opt/svc/fresh-daylight/bin/run.sh
+    fresh-daylight-install-to /opt/svc/fresh-daylight || return
     systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
     systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
     systemctl start fresh-daylight.timer
@@ -7268,10 +7401,15 @@ zabbly-validate-fingerprint ()
 }
 
 
-# If this script is being sourced in a terminal, and it does not exist on
-# the host in /opt/bin, then download this script to /opt/bin and install the
-# `fresh-daylight` service which will pull the latest script every hour.
-if [[ ! -f /opt/bin/daylight.sh  &&  -t 0 ]]; then
+#-------------------------------------------------------------------------------
+#
+# hello()
+#
+# Print a greeting and begin setting things up for the host in /opt/bin.
+# TODO: fix internals — mkdir, release download, etc (dedicated issue)
+#
+hello ()
+{
     printf '%s\n' "Hello"
     printf '\n'  
     printf '%s\n' "It's nice to see you."
@@ -7294,7 +7432,7 @@ if [[ ! -f /opt/bin/daylight.sh  &&  -t 0 ]]; then
     fi
     printf '%s\n' Done.
     printf '\n' 
-fi
+}
 
 
 #-------------------------------------------------------------------------------
