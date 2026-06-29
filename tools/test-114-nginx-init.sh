@@ -36,12 +36,12 @@ test-nginx-init-appends-emoji()
 
     nginx-init >/dev/null 2>&1 || true
 
-    if grep -q '🌞' "$NGINX_INDEX"; then
+    if grep -q '🌞' "$NGINX_INDEX" && grep -A1 '🌞' "$NGINX_INDEX" | grep -q '</body>'; then
         rm -f "$NGINX_INDEX"
         printf '  PASS\n'
     else
         rm -f "$NGINX_INDEX"
-        printf '  FAIL (nginx-init-appends-emoji): emoji not found in index\n'
+        printf '  FAIL (nginx-init-appends-emoji): emoji not followed by </body>\n'
         return 1
     fi
 }

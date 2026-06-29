@@ -6061,7 +6061,11 @@ nginx-init ()
 
     local index=${NGINX_INDEX:-/var/www/html/index.nginx-debian.html}
     if [[ -f "$index" ]]; then
-        printf '  <span style="font-size: 2em;">🌞</span>\n' >> "$index"
+        if grep -q '</body>' "$index"; then
+            sed -i '\|</body>|i\  <span style="font-size: 2em;">🌞</span>' "$index"
+        else
+            printf '  <span style="font-size: 2em;">🌞</span>\n' >> "$index"
+        fi
     fi
 
     curl -sf http://localhost/ | grep -q '🌞' || {
