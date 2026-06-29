@@ -7818,8 +7818,6 @@ main ()
             list-public-keys)                         list-public-keys "$@";;
             list-services)                            list-services "$@";;
             list-vms)                                 list-vms "$@";;
-            nginx-gen-default-index)                  nginx-gen-default-index "$@";;
-            nginx-install-index)                      nginx-install-index "$@";;
             nginx-init)                               nginx-init "$@";;
             pgql-install-client)                      pgql-install-client "$@";;
             prep-filesystem)                          prep-filesystem "$@";;

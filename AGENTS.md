@@ -1,3 +1,18 @@
+
+
+### @internal functions
+internal functions in daylight are marked with an @internal oneliner in their leading comment block
+internal functions do not participate in case dispatch
+internal functions do not participate in bash completion
+_Do not_ mark functions as @internal. That is a decision for a human agent.
+_Do not_ remove @internal from existing functions (even if you mistakenly added it). That is a decision for a human agent.
+
+### case dispatch
+the main function provides support to execute functions via daylight.sh funcname funcargs. This is an alternative to source daylight.sh + func call that keeps the environment clean.
+case dispatch is generally favored, but not required, and sometimes source dispatch is required, eg for a function that sets a local variable via nameref
+cmdline args are unexamined and passed thru via "$@"
+All non @internal functions should be supported by case dispatch
+
 ### Paramterizing functions: positional args vs flags vs envvars
 
 Sometimes, even when it's easy to know what a function should do, it's hard to figure out how to tell the function to do it. Bash has a rich set of behavior parameterization, all of which are perfectly idiomatic. It can be hard to know which to choose. Below are some rough guidelines.

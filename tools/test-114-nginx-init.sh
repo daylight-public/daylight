@@ -76,25 +76,16 @@ test-nginx-init-serves-emoji()
     chmod 755 "$docroot"
     local port=8080
     local conf; conf=$(mktemp /tmp/daylight-nginx-conf-XXXXXX)
-    cat > "$conf" <<NGINX_CONF
-daemon off;
-pid $docroot/nginx.pid;
-error_log $docroot/error.log;
-events {}
-http {
-    access_log $docroot/access.log;
-    server {
-        listen $port;
-        root $docroot;
-    }
-}
-NGINX_CONF
+    DOCROOT=$docroot PORT=$port PID_FILE=$docroot/nginx.pid \
+        ERROR_LOG=$docroot/error.log ACCESS_LOG=$docroot/access.log \
+        envsubst '$DOCROOT $PORT $PID_FILE $ERROR_LOG $ACCESS_LOG' \
+        < "$SCRIPT_DIR/../svc/nginx/test-server.conf.tmpl" > "$conf"
 
     # Start nginx with the test config (backgrounded since daemon off)
     nginx -c "$conf" -p "$docroot" &>/dev/null &
     local nginx_pid=$!
-    # Create a dummy index.html so curl can detect nginx is up
-    printf '<html><body>\n</body></html>\n' > "$docroot/index.html"
+    # Generate the real template-based index so curl can detect nginx is up
+    nginx-install-index "$docroot/index.html"
     # Give nginx a moment to bind before polling
     sleep 0.3
     # Wait for the port to be available
