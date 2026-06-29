@@ -5454,14 +5454,41 @@ fresh-daylight-install-to ()
 
 install-fresh-daylight-svc ()
 {
+    local enable_timer=pending
+
+    while (( $# )); do
+        case $1 in
+            --enable-timer)
+                if (( $# > 1 )) && [[ $2 != -* ]]; then
+                    case $2 in
+                        on)  enable_timer=on; shift ;;
+                        off) enable_timer=off; shift ;;
+                        *)   printf 'Unknown value for --enable-timer: %s\n' "$2" >&2; return 1 ;;
+                    esac
+                else
+                    enable_timer=on
+                fi
+                ;;
+            *)
+                printf 'Unknown flag: %s\n' "$1" >&2; return 1 ;;
+        esac
+        shift
+    done
+
     fresh-daylight-install-to /opt/svc/fresh-daylight || return
     systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
-    local reply
-    read -r -n1 -p "Enable hourly timer? (y/N) " reply
-    printf '\n'
-    if [[ $reply == [yY] ]]; then
+
+    if [[ $enable_timer == on ]]; then
         systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
         systemctl start fresh-daylight.timer
+    elif [[ $enable_timer == pending ]]; then
+        local reply
+        read -r -n1 -p "Enable hourly timer? (y/N) " reply
+        printf '\n'
+        if [[ $reply == [yY] ]]; then
+            systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
+            systemctl start fresh-daylight.timer
+        fi
     fi
 }
 

@@ -96,6 +96,90 @@ test-install-to()
 }
 
 
+test-install-svc-enable-flag-on()
+{
+    local systemctl_calls=()
+    systemctl() { systemctl_calls+=("$*"); }
+    fresh-daylight-install-to() { true; }
+
+    install-fresh-daylight-svc --enable-timer on || {
+        printf '  FAIL (install-svc-enable-flag-on): returned non-zero\n'
+        return 1
+    }
+    local joined="${systemctl_calls[*]}"
+    [[ $joined == *"enable /opt/svc/fresh-daylight/fresh-daylight.service"* ]] || {
+        printf '  FAIL (install-svc-enable-flag-on): service not enabled\n'
+        return 1
+    }
+    [[ $joined == *"enable /opt/svc/fresh-daylight/fresh-daylight.timer"* ]] || {
+        printf '  FAIL (install-svc-enable-flag-on): timer not enabled\n'
+        return 1
+    }
+    [[ $joined == *"start fresh-daylight.timer"* ]] || {
+        printf '  FAIL (install-svc-enable-flag-on): timer not started\n'
+        return 1
+    }
+    printf '  PASS\n'
+}
+
+
+test-install-svc-enable-flag-off()
+{
+    local systemctl_calls=()
+    systemctl() { systemctl_calls+=("$*"); }
+    fresh-daylight-install-to() { true; }
+
+    install-fresh-daylight-svc --enable-timer off || {
+        printf '  FAIL (install-svc-enable-flag-off): returned non-zero\n'
+        return 1
+    }
+    local joined="${systemctl_calls[*]}"
+    [[ $joined == *"enable /opt/svc/fresh-daylight/fresh-daylight.service"* ]] || {
+        printf '  FAIL (install-svc-enable-flag-off): service not enabled\n'
+        return 1
+    }
+    if [[ $joined == *"fresh-daylight.timer"* ]]; then
+        printf '  FAIL (install-svc-enable-flag-off): timer was enabled despite --enable-timer off\n'
+        return 1
+    fi
+    printf '  PASS\n'
+}
+
+
+test-install-svc-enable-flag-no-val()
+{
+    local systemctl_calls=()
+    systemctl() { systemctl_calls+=("$*"); }
+    fresh-daylight-install-to() { true; }
+
+    install-fresh-daylight-svc --enable-timer || {
+        printf '  FAIL (install-svc-enable-flag-no-val): returned non-zero\n'
+        return 1
+    }
+    local joined="${systemctl_calls[*]}"
+    [[ $joined == *"enable /opt/svc/fresh-daylight/fresh-daylight.timer"* ]] || {
+        printf '  FAIL (install-svc-enable-flag-no-val): timer not enabled\n'
+        return 1
+    }
+    printf '  PASS\n'
+}
+
+
+test-install-svc-unknown-flag()
+{
+    local stderr
+    stderr=$(install-fresh-daylight-svc --bogus 2>&1 1>/dev/null) && {
+        printf '  FAIL (install-svc-unknown-flag): expected failure but succeeded\n'
+        return 1
+    }
+    [[ $stderr == *"Unknown flag"* ]] || {
+        printf '  FAIL (install-svc-unknown-flag): expected "Unknown flag" error, got: %s\n' "$stderr"
+        return 1
+    }
+    printf '  PASS\n'
+}
+
+
 run-tests()
 {
     local tests=(
@@ -103,6 +187,10 @@ run-tests()
         test-gen-run-script-no-raw-url
         test-gen-run-script-syntax
         test-install-to
+        test-install-svc-enable-flag-on
+        test-install-svc-enable-flag-off
+        test-install-svc-enable-flag-no-val
+        test-install-svc-unknown-flag
     )
     local total=${#tests[@]}
     local passed=0
@@ -133,8 +221,12 @@ main()
         test-gen-run-script)             test-gen-run-script ;;
         test-gen-run-script-no-raw-url)  test-gen-run-script-no-raw-url ;;
         test-gen-run-script-syntax)      test-gen-run-script-syntax ;;
-        test-install-to)                 test-install-to ;;
-        all)                             run-tests ;;
+        test-install-to)                          test-install-to ;;
+        test-install-svc-enable-flag-on)           test-install-svc-enable-flag-on ;;
+        test-install-svc-enable-flag-off)          test-install-svc-enable-flag-off ;;
+        test-install-svc-enable-flag-no-val)       test-install-svc-enable-flag-no-val ;;
+        test-install-svc-unknown-flag)             test-install-svc-unknown-flag ;;
+        all)                                       run-tests ;;
         *)                               printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }
