@@ -64,37 +64,26 @@ test-gen-run-script()
 
 test-install-to()
 {
-    local tmpDir
-    tmpDir=$(mktemp -d /tmp/daylight-107-XXXXXX) || {
-        printf '  FAIL (install-to): failed to create temp dir\n'
-        return 1
-    }
-    fresh-daylight-install-to "$tmpDir" || {
+    fresh-daylight-install-to "$TEST_TMP_DIR" || {
         printf '  FAIL (install-to): function returned non-zero\n'
-        rm -rf "$tmpDir"
         return 1
     }
-    [[ -f "$tmpDir/fresh-daylight.service" ]] || {
+    [[ -f "$TEST_TMP_DIR/fresh-daylight.service" ]] || {
         printf '  FAIL (install-to): service file not created\n'
-        rm -rf "$tmpDir"
         return 1
     }
-    [[ -f "$tmpDir/fresh-daylight.timer" ]] || {
+    [[ -f "$TEST_TMP_DIR/fresh-daylight.timer" ]] || {
         printf '  FAIL (install-to): timer file not created\n'
-        rm -rf "$tmpDir"
         return 1
     }
-    [[ -f "$tmpDir/bin/run.sh" ]] || {
+    [[ -f "$TEST_TMP_DIR/bin/run.sh" ]] || {
         printf '  FAIL (install-to): run.sh not created\n'
-        rm -rf "$tmpDir"
         return 1
     }
-    [[ -x "$tmpDir/bin/run.sh" ]] || {
+    [[ -x "$TEST_TMP_DIR/bin/run.sh" ]] || {
         printf '  FAIL (install-to): run.sh not executable\n'
-        rm -rf "$tmpDir"
         return 1
     }
-    rm -rf "$tmpDir"
     printf '  PASS\n'
 }
 
@@ -125,6 +114,13 @@ run-tests()
 
 main()
 {
+    if [[ ${1:-all} == test-install-to ]] || [[ ${1:-all} == all ]]; then
+        TEST_TMP_DIR=$(mktemp -d /tmp/daylight-107-XXXXXX) || {
+            printf 'Failed to create test temp dir\n' >&2
+            exit 1
+        }
+        printf 'Test artifacts: %s\n' "$TEST_TMP_DIR"
+    fi
     case ${1:-all} in
         test-gen-service-file)  test-gen-service-file ;;
         test-gen-timer-file)    test-gen-timer-file ;;
