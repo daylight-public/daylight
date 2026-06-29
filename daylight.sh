@@ -6057,17 +6057,20 @@ list-vms ()
 #
 nginx-init ()
 {
+    # nginx -t exits non-zero when /run/nginx.pid is not writable (common
+    # without sudo), even when the config is valid. Grepping for "syntax is
+    # ok" catches real syntax errors while ignoring that runtime permission
+    # issue.
     if [[ -n "${NGINX_CONF:-}" ]]; then
-        nginx -t -c "$NGINX_CONF" || return
+        nginx -t -c "$NGINX_CONF" 2>&1 | grep -q 'syntax is ok' || return
     else
-        nginx -t || return
+        nginx -t 2>&1 | grep -q 'syntax is ok' || return
     fi
 
-    local index=${NGINX_INDEX:-/var/www/html/index.nginx-debian.html}
-    local indexDir; indexDir=$(dirname "$index")
-    [[ -d "$indexDir" ]] || mkdir -p "$indexDir" || return
-    nginx-gen-default-index > "$index" || return
+    # Generate and install the default index page with the sun emoji.
+    nginx-install-index || return
 
+    # Verify the page is being served by curling localhost.
     local url=${NGINX_URL:-http://localhost/}
     curl -sf "$url" | grep -q '🌞' || {
         printf 'Sun emoji not found on default page\n' >&2
@@ -6091,6 +6094,22 @@ nginx-gen-default-index ()
     local tmpl="$scriptDir/svc/nginx/index.html.tmpl"
     [[ -f "$tmpl" ]] || { printf 'Template not found: %s\n' "$tmpl" >&2; return 1; }
     cat "$tmpl" | envsubst ''
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# nginx-install-index()
+#
+# @internal
+# Generate and install the default nginx index page
+#
+nginx-install-index ()
+{
+    local index=${NGINX_INDEX:-/var/www/html/index.nginx-debian.html}
+    local indexDir; indexDir=$(dirname "$index")
+    [[ -d "$indexDir" ]] || mkdir -p "$indexDir" || return
+    nginx-gen-default-index > "$index" || return
 }
 
 
@@ -7788,6 +7807,7 @@ main ()
             list-services)                            list-services "$@";;
             list-vms)                                 list-vms "$@";;
             nginx-gen-default-index)                  nginx-gen-default-index "$@";;
+            nginx-install-index)                      nginx-install-index "$@";;
             nginx-init)                               nginx-init "$@";;
             pgql-install-client)                      pgql-install-client "$@";;
             prep-filesystem)                          prep-filesystem "$@";;
