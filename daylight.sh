@@ -6064,13 +6064,9 @@ nginx-init ()
     fi
 
     local index=${NGINX_INDEX:-/var/www/html/index.nginx-debian.html}
-    if [[ -f "$index" ]]; then
-        if grep -q '</body>' "$index"; then
-            sed -i '\|</body>|i\  <span style="font-size: 2em;">🌞</span>' "$index"
-        else
-            printf '  <span style="font-size: 2em;">🌞</span>\n' >> "$index"
-        fi
-    fi
+    local indexDir; indexDir=$(dirname "$index")
+    [[ -d "$indexDir" ]] || mkdir -p "$indexDir" || return
+    nginx-gen-default-index > "$index" || return
 
     local url=${NGINX_URL:-http://localhost/}
     curl -sf "$url" | grep -q '🌞' || {
@@ -6078,6 +6074,23 @@ nginx-init ()
         return 1
     }
     printf 'OK\n'
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# nginx-gen-default-index()
+#
+# @internal
+# Generate the default nginx index page with the daylight sun emoji
+#
+nginx-gen-default-index ()
+{
+    local scriptPath=${BASH_SOURCE[0]:-'/opt/bin/daylight.sh'}
+    local scriptDir; scriptDir=$(dirname "$scriptPath")
+    local tmpl="$scriptDir/svc/nginx/index.html.tmpl"
+    [[ -f "$tmpl" ]] || { printf 'Template not found: %s\n' "$tmpl" >&2; return 1; }
+    cat "$tmpl" | envsubst ''
 }
 
 
@@ -7774,6 +7787,7 @@ main ()
             list-public-keys)                         list-public-keys "$@";;
             list-services)                            list-services "$@";;
             list-vms)                                 list-vms "$@";;
+            nginx-gen-default-index)                  nginx-gen-default-index "$@";;
             nginx-init)                               nginx-init "$@";;
             pgql-install-client)                      pgql-install-client "$@";;
             prep-filesystem)                          prep-filesystem "$@";;

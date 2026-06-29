@@ -114,9 +114,29 @@ NGINX_CONF
 }
 
 
+test-gen-default-index()
+{
+    local out
+    out=$(nginx-gen-default-index) || {
+        printf '  FAIL (gen-default-index): function returned non-zero\n'
+        return 1
+    }
+    printf '%s' "$out" | grep -q '🌞' || {
+        printf '  FAIL (gen-default-index): emoji not in template output\n'
+        return 1
+    }
+    printf '%s' "$out" | grep -q 'Welcome to nginx' || {
+        printf '  FAIL (gen-default-index): missing welcome text\n'
+        return 1
+    }
+    printf '  PASS\n'
+}
+
+
 run-tests()
 {
     local tests=(
+        test-gen-default-index
         test-nginx-init-calls-nginx-t
         test-nginx-init-syntax-failure
         test-nginx-init-serves-emoji
@@ -145,6 +165,7 @@ run-tests()
 main()
 {
     case ${1:-all} in
+        test-gen-default-index)           test-gen-default-index ;;
         test-nginx-init-calls-nginx-t)    test-nginx-init-calls-nginx-t ;;
         test-nginx-init-syntax-failure)   test-nginx-init-syntax-failure ;;
         test-nginx-init-serves-emoji)     test-nginx-init-serves-emoji ;;
