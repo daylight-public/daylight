@@ -6057,7 +6057,11 @@ list-vms ()
 #
 nginx-init ()
 {
-    nginx -t || return
+    if [[ -n "${NGINX_CONF:-}" ]]; then
+        nginx -t -c "$NGINX_CONF" || return
+    else
+        nginx -t || return
+    fi
 
     local index=${NGINX_INDEX:-/var/www/html/index.nginx-debian.html}
     if [[ -f "$index" ]]; then
@@ -6068,7 +6072,8 @@ nginx-init ()
         fi
     fi
 
-    curl -sf http://localhost/ | grep -q '🌞' || {
+    local url=${NGINX_URL:-http://localhost/}
+    curl -sf "$url" | grep -q '🌞' || {
         printf 'Sun emoji not found on default page\n' >&2
         return 1
     }
