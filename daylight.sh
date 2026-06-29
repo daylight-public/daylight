@@ -6051,6 +6051,29 @@ list-vms ()
 
 #-------------------------------------------------------------------------------
 #
+# nginx-init()
+#
+# Verify nginx config and add daylight sun emoji to the default page
+#
+nginx-init ()
+{
+    nginx -t || return
+
+    local index=${NGINX_INDEX:-/var/www/html/index.nginx-debian.html}
+    if [[ -f "$index" ]]; then
+        printf '  <span style="font-size: 2em;">🌞</span>\n' >> "$index"
+    fi
+
+    curl -sf http://localhost/ | grep -q '🌞' || {
+        printf 'Sun emoji not found on default page\n' >&2
+        return 1
+    }
+    printf 'OK\n'
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # lxd-dump-id-map()
 #
 # Dump the UID/GID mapping for a container
@@ -7742,6 +7765,7 @@ main ()
             list-public-keys)                         list-public-keys "$@";;
             list-services)                            list-services "$@";;
             list-vms)                                 list-vms "$@";;
+            nginx-init)                               nginx-init "$@";;
             pgql-install-client)                      pgql-install-client "$@";;
             prep-filesystem)                          prep-filesystem "$@";;
             print-os-arch-vars)                       print-os-arch-vars "$@";;
