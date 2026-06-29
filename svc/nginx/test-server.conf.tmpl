@@ -1,0 +1,11 @@
+daemon off;
+pid ${PID_FILE};
+error_log ${ERROR_LOG};
+events {}
+http {
+    access_log ${ACCESS_LOG};
+    server {
+        listen ${PORT};
+        root ${DOCROOT};
+    }
+}

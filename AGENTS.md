@@ -1,3 +1,31 @@
+
+
+### @internal functions
+internal functions in daylight are marked with an @internal oneliner in their leading comment block
+internal functions do not participate in case dispatch
+internal functions do not participate in bash completion
+_Do not_ mark functions as @internal. That is a decision for a human agent.
+_Do not_ remove @internal from existing functions (even if you mistakenly added it). That is a decision for a human agent.
+
+### case dispatch
+the main function provides support to execute functions via daylight.sh funcname funcargs. This is an alternative to source daylight.sh + func call that keeps the environment clean.
+case dispatch is generally favored, but not required, and sometimes source dispatch is required, eg for a function that sets a local variable via nameref
+cmdline args are unexamined and passed thru via "$@"
+All non @internal functions should be supported by case dispatch
+
+### Paramterizing functions: positional args vs flags vs envvars
+
+Sometimes, even when it's easy to know what a function should do, it's hard to figure out how to tell the function to do it. Bash has a rich set of behavior parameterization, all of which are perfectly idiomatic. It can be hard to know which to choose. Below are some rough guidelines.
+
+#### Positional args
+Positional args are typically the data that, without it, a function wouldn't make much sense. In an add() function that adds x+y, x and y make sense as positional args, possibly variadic.
+
+#### Flags
+Flags are good for data a function might not need to do its job, but they might greatly affect _how_() it does its job. In a div() function, that divides x/y, x and y make sense as positional args but --precision makes sense as a flag that says 'how many decimal points'
+
+#### Environment Variables / envvars
+Environment variables are typically non-functional and crosscutting. They often aren't targetted to one specific function, except perhaps an initialization function, and it can be unclear which functions may or may not make use of any given environment variable. And that's ok: that's why they're in the Environment, available to all. In a collection of math functions, like add() sub() mul() div(), SEPARATOR makes sense as an envvar, to tell any interested function whether 999+1 = 1,000, or 1.000, or 1000, or other.
+
 ### daylight.sh
 
 daylight.sh is a monolithic bash 4+ script that contains lots of functions for setting up a Linux host (currently Debian/Ubuntu) to support daylight functionality. daylight.sh was the first script created as part of daylight. It was created to be fast and easy to write, read, extend, and maintain. Obviouslt it's also tech debt, but sometimes tech debt can be a goot place to start.
@@ -6,6 +34,10 @@ daylight.sh functions are alphabetized, except for a main function at the end.
 
 #### comments
 daylight.sh functions should begin with comments that look like this.
+
+#### what if you don't know?
+If you don't know ask.
+But ... if you're going to make a mistake, the safest way to make a mistake is with flags. Too many positional args makes a function unusable. Too many envvars make it unfeasible to customize, esp in a comfortable one-liner. Too many flags might give code a reputation for having, well, too many flags. But theyre otherwise pretty harmless. 99.999% of curls users couldn't name you 1/10th of the flags curl supports, and they're doing fine. Sometimes a function or tool invocation with a dozen flags is just a nice recipe.
 
 ```
 #-------------------------------------------------------------------------------

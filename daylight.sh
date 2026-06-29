@@ -6051,6 +6051,82 @@ list-vms ()
 
 #-------------------------------------------------------------------------------
 #
+# nginx-init()
+#
+# Verify nginx config and add daylight sun emoji to the default page
+#
+nginx-init ()
+{
+    local conf= index= url=
+
+    while (( $# )); do
+        case $1 in
+            --conf)  conf=$2; shift ;;
+            --index) index=$2; shift ;;
+            --url)   url=$2; shift ;;
+            *)       printf 'Unknown flag: %s\n' "$1" >&2; return 1 ;;
+        esac
+        shift
+    done
+
+    # nginx -t exits non-zero when /run/nginx.pid is not writable (common
+    # without sudo), even when the config is valid. Grepping for "syntax is
+    # ok" catches real syntax errors while ignoring that runtime permission
+    # issue.
+    if [[ -n "$conf" ]]; then
+        nginx -t -c "$conf" 2>&1 | grep -q 'syntax is ok' || return
+    else
+        nginx -t 2>&1 | grep -q 'syntax is ok' || return
+    fi
+
+    # Generate and install the default index page with the sun emoji.
+    nginx-install-index "$index" || return
+
+    # Verify the page is being served by curling localhost.
+    local target=${url:-http://localhost/}
+    curl -sf "$target" | grep -q '🌞' || {
+        printf 'Sun emoji not found on default page\n' >&2
+        return 1
+    }
+    printf 'OK\n'
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# nginx-gen-default-index()
+#
+# @internal
+# Generate the default nginx index page with the daylight sun emoji
+#
+nginx-gen-default-index ()
+{
+    local scriptPath=${BASH_SOURCE[0]:-'/opt/bin/daylight.sh'}
+    local scriptDir; scriptDir=$(dirname "$scriptPath")
+    local tmpl="$scriptDir/svc/nginx/index.html.tmpl"
+    [[ -f "$tmpl" ]] || { printf 'Template not found: %s\n' "$tmpl" >&2; return 1; }
+    cat "$tmpl" | envsubst ''
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# nginx-install-index()
+#
+# @internal
+# Generate and install the default nginx index page
+#
+nginx-install-index ()
+{
+    local index=${1:-/var/www/html/index.nginx-debian.html}
+    local indexDir; indexDir=$(dirname "$index")
+    [[ -d "$indexDir" ]] || mkdir -p "$indexDir" || return
+    nginx-gen-default-index > "$index" || return
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # lxd-dump-id-map()
 #
 # Dump the UID/GID mapping for a container
@@ -7742,6 +7818,7 @@ main ()
             list-public-keys)                         list-public-keys "$@";;
             list-services)                            list-services "$@";;
             list-vms)                                 list-vms "$@";;
+            nginx-init)                               nginx-init "$@";;
             pgql-install-client)                      pgql-install-client "$@";;
             prep-filesystem)                          prep-filesystem "$@";;
             print-os-arch-vars)                       print-os-arch-vars "$@";;
