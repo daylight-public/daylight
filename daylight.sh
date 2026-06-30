@@ -1735,7 +1735,6 @@ etcd-setup-data-dir ()
 #
 # fresh-daylight-gen-run-script()
 #
-# @internal
 # Generate the run.sh script for the fresh-daylight service. Writes to stdout.
 # Template vars: (none yet — mechanism ready via envsubst)
 #
@@ -1904,7 +1903,6 @@ fresh-daylight-gen-run-script ()
 #
 # fresh-daylight-gen-service-file()
 #
-# @internal
 # Generate the systemd service file for fresh-daylight. Writes to stdout.
 # Template vars: (none yet — mechanism ready via envsubst)
 #
@@ -1952,7 +1950,6 @@ fresh-daylight-gen-svc ()
 #
 # fresh-daylight-gen-timer-file()
 #
-# @internal
 # Generate the systemd timer file for fresh-daylight. Writes to stdout.
 # Template vars: (none yet — mechanism ready via envsubst)
 #
@@ -2435,7 +2432,7 @@ get-service-exec-start ()
 get-service-file-value ()
 {
     # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: get-service-working-directory $serviceName $key\n' >&2; return 1; }
+    (( $# == 2 )) || { printf 'Usage: get-service-file-value $serviceName $key\n' >&2; return 1; }
     local name=$1
     local key=$2
     
@@ -4730,6 +4727,7 @@ hello ()
 #
 # hello2()
 #
+# @internal
 # Print a greeting and begin setting things up for the host in /opt/bin.
 # TODO: fix internals — mkdir, release download, etc (dedicated issue)
 #
@@ -6108,7 +6106,6 @@ lxd-share-folder ()
 #
 # nginx-gen-default-index()
 #
-# @internal
 # Generate the default nginx index page with the daylight sun emoji
 #
 nginx-gen-default-index ()
@@ -6167,7 +6164,6 @@ nginx-init ()
 #
 # nginx-install-index()
 #
-# @internal
 # Generate and install the default nginx index page
 #
 nginx-install-index ()
@@ -7728,7 +7724,7 @@ main ()
             github-shr-install)                       github-shr-install "$@";;
             github-shr-install-runner)                github-shr-install-runner "$@";;
             github-shr-save-uat)                      github-shr-save-uat "$@";;
-	        github-shr-setup)                         github-shr-setup "$@";;
+	    github-shr-setup)                         github-shr-setup "$@";;
             github-shr-start)                         github-shr-start "$@";;
             github-shr-test)                          github-shr-test "$@";;
             github-test-repo)                         github-test-repo "$@";;
@@ -7739,6 +7735,7 @@ main ()
             go-service-uninstall)                     go-service-uninstall "$@";;
             go-upgrade)                               go-upgrade "$@";;
             hello)                                    hello "$@";;
+            hello2)                                   hello2 "$@";;
             host-init)                                host-init "$@";;
             incus-config-snapshots)                   incus-config-snapshots "$@";;
             incus-create-profiles)                    incus-create-profiles "$@";;
