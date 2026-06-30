@@ -6101,9 +6101,8 @@ nginx-init ()
 #
 nginx-gen-default-index ()
 {
-    local scriptPath=${BASH_SOURCE[0]:-'/opt/bin/daylight.sh'}
-    local scriptDir; scriptDir=$(dirname "$scriptPath")
-    local tmpl="$scriptDir/svc/nginx/index.html.tmpl"
+    local tmpl
+    tmpl=$(resolve-rel-path svc/nginx/index.html.tmpl) || return
     [[ -f "$tmpl" ]] || { printf 'Template not found: %s\n' "$tmpl" >&2; return 1; }
     cat "$tmpl" | envsubst ''
 }
@@ -6842,6 +6841,24 @@ EOT
 
 	# Restart nginx, to validate and pickup the new config file
 	restart-nginx
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# resolve-rel-path()
+#
+# Resolve a relative path against the executing script's directory.
+# Uses readlink -f to canonicalize the script location, then appends
+# the relative path. Handles symlinks, relative invocations, and PATH
+# lookups.
+#
+resolve-rel-path ()
+{
+    (( $# == 1 )) || { printf 'Usage: resolve-rel-path $relPath\n' >&2; return 1; }
+    local relPath=$1 scriptPath
+    scriptPath=$(readlink -f "${BASH_SOURCE[0]:-$0}") || return 1
+    printf '%s' "${scriptPath%/*}/$relPath"
 }
 
 
@@ -7838,6 +7855,7 @@ main ()
             push-svc)                                 push-svc "$@";;
             push-webapp)                              push-webapp "$@";;
             replace-nginx-conf)                       replace-nginx-conf "$@";;
+            resolve-rel-path)                         resolve-rel-path "$@";;
             run-conf-script)                          run-conf-script "$@";;
             run-service)                              run-service "$@";;
             sanitize-label)                           sanitize-label "$@";;
