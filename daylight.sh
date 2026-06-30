@@ -2027,7 +2027,8 @@ fresh-daylight-install-svc ()
 # Generate a bash completion script from a list of subcommands on stdin.
 # Outputs to stdout. No interactivity.
 #
-gen-completion-script-batch () {
+gen-completion-script-batch ()
+{
     # shellcheck disable=SC2016
     (( $# == 1 )) || { printf 'Usage: gen-completion-script-batch <cmdName>\n' >&2; return 1; }
     if [[ -t 0 ]]; then
@@ -2133,7 +2134,8 @@ gen-completion-script ()
 #
 # Generate and install a bash completion script for daylight.sh
 #
-gen-daylight-completion-script () {
+gen-daylight-completion-script ()
+{
 	# shellcheck disable=SC2016
 	(( $# >= 0 && $# <= 1 )) || { printf 'Usage: gen-daylight-completion-script [$folder] []\n' >&2; return 1; }
 	local folder=${1:-~/bash-completion.d}
