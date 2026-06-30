@@ -540,27 +540,6 @@ create-lxd-user-data ()
 
 #-------------------------------------------------------------------------------
 #
-# create-publish-image-service()
-#
-# Create a systemd service to publish a VM image
-#
-# TODO complete this function
-create-publish-image-service ()
-{
-    # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: create-publish-image-service $vm $base [$imageRepo]\n' >&3; return 1; }
-    local vm=$1
-    local base=$2
-    local imageRepo=${3:-'local'}
-
-    local service="publish-$vm"
-    local cmd="/usr/bin/daylight.sh install-vm \"$vm\" \"$base\" \"$imageRepo\""
-    install-service-from-command "$service" "$cmd"
-}
-
-
-#-------------------------------------------------------------------------------
-#
 # create-pubbo-service()
 #
 # Create a service to expose a file over a Unix socket via pubbo
@@ -643,6 +622,27 @@ EOT
     systemctl enable "$svcName"
 	# Restart nginx to pickup the new Unix socket started by the new service
 	restart-nginx
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# create-publish-image-service()
+#
+# Create a systemd service to publish a VM image
+#
+# TODO complete this function
+create-publish-image-service ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 2 )) && (( $# <= 3 )); } || { printf 'Usage: create-publish-image-service $vm $base [$imageRepo]\n' >&3; return 1; }
+    local vm=$1
+    local base=$2
+    local imageRepo=${3:-'local'}
+
+    local service="publish-$vm"
+    local cmd="/usr/bin/daylight.sh install-vm \"$vm\" \"$base\" \"$imageRepo\""
+    install-service-from-command "$service" "$cmd"
 }
 
 
@@ -806,6 +806,64 @@ delete-lxd-instance ()
 
 #-------------------------------------------------------------------------------
 #
+# detect-platform()
+#
+# Detect the OS and architecture as a platform string
+#
+detect-platform ()
+{
+    (( $# == 0 )) || { printf 'Usage: detect-platform\n' >&2; return 1; }
+    local os arch
+
+    case "$(uname -s)" in
+        Linux)                     os="linux" ;;
+        Darwin)                    os="darwin" ;;
+        MINGW*|MSYS*|CYGWIN*)     os="windows" ;;
+        *) printf 'Unsupported OS: %s\n' "$(uname -s)" >&2; return 1 ;;
+    esac
+
+    case "$(uname -m)" in
+        x86_64|amd64)             arch="amd64" ;;
+        aarch64|arm64)            arch="arm64" ;;
+        armv7l|armv6l)            arch="arm" ;;
+        *) printf 'Unsupported architecture: %s\n' "$(uname -m)" >&2; return 1 ;;
+    esac
+
+    printf '%s-%s' "$os" "$arch"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# detect-runner-platform()
+#
+# Detect the runner OS and architecture as a platform string
+#
+detect-runner-platform ()
+{
+    (( $# == 0 )) || { printf 'Usage: detect-runner-platform\n' >&2; return 1; }
+    local os arch
+
+    case "$(uname -s)" in
+        Linux)                     os="linux" ;;
+        Darwin)                    os="osx" ;;
+        MINGW*|MSYS*|CYGWIN*)     os="win" ;;
+        *) printf 'Unsupported OS: %s\n' "$(uname -s)" >&2; return 1 ;;
+    esac
+
+    case "$(uname -m)" in
+        x86_64|amd64)             arch="x64" ;;
+        aarch64|arm64)            arch="arm64" ;;
+        armv7l|armv6l)            arch="arm" ;;
+        *) printf 'Unsupported architecture: %s\n' "$(uname -m)" >&2; return 1 ;;
+    esac
+
+    printf '%s-%s' "$os" "$arch"
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # download-app()
 #
 # Download an app tarball from the S3 dist bucket
@@ -821,6 +879,61 @@ download-app ()
     local tempDir; tempDir=$(download-to-temp-dir "$s3url") || return
 
     printf '%s' "$tempDir"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# download-daylight()
+#
+# Download daylight.sh with optional interactive prompts
+#
+download-daylight ()
+{
+    local gen_completions=""
+    local completions_path=""
+    local -a pass_args=()
+    local args=("$@")
+
+    local i=0
+    while (( i < $# )); do
+        case "${args[i]}" in
+            --gen-bash-completions)
+                gen_completions=1
+                if (( i+1 < $# )) && [[ "${args[i+1]}" != --* ]]; then
+                    completions_path=${args[i+1]}
+                    (( i++ ))
+                fi
+                ;;
+            *)
+                pass_args+=("${args[i]}")
+                ;;
+        esac
+        (( i++ ))
+    done
+
+    download-daylight-batch "${pass_args[@]}" || return
+
+    if [[ -z "$gen_completions" ]] && [[ -t 0 ]]; then
+        printf 'Generate bash completions for daylight.sh? [y/N] '
+        local reply
+        read -r reply
+        [[ "$reply" =~ ^[yY] ]] || return 0
+    fi
+
+    # Find dstFolder from pass_args (last positional arg)
+    local dstFolder="${pass_args[${#pass_args[@]}-1]}"
+
+    [[ -n "$dstFolder" ]] || { printf 'error: could not determine destination folder\n' >&2; return 1; }
+
+    local scriptPath="$dstFolder/daylight.sh"
+    [[ -f "$scriptPath" ]] || { printf 'error: %s not found after download\n' "$scriptPath" >&2; return 1; }
+
+    local compPath="${completions_path:-$HOME/bash-completion.d/daylight.sh}"
+    mkdir -p "$(dirname "$compPath")" || return
+
+    bash "$scriptPath" gen-completion-script daylight.sh < <(bash "$scriptPath" list-bash-funcs < "$scriptPath") > "$compPath" || return
+    printf 'Bash completions written to %s\n' "$compPath" >&2
 }
 
 
@@ -1005,61 +1118,6 @@ download-daylight-batch ()
 
 #-------------------------------------------------------------------------------
 #
-# download-daylight()
-#
-# Download daylight.sh with optional interactive prompts
-#
-download-daylight ()
-{
-    local gen_completions=""
-    local completions_path=""
-    local -a pass_args=()
-    local args=("$@")
-
-    local i=0
-    while (( i < $# )); do
-        case "${args[i]}" in
-            --gen-bash-completions)
-                gen_completions=1
-                if (( i+1 < $# )) && [[ "${args[i+1]}" != --* ]]; then
-                    completions_path=${args[i+1]}
-                    (( i++ ))
-                fi
-                ;;
-            *)
-                pass_args+=("${args[i]}")
-                ;;
-        esac
-        (( i++ ))
-    done
-
-    download-daylight-batch "${pass_args[@]}" || return
-
-    if [[ -z "$gen_completions" ]] && [[ -t 0 ]]; then
-        printf 'Generate bash completions for daylight.sh? [y/N] '
-        local reply
-        read -r reply
-        [[ "$reply" =~ ^[yY] ]] || return 0
-    fi
-
-    # Find dstFolder from pass_args (last positional arg)
-    local dstFolder="${pass_args[${#pass_args[@]}-1]}"
-
-    [[ -n "$dstFolder" ]] || { printf 'error: could not determine destination folder\n' >&2; return 1; }
-
-    local scriptPath="$dstFolder/daylight.sh"
-    [[ -f "$scriptPath" ]] || { printf 'error: %s not found after download\n' "$scriptPath" >&2; return 1; }
-
-    local compPath="${completions_path:-$HOME/bash-completion.d/daylight.sh}"
-    mkdir -p "$(dirname "$compPath")" || return
-
-    bash "$scriptPath" gen-completion-script daylight.sh < <(bash "$scriptPath" list-bash-funcs < "$scriptPath") > "$compPath" || return
-    printf 'Bash completions written to %s\n' "$compPath" >&2
-}
-
-
-#-------------------------------------------------------------------------------
-#
 # download-dist()
 #
 # Download the entire dist folder from S3 to /tmp/dist
@@ -1073,35 +1131,6 @@ download-dist ()
     mkdir -p /tmp/dist || return
     aws s3 cp --recursive "s3://$bucket/dist" /tmp/dist || return
     find /tmp/dist -type f -name "*.sh" -exec chmod 777 {} \; || return
-}
-
-
-#-------------------------------------------------------------------------------
-#
-# detect-platform()
-#
-# Detect the OS and architecture as a platform string
-#
-detect-platform ()
-{
-    (( $# == 0 )) || { printf 'Usage: detect-platform\n' >&2; return 1; }
-    local os arch
-
-    case "$(uname -s)" in
-        Linux)                     os="linux" ;;
-        Darwin)                    os="darwin" ;;
-        MINGW*|MSYS*|CYGWIN*)     os="windows" ;;
-        *) printf 'Unsupported OS: %s\n' "$(uname -s)" >&2; return 1 ;;
-    esac
-
-    case "$(uname -m)" in
-        x86_64|amd64)             arch="amd64" ;;
-        aarch64|arm64)            arch="arm64" ;;
-        armv7l|armv6l)            arch="arm" ;;
-        *) printf 'Unsupported architecture: %s\n' "$(uname -m)" >&2; return 1 ;;
-    esac
-
-    printf '%s-%s' "$os" "$arch"
 }
 
 
@@ -1206,82 +1235,6 @@ download-public-key ()
     local s3url="s3://$bucket/dist/ssh.tgz"
     local srcFolder; srcFolder=$(download-to-temp-dir "$s3url") || return
     cp "$srcFolder/$name" "./$name"
-}
-
-
-#-------------------------------------------------------------------------------
-#
-# detect-runner-platform()
-#
-# Detect the runner OS and architecture as a platform string
-#
-detect-runner-platform ()
-{
-    (( $# == 0 )) || { printf 'Usage: detect-runner-platform\n' >&2; return 1; }
-    local os arch
-
-    case "$(uname -s)" in
-        Linux)                     os="linux" ;;
-        Darwin)                    os="osx" ;;
-        MINGW*|MSYS*|CYGWIN*)     os="win" ;;
-        *) printf 'Unsupported OS: %s\n' "$(uname -s)" >&2; return 1 ;;
-    esac
-
-    case "$(uname -m)" in
-        x86_64|amd64)             arch="x64" ;;
-        aarch64|arm64)            arch="arm64" ;;
-        armv7l|armv6l)            arch="arm" ;;
-        *) printf 'Unsupported architecture: %s\n' "$(uname -m)" >&2; return 1 ;;
-    esac
-
-    printf '%s-%s' "$os" "$arch"
-}
-
-
-#-------------------------------------------------------------------------------
-#
-# shr-download-tarball()
-#
-# Download the tarball for the latest GitHub Actions Self-Hosted Runner release
-#
-shr-download-tarball ()
-{
-    (( $# >= 1 )) || { printf 'Usage: shr-download-tarball $targetFolder' >&2; return 1; }
-    local downloadFolder=$1
-    local urlLatestRelease="https://api.github.com/repos/actions/runner/releases/latest"
-    local platform;  platform=$(detect-runner-platform) || return
-    local fileExt="tar.gz"
-
-    if [[ $platform == win-* ]]; then
-        fileExt="zip"
-    fi
-
-    local namePattern="^actions-runner-$platform-.*\\.$fileExt\$"
-    local tarballFileName tarballUrl
-    local args
-    read -r -a args < <(curl --silent "$urlLatestRelease" \
-        | jq -r --arg pat "$namePattern" '.assets[]? | select(.name | test($pat)) | [.name, .browser_download_url] | @tsv') \
-        || return
-
-    if [[ ${#args[@]} -eq 0 ]]; then
-        printf 'No runner asset found for platform: %s\n' "$platform" >&2
-        return 1
-    fi
-
-    tarballFileName=${args[0]}
-    tarballUrl=${args[1]}
-    local tarballPath; tarballPath="$(create-temp-file "XXX.$tarballFileName")" || return
-    curl --location --silent --output "$tarballPath" "$tarballUrl"
-
-    if [[ "$fileExt" == "zip" ]]; then
-        unzip -t "$tarballPath" >/dev/null || return
-        unzip -o -d "$downloadFolder" "$tarballPath" >/dev/null || return
-    else
-        tar --list --gunzip --file "$tarballPath" >/dev/null
-        tar --directory "$downloadFolder" --extract --gunzip --file "$tarballPath" || return
-    fi
-
-    printf '%s' "$downloadFolder" 
 }
 
 
@@ -1482,22 +1435,6 @@ etcd-create-release-name ()
 
 #-------------------------------------------------------------------------------
 #
-# etcd-download-latest()
-#
-# Download the latest etcd release
-#
-etcd-download-latest ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: etcd-download-latest $downloadFolder\n' >&2; return 1; }
-
-    local version; version=$(etcd-get-latest-version) || return
-    etcd-download --version "$version" "$@"
-}
-
-
-#-------------------------------------------------------------------------------
-#
 # etcd-download()
 #
 # Download a release of etcd from the specified URL
@@ -1527,6 +1464,22 @@ etcd-download ()
     github-create-flags argmap flags token
     flags+=(--version "$version")
     github-release-download "${flags[@]}" --asset-name "$releaseName" --output-dir "$downloadFolder" etcd-io etcd
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# etcd-download-latest()
+#
+# Download the latest etcd release
+#
+etcd-download-latest ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: etcd-download-latest $downloadFolder\n' >&2; return 1; }
+
+    local version; version=$(etcd-get-latest-version) || return
+    etcd-download --version "$version" "$@"
 }
 
 
@@ -1978,6 +1931,25 @@ fresh-daylight-gen-service-file ()
 
 #-------------------------------------------------------------------------------
 #
+# fresh-daylight-gen-svc()
+#
+# Install a fresh daylight systemd service
+#
+fresh-daylight-gen-svc ()
+{
+    (( $# == 1 )) || { printf 'Usage: fresh-daylight-gen-svc $targetDir\n' >&2; return 1; }
+    local targetDir=$1
+    mkdir -p "$targetDir/bin"
+    fresh-daylight-gen-service-file >"$targetDir/fresh-daylight.service" || return
+    fresh-daylight-gen-timer-file >"$targetDir/fresh-daylight.timer" || return
+    fresh-daylight-gen-run-script >"$targetDir/bin/run.sh" || return
+    chmod 755 "$targetDir/bin/run.sh"
+    chown -R rayray:rayray "$targetDir" 2>/dev/null || true
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # fresh-daylight-gen-timer-file()
 #
 # @internal
@@ -2001,6 +1973,53 @@ fresh-daylight-gen-timer-file ()
 	[Install]
 	WantedBy=timers.target
 	EOT
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# fresh-daylight-install-svc()
+#
+# Install a fresh daylight systemd service
+#
+fresh-daylight-install-svc ()
+{
+    local enable_timer=pending
+
+    while (( $# )); do
+        case $1 in
+            --enable-timer)
+                if (( $# > 1 )) && [[ $2 != -* ]]; then
+                    case $2 in
+                        on)  enable_timer=on; shift ;;
+                        off) enable_timer=off; shift ;;
+                        *)   printf 'Unknown value for --enable-timer: %s\n' "$2" >&2; return 1 ;;
+                    esac
+                else
+                    enable_timer=on
+                fi
+                ;;
+            *)
+                printf 'Unknown flag: %s\n' "$1" >&2; return 1 ;;
+        esac
+        shift
+    done
+
+    fresh-daylight-gen-svc /opt/svc/fresh-daylight || return
+    systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
+
+    if [[ $enable_timer == on ]]; then
+        systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
+        systemctl start fresh-daylight.timer
+    elif [[ $enable_timer == pending ]]; then
+        local reply
+        read -r -n1 -p "Enable hourly timer? (y/N) " reply
+        printf '\n'
+        if [[ $reply == [yY] ]]; then
+            systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
+            systemctl start fresh-daylight.timer
+        fi
+    fi
 }
 
 
@@ -2377,31 +2396,6 @@ get-linux-version-codename ()
 
 #-------------------------------------------------------------------------------
 #
-# get-service-file-value()
-#
-# Parse a value from a systemd service file
-#
-get-service-file-value ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: get-service-working-directory $serviceName $key\n' >&2; return 1; }
-    local name=$1
-    local key=$2
-    
-    systemctl cat "$name" >/dev/null || { printf 'Service not found: %s\n' "$name"; return 1; }
-    local rx="^$key=(.*)"
-    while read -r line; do
-        if [[ "$line" =~ $rx ]]; then
-            printf '%s' "${BASH_REMATCH[1]}"
-            return
-        fi
-    done < <(systemctl cat "$name")
-
-}
-
-
-#-------------------------------------------------------------------------------
-#
 # get-service-environment-file()
 #
 # Get the EnvironmentFile path from a systemd service
@@ -2429,6 +2423,31 @@ get-service-exec-start ()
     local name=$1
 
     get-service-file-value "$name" 'ExecStart'
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# get-service-file-value()
+#
+# Parse a value from a systemd service file
+#
+get-service-file-value ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: get-service-working-directory $serviceName $key\n' >&2; return 1; }
+    local name=$1
+    local key=$2
+    
+    systemctl cat "$name" >/dev/null || { printf 'Service not found: %s\n' "$name"; return 1; }
+    local rx="^$key=(.*)"
+    while read -r line; do
+        if [[ "$line" =~ $rx ]]; then
+            printf '%s' "${BASH_REMATCH[1]}"
+            return
+        fi
+    done < <(systemctl cat "$name")
+
 }
 
 
@@ -2617,27 +2636,6 @@ github-create-flags ()
 
 #-------------------------------------------------------------------------------
 #
-# github-create-url()
-#
-# Create a full GitHub API URL from a path
-#
-github-create-url ()
-{
-    local urlPath=$1
-    local urlBase=${2:-'https://api.github.com'}
-
-    # Trim leading slash
-    if [[ $urlPath == /* ]]; then
-        urlPath=${urlPath:1}
-    fi
-    # concatenate urlBase and Path
-    local url="$urlBase/$urlPath"
-    printf '%s' "$url" || return
-}
-
-
-#-------------------------------------------------------------------------------
-#
 # github-create-uat()
 #
 # Create a GitHub user access token via API
@@ -2699,6 +2697,27 @@ github-create-uat ()
     # return the access token
     # shellcheck disable=SC2034
     tokenvar=${args[0]}
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# github-create-url()
+#
+# Create a full GitHub API URL from a path
+#
+github-create-url ()
+{
+    local urlPath=$1
+    local urlBase=${2:-'https://api.github.com'}
+
+    # Trim leading slash
+    if [[ $urlPath == /* ]]; then
+        urlPath=${urlPath:1}
+    fi
+    # concatenate urlBase and Path
+    local url="$urlBase/$urlPath"
+    printf '%s' "$url" || return
 }
 
 
@@ -2992,89 +3011,6 @@ github-get-release-package-info ()
 
 #-------------------------------------------------------------------------------
 #
-# github-shr-load-uat
-#
-# Read the saved user access token from its path
-#
-github-shr-load-uat ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-shr-load-uat $org $repo\n' >&2; return 1; }
-    local org=$1 repo=$2
-
-    local uatPath; uatPath=$(github-shr-uat-path "$org" "$repo") || return
-    [[ -f "$uatPath" ]] || { printf 'User Access Token not found (%s)\n' "$uatPath"; return 1; }
-    local uat; uat=$(< "$uatPath") || return
-    [[ -n "$uat" ]] || { printf 'UAT file is empty (%s)\n' "$uatPath" >&2; return 1; }
-    printf '%s' "$uat"
-}
-
-
-#-------------------------------------------------------------------------------
-#
-# github-shr-uat-path
-#
-# Get the path for the uat for this org + repo
-#
-github-shr-uat-path ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-shr-uat-path $org $repo\n' >&2; return 1; }
-    local org=$1 repo=$2
-
-    local shrFolder; shrFolder=$(github-shr-folder-name "$org" "$repo") || return
-    local uatPath=$(printf '%s/.uat' "$shrFolder")
-    printf '%s' "$uatPath"
-}
-
-
-#-------------------------------------------------------------------------------
-#
-# github-shr-swap-tokens()
-#
-# Redeem a GitHub access token for a self-hosted runner registration token
-#
-github-shr-swap-tokens ()
-{
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-shr-swap-tokens $org $repo\n' >&2; return 1; }
-    local org=$1 repo=$2
-
-    local shrFolder; shrFolder=$(github-shr-folder-name "$org" "$repo") || return
-    local uat; uat=$(github-shr-load-uat "$org" "$repo") || return
-
-    local apiUrl="https://api.github.com/repos/$org/$repo/actions/runners/registration-token"
-    local tmpCurl; tmpCurl=$(create-temp-file curl.get.shr.token.json) || return
-    curl --fail-with-body --location --silent --request POST \
-        --header "Authorization: Bearer $uat" \
-        --header "Accept: application/json" \
-        --output "$tmpCurl" \
-        "$apiUrl" || {
-        local httpCode
-        httpCode=$(jq -r '.status // "unknown"' <"$tmpCurl")
-        local msg
-        msg=$(jq -r '.message // "unknown"' <"$tmpCurl")
-        printf 'github-shr-swap-tokens: %s — %s\n' "$httpCode" "$msg" >&2
-        if [[ "$httpCode" == "403" ]]; then
-            printf 'The GitHub App may not be installed on %s/%s.\n' "$org" "$repo" >&2
-            printf 'Run: github-is-gha-installed %s <app-slug>\n' "$org" >&2
-            printf 'Install at: https://github.com/apps/<app-slug>/installations/new\n' >&2
-        fi
-        return 1
-    }
-    local shrToken
-    shrToken=$(jq -r '.token' <"$tmpCurl")
-    if [[ -z "$shrToken" || "$shrToken" == "null" ]]; then
-        printf 'github-shr-swap-tokens: response did not contain a token\n' >&2
-        jq . <"$tmpCurl" >&2
-        return 1
-    fi
-    printf '%s' "$shrToken"
-}
-
-
-#-------------------------------------------------------------------------------
-#
 # github-is-gha-installed()
 #
 # Check whether a GitHub App is installed on an org (or user account).
@@ -3110,63 +3046,6 @@ github-is-gha-installed ()
     fi
 
     return 0
-}
-
-
-#-------------------------------------------------------------------------------
-#
-# github-curl-parse-args()
-#
-# Parse common GitHub API arguments into an associative array
-#
-github-curl-parse-args ()
-{
-    # shellcheck disable=SC2016
-    (( $# >= 2 )) || { printf 'Usage: github-curl-parse-args infovar nargs [$args]\n' >&2; return 1; }
-    # shellcheck disable=SC2178
-    [[ $1 != argmap ]] && { local -n argmap; argmap=$1; }
-    # Check that argmap is either an assoc array or a nameref to an assoc array
-    [[ $(declare -p argmap 2>/dev/null) == "declare -A"* ]] \
-    || [[ $(declare -p "${!argmap}" 2>/dev/null) == "declare -A"* ]] \
-    || { printf "%s is not an associative array, and it's not a nameref to an associative array either\n" "argmap" >&2; return 1; }
-    # shellcheck disable=SC2178
-    [[ $2 != nargs ]] && { local -n nargs; nargs=$2; }
-
-    nargs=0
-    shift 2
-    while (( $# > 0 )); do
-        case $1 in
-            '--accept'     |\
-            '--data'       |\
-            '--output'     |\
-            '--output-dir' |\
-            '--per-page'   |\
-            '--token'      |\
-            '--label'      |\
-            '--platform'   |\
-            '--version'    |\
-            '--workflow'   \
-            )
-                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
-                argmap["${1##--}"]=$2
-                ((nargs+=2))
-                shift 2
-                ;;
-            '--remote-name')
-                argmap[remote-name]=1
-                ((nargs++))
-                shift
-                ;;
-            '--')
-                shift
-                ((nargs++))
-                break
-                ;;
-            *)
-                break
-                ;;
-        esac
-    done
 }
 
 
@@ -3472,33 +3351,6 @@ github-release-download-latest ()
 
 #-------------------------------------------------------------------------------
 #
-# github-release-get-data()
-#
-# Get release data from a GitHub repository
-#
-github-release-get-data ()
-{
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@"
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    { (( $# >= 2 )) } || { printf 'Usage: github-release-get-data [flags] $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    
-    local -a flags
-    github-create-flags argmap flags version || return
-    local urlPath; urlPath=$(github-release-create-url-path "${flags[@]}" "$org" "$repo") || return
-    # build argstring for github-curl
-    github-create-flags argmap flags token || return
-    github-curl "${flags[@]}" "$urlPath" || return
-}
-
-
-#-------------------------------------------------------------------------------
-#
 # github-release-get-asset-name()
 #
 # Determine the best asset name from a GitHub release by priority:
@@ -3538,6 +3390,33 @@ github-release-get-asset-name ()
         return 1
     fi
     printf '%s' "$assetName"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# github-release-get-data()
+#
+# Get release data from a GitHub repository
+#
+github-release-get-data ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-curl-parse-args argmap nargs "$@"
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    { (( $# >= 2 )) } || { printf 'Usage: github-release-get-data [flags] $org $repo\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+    
+    local -a flags
+    github-create-flags argmap flags version || return
+    local urlPath; urlPath=$(github-release-create-url-path "${flags[@]}" "$org" "$repo") || return
+    # build argstring for github-curl
+    github-create-flags argmap flags token || return
+    github-curl "${flags[@]}" "$urlPath" || return
 }
 
 
@@ -3916,6 +3795,44 @@ github-release-verify-checksum ()
 
 #-------------------------------------------------------------------------------
 #
+# github-shr-clean()
+#
+# Remove a self-hosted runner: stop/uninstall svc, deregister from GitHub,
+# delete runner directory. Derives svcName from $org-$repo, reads UAT
+# from the uat folder in the runner folder. Must be run as root (try sudo).
+#
+github-shr-clean ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: github-shr-clean $org $repo\n' >&2; return 1; }
+    local org=$1 repo=$2
+    local svcName="shr-$org-$repo"
+    local shrFolder="/opt/actions-runner/$svcName"
+
+    [[ $EUID -eq 0 ]] || { printf 'github-shr-clean: must be run as root (try sudo)\n' >&2; return 1; }
+
+    local reg_token
+    reg_token=$(github-shr-swap-tokens "$org" "$repo") || return $?
+
+    if [[ -f "$shrFolder/.service" ]]; then
+        cd "$shrFolder" || return
+        ./svc.sh stop 2>/dev/null || true
+        ./svc.sh uninstall 2>/dev/null || true
+    fi
+
+    if [[ -f "$shrFolder/.runner" ]]; then
+        cd "$shrFolder" 2>/dev/null || true
+        ./config.sh remove --token "$reg_token" || \
+            printf 'Warning: config.sh remove failed — orphaned runner may need manual cleanup\n' >&2
+    fi
+
+    rm -rf "$shrFolder"
+    printf 'info: Cleaned up runner %s for %s/%s\n' "$svcName" "$org" "$repo"
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # github-shr-create-folder
 #
 # Create parent folder for an shr installation
@@ -3929,6 +3846,54 @@ github-shr-create-folder ()
     mkdir -p "$folder" || return
     printf '%s' "$folder"
 }
+
+
+#-------------------------------------------------------------------------------
+#
+# github-shr-download-tarball()
+#
+# Download the tarball for the latest GitHub Actions Self-Hosted Runner release
+#
+github-shr-download-tarball ()
+{
+    (( $# >= 1 )) || { printf 'Usage: github-shr-download-tarball $targetFolder' >&2; return 1; }
+    local downloadFolder=$1
+    local urlLatestRelease="https://api.github.com/repos/actions/runner/releases/latest"
+    local platform;  platform=$(detect-runner-platform) || return
+    local fileExt="tar.gz"
+
+    if [[ $platform == win-* ]]; then
+        fileExt="zip"
+    fi
+
+    local namePattern="^actions-runner-$platform-.*\\.$fileExt\$"
+    local tarballFileName tarballUrl
+    local args
+    read -r -a args < <(curl --silent "$urlLatestRelease" \
+        | jq -r --arg pat "$namePattern" '.assets[]? | select(.name | test($pat)) | [.name, .browser_download_url] | @tsv') \
+        || return
+
+    if [[ ${#args[@]} -eq 0 ]]; then
+        printf 'No runner asset found for platform: %s\n' "$platform" >&2
+        return 1
+    fi
+
+    tarballFileName=${args[0]}
+    tarballUrl=${args[1]}
+    local tarballPath; tarballPath="$(create-temp-file "XXX.$tarballFileName")" || return
+    curl --location --silent --output "$tarballPath" "$tarballUrl"
+
+    if [[ "$fileExt" == "zip" ]]; then
+        unzip -t "$tarballPath" >/dev/null || return
+        unzip -o -d "$downloadFolder" "$tarballPath" >/dev/null || return
+    else
+        tar --list --gunzip --file "$tarballPath" >/dev/null
+        tar --directory "$downloadFolder" --extract --gunzip --file "$tarballPath" || return
+    fi
+
+    printf '%s' "$downloadFolder" 
+}
+
 
 
 #-------------------------------------------------------------------------------
@@ -3983,7 +3948,7 @@ github-shr-install-runner ()
     local shrHome="/opt/actions-runner"
     local shrFolder; shrFolder="$(github-shr-folder-name "$org" "$repo")" || return
     printf '%sDownloading runner tarball...%s\n' "$SHR_GRAY" "$SHR_RESET"
-    shr-download-tarball "$shrFolder"
+    github-shr-download-tarball "$shrFolder"
     cd "$shrFolder" || return
     chown -R rayray:rayray "$shrHome"
     local repoUrl="https://github.com/$org/$repo"
@@ -4009,26 +3974,21 @@ github-shr-install-runner ()
 
 #-------------------------------------------------------------------------------
 #
-# github-shr-setup()
+# github-shr-load-uat
 #
-# End-to-end runner install: device-code auth, tarball download, registration,
-# systemd service install + start, and verification. Must be run as root.
+# Read the saved user access token from its path
 #
-github-shr-setup ()
+github-shr-load-uat ()
 {
     # shellcheck disable=SC2016
-    (( $# >= 2 )) || { printf 'Usage: github-shr-setup $org $repo\n' >&2; return 1; }
+    (( $# == 2 )) || { printf 'Usage: github-shr-load-uat $org $repo\n' >&2; return 1; }
     local org=$1 repo=$2
-    
-    local appSlug="shrboy"
-    local shrHome="/opt/actions-runner"
 
-    local USER_ACCESS_TOKEN
-    github-create-uat USER_ACCESS_TOKEN "$appSlug" || return
-    github-shr-save-uat "$org" "$repo" "$USER_ACCESS_TOKEN" || return
-
-    printf '%sDownloading and registering runner...%s\n' "$SHR_GRAY" "$SHR_RESET"
-    github-shr-install-runner "$org" "$repo" || return
+    local uatPath; uatPath=$(github-shr-uat-path "$org" "$repo") || return
+    [[ -f "$uatPath" ]] || { printf 'User Access Token not found (%s)\n' "$uatPath"; return 1; }
+    local uat; uat=$(< "$uatPath") || return
+    [[ -n "$uat" ]] || { printf 'UAT file is empty (%s)\n' "$uatPath" >&2; return 1; }
+    printf '%s' "$uat"
 }
 
 
@@ -4049,6 +4009,31 @@ github-shr-save-uat ()
    local uatPath; uatPath=$(github-shr-uat-path "$org" "$repo") || return
    printf '%s' "$uat" >"$uatPath"
    chmod 600 "$uatPath" || return
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# github-shr-setup()
+#
+# End-to-end runner install: device-code auth, tarball download, registration,
+# systemd service install + start, and verification. Must be run as root.
+#
+github-shr-setup ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 2 )) || { printf 'Usage: github-shr-setup $org $repo\n' >&2; return 1; }
+    local org=$1 repo=$2
+    
+    local appSlug="shrboy"
+    local shrHome="/opt/actions-runner"
+
+    local USER_ACCESS_TOKEN
+    github-create-uat USER_ACCESS_TOKEN "$appSlug" || return
+    github-shr-save-uat "$org" "$repo" "$USER_ACCESS_TOKEN" || return
+
+    printf '%sDownloading and registering runner...%s\n' "$SHR_GRAY" "$SHR_RESET"
+    github-shr-install-runner "$org" "$repo" || return
 }
 
 
@@ -4087,6 +4072,50 @@ github-shr-start ()
     fi
 }
 
+
+#-------------------------------------------------------------------------------
+#
+# github-shr-swap-tokens()
+#
+# Redeem a GitHub access token for a self-hosted runner registration token
+#
+github-shr-swap-tokens ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: github-shr-swap-tokens $org $repo\n' >&2; return 1; }
+    local org=$1 repo=$2
+
+    local shrFolder; shrFolder=$(github-shr-folder-name "$org" "$repo") || return
+    local uat; uat=$(github-shr-load-uat "$org" "$repo") || return
+
+    local apiUrl="https://api.github.com/repos/$org/$repo/actions/runners/registration-token"
+    local tmpCurl; tmpCurl=$(create-temp-file curl.get.shr.token.json) || return
+    curl --fail-with-body --location --silent --request POST \
+        --header "Authorization: Bearer $uat" \
+        --header "Accept: application/json" \
+        --output "$tmpCurl" \
+        "$apiUrl" || {
+        local httpCode
+        httpCode=$(jq -r '.status // "unknown"' <"$tmpCurl")
+        local msg
+        msg=$(jq -r '.message // "unknown"' <"$tmpCurl")
+        printf 'github-shr-swap-tokens: %s — %s\n' "$httpCode" "$msg" >&2
+        if [[ "$httpCode" == "403" ]]; then
+            printf 'The GitHub App may not be installed on %s/%s.\n' "$org" "$repo" >&2
+            printf 'Run: github-is-gha-installed %s <app-slug>\n' "$org" >&2
+            printf 'Install at: https://github.com/apps/<app-slug>/installations/new\n' >&2
+        fi
+        return 1
+    }
+    local shrToken
+    shrToken=$(jq -r '.token' <"$tmpCurl")
+    if [[ -z "$shrToken" || "$shrToken" == "null" ]]; then
+        printf 'github-shr-swap-tokens: response did not contain a token\n' >&2
+        jq . <"$tmpCurl" >&2
+        return 1
+    fi
+    printf '%s' "$shrToken"
+}
 
 #-------------------------------------------------------------------------------
 #
@@ -4172,39 +4201,19 @@ github-shr-test ()
 
 #-------------------------------------------------------------------------------
 #
-# github-shr-clean()
+# github-shr-uat-path
 #
-# Remove a self-hosted runner: stop/uninstall svc, deregister from GitHub,
-# delete runner directory. Derives svcName from $org-$repo, reads UAT
-# from the uat folder in the runner folder. Must be run as root (try sudo).
+# Get the path for the uat for this org + repo
 #
-github-shr-clean ()
+github-shr-uat-path ()
 {
     # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-shr-clean $org $repo\n' >&2; return 1; }
+    (( $# == 2 )) || { printf 'Usage: github-shr-uat-path $org $repo\n' >&2; return 1; }
     local org=$1 repo=$2
-    local svcName="shr-$org-$repo"
-    local shrFolder="/opt/actions-runner/$svcName"
 
-    [[ $EUID -eq 0 ]] || { printf 'github-shr-clean: must be run as root (try sudo)\n' >&2; return 1; }
-
-    local reg_token
-    reg_token=$(github-shr-swap-tokens "$org" "$repo") || return $?
-
-    if [[ -f "$shrFolder/.service" ]]; then
-        cd "$shrFolder" || return
-        ./svc.sh stop 2>/dev/null || true
-        ./svc.sh uninstall 2>/dev/null || true
-    fi
-
-    if [[ -f "$shrFolder/.runner" ]]; then
-        cd "$shrFolder" 2>/dev/null || true
-        ./config.sh remove --token "$reg_token" || \
-            printf 'Warning: config.sh remove failed — orphaned runner may need manual cleanup\n' >&2
-    fi
-
-    rm -rf "$shrFolder"
-    printf 'info: Cleaned up runner %s for %s/%s\n' "$svcName" "$org" "$repo"
+    local shrFolder; shrFolder=$(github-shr-folder-name "$org" "$repo") || return
+    local uatPath=$(printf '%s/.uat' "$shrFolder")
+    printf '%s' "$uatPath"
 }
 
 
@@ -4714,6 +4723,40 @@ EOT
 hello ()
 {
     printf "Hello!\n"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# hello2()
+#
+# Print a greeting and begin setting things up for the host in /opt/bin.
+# TODO: fix internals — mkdir, release download, etc (dedicated issue)
+#
+hello2 ()
+{
+    printf '%s\n' "Hello"
+    printf '\n'  
+    printf '%s\n' "It's nice to see you."
+    printf '\n'  
+    printf '%s\n' "Installing daylight ..."
+    printf '\n' 
+    url=https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
+    curl --silent --remote-name --output-dir /opt/bin "$url"
+    # shellcheck source=/dev/null
+    source /opt/bin/daylight.sh
+    printf '%s\n' "Installing fresh-daylight service ..."
+    printf '\n' 
+    fresh-daylight-install-svc
+    if [[ -f /home/rayray/.bashrc ]]; then
+    {
+        printf '%s\n' ""
+        printf '%s\n' "# hello from daylight"
+        printf '%s\n' "source /opt/bin/daylight.sh"
+    } >> /home/rayray/.bashrc;
+    fi
+    printf '%s\n' Done.
+    printf '\n' 
 }
 
 
@@ -5274,7 +5317,7 @@ init-rpi ()
     echo 'rayray ALL = (root) NOPASSWD: ALL' >/etc/sudoers.d/01-rayray
 
     # Install service to check daylight.sh every hour for updates
-    install-fresh-daylight-svc || return
+    fresh-daylight-install-svc || return
 
     # Install dylt CLI
     install-dylt /opt/bin/ || return
@@ -5459,66 +5502,6 @@ install-flask-app ()
 
 #-------------------------------------------------------------------------------
 #
-# install-fresh-daylight-svc()
-#
-# Install a fresh daylight systemd service
-#
-fresh-daylight-install-to ()
-{
-    (( $# == 1 )) || { printf 'Usage: fresh-daylight-install-to $targetDir\n' >&2; return 1; }
-    local targetDir=$1
-    mkdir -p "$targetDir/bin"
-    fresh-daylight-gen-service-file >"$targetDir/fresh-daylight.service" || return
-    fresh-daylight-gen-timer-file >"$targetDir/fresh-daylight.timer" || return
-    fresh-daylight-gen-run-script >"$targetDir/bin/run.sh" || return
-    chmod 755 "$targetDir/bin/run.sh"
-    chown -R rayray:rayray "$targetDir" 2>/dev/null || true
-}
-
-
-install-fresh-daylight-svc ()
-{
-    local enable_timer=pending
-
-    while (( $# )); do
-        case $1 in
-            --enable-timer)
-                if (( $# > 1 )) && [[ $2 != -* ]]; then
-                    case $2 in
-                        on)  enable_timer=on; shift ;;
-                        off) enable_timer=off; shift ;;
-                        *)   printf 'Unknown value for --enable-timer: %s\n' "$2" >&2; return 1 ;;
-                    esac
-                else
-                    enable_timer=on
-                fi
-                ;;
-            *)
-                printf 'Unknown flag: %s\n' "$1" >&2; return 1 ;;
-        esac
-        shift
-    done
-
-    fresh-daylight-install-to /opt/svc/fresh-daylight || return
-    systemctl enable /opt/svc/fresh-daylight/fresh-daylight.service
-
-    if [[ $enable_timer == on ]]; then
-        systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
-        systemctl start fresh-daylight.timer
-    elif [[ $enable_timer == pending ]]; then
-        local reply
-        read -r -n1 -p "Enable hourly timer? (y/N) " reply
-        printf '\n'
-        if [[ $reply == [yY] ]]; then
-            systemctl enable /opt/svc/fresh-daylight/fresh-daylight.timer
-            systemctl start fresh-daylight.timer
-        fi
-    fi
-}
-
-
-#-------------------------------------------------------------------------------
-#
 # install-gnome-keyring()
 #
 # Install and configure the GNOME keyring
@@ -5644,6 +5627,38 @@ install-service ()
 
 #-------------------------------------------------------------------------------
 #
+# install-service-from-command()
+#
+# Install a systemd service from a command
+#
+install-service-from-command ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 2 )) || { printf 'Usage: install-service-from-script $service $cmd [$cmdArg1 ... $cmdArgN]\n' >&2; return 1; }
+    local service=$1
+    # Set $@ = $args
+    shift 
+
+    # 'Install' the service - Create a service folder, copy the script to $serviceFolder/run.sh, and gen a .service file
+    local serviceFolder="/app/svc/$service"
+    mkdir -p "$serviceFolder" "$serviceFolder" || return
+    chmod 777 "$serviceFolder" || return
+    # Generate the unit file
+    local cmd="$*"
+    local description="One-off service for command"
+    generate-unit-file "$cmd" "$description" >"$serviceFolder/$service.service"
+    chown -R rayray:rayray "$serviceFolder"|| return
+
+    # Create a symlink in /etc/sysd/sys to the new service in its new home
+    sudo ln --force --symbolic "$serviceFolder/$service.service" "/etc/systemd/system/$service.service"
+
+    # Done!
+    printf '%s' "$service"
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # install-service-from-script()
 #
 # Install a systemd service from a script file
@@ -5673,38 +5688,6 @@ install-service-from-script ()
     local description="One-off service for $serviceScriptFile"
     local cmd="$serviceFolder/bin/$serviceScriptFile $*"
     generate-unit-file "$cmd" "$description" >"$serviceFolder/$service.service"
-
-    # Create a symlink in /etc/sysd/sys to the new service in its new home
-    sudo ln --force --symbolic "$serviceFolder/$service.service" "/etc/systemd/system/$service.service"
-
-    # Done!
-    printf '%s' "$service"
-}
-
-
-#-------------------------------------------------------------------------------
-#
-# install-service-from-command()
-#
-# Install a systemd service from a command
-#
-install-service-from-command ()
-{
-    # shellcheck disable=SC2016
-    (( $# >= 2 )) || { printf 'Usage: install-service-from-script $service $cmd [$cmdArg1 ... $cmdArgN]\n' >&2; return 1; }
-    local service=$1
-    # Set $@ = $args
-    shift 
-
-    # 'Install' the service - Create a service folder, copy the script to $serviceFolder/run.sh, and gen a .service file
-    local serviceFolder="/app/svc/$service"
-    mkdir -p "$serviceFolder" "$serviceFolder" || return
-    chmod 777 "$serviceFolder" || return
-    # Generate the unit file
-    local cmd="$*"
-    local description="One-off service for command"
-    generate-unit-file "$cmd" "$description" >"$serviceFolder/$service.service"
-    chown -R rayray:rayray "$serviceFolder"|| return
 
     # Create a symlink in /etc/sysd/sys to the new service in its new home
     sudo ln --force --symbolic "$serviceFolder/$service.service" "/etc/systemd/system/$service.service"
@@ -6051,81 +6034,6 @@ list-vms ()
 
 #-------------------------------------------------------------------------------
 #
-# nginx-init()
-#
-# Verify nginx config and add daylight sun emoji to the default page
-#
-nginx-init ()
-{
-    local conf= index= url=
-
-    while (( $# )); do
-        case $1 in
-            --conf)  conf=$2; shift ;;
-            --index) index=$2; shift ;;
-            --url)   url=$2; shift ;;
-            *)       printf 'Unknown flag: %s\n' "$1" >&2; return 1 ;;
-        esac
-        shift
-    done
-
-    # nginx -t exits non-zero when /run/nginx.pid is not writable (common
-    # without sudo), even when the config is valid. Grepping for "syntax is
-    # ok" catches real syntax errors while ignoring that runtime permission
-    # issue.
-    if [[ -n "$conf" ]]; then
-        nginx -t -c "$conf" 2>&1 | grep -q 'syntax is ok' || return
-    else
-        nginx -t 2>&1 | grep -q 'syntax is ok' || return
-    fi
-
-    # Generate and install the default index page with the sun emoji.
-    nginx-install-index "$index" || return
-
-    # Verify the page is being served by curling localhost.
-    local target=${url:-http://localhost/}
-    curl -sf "$target" | grep -q '🌞' || {
-        printf 'Sun emoji not found on default page\n' >&2
-        return 1
-    }
-    printf 'OK\n'
-}
-
-
-#-------------------------------------------------------------------------------
-#
-# nginx-gen-default-index()
-#
-# @internal
-# Generate the default nginx index page with the daylight sun emoji
-#
-nginx-gen-default-index ()
-{
-    local tmpl
-    tmpl=$(resolve-rel-path svc/nginx/index.html.tmpl) || return
-    [[ -f "$tmpl" ]] || { printf 'Template not found: %s\n' "$tmpl" >&2; return 1; }
-    cat "$tmpl" | envsubst ''
-}
-
-
-#-------------------------------------------------------------------------------
-#
-# nginx-install-index()
-#
-# @internal
-# Generate and install the default nginx index page
-#
-nginx-install-index ()
-{
-    local index=${1:-/var/www/html/index.nginx-debian.html}
-    local indexDir; indexDir=$(dirname "$index")
-    [[ -d "$indexDir" ]] || mkdir -p "$indexDir" || return
-    nginx-gen-default-index > "$index" || return
-}
-
-
-#-------------------------------------------------------------------------------
-#
 # lxd-dump-id-map()
 #
 # Dump the UID/GID mapping for a container
@@ -6193,6 +6101,81 @@ lxd-share-folder ()
     [[ -d "$srcDir" ]] || { echo "Non-existent folder: $srcDir" >&2; return 1; }
     local dstDir=$4
     lxc config device add "$container" "$share" disk source="$srcDir" path="$dstDir"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# nginx-gen-default-index()
+#
+# @internal
+# Generate the default nginx index page with the daylight sun emoji
+#
+nginx-gen-default-index ()
+{
+    local tmpl
+    tmpl=$(resolve-rel-path svc/nginx/index.html.tmpl) || return
+    [[ -f "$tmpl" ]] || { printf 'Template not found: %s\n' "$tmpl" >&2; return 1; }
+    cat "$tmpl" | envsubst ''
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# nginx-init()
+#
+# Verify nginx config and add daylight sun emoji to the default page
+#
+nginx-init ()
+{
+    local conf= index= url=
+
+    while (( $# )); do
+        case $1 in
+            --conf)  conf=$2; shift ;;
+            --index) index=$2; shift ;;
+            --url)   url=$2; shift ;;
+            *)       printf 'Unknown flag: %s\n' "$1" >&2; return 1 ;;
+        esac
+        shift
+    done
+
+    # nginx -t exits non-zero when /run/nginx.pid is not writable (common
+    # without sudo), even when the config is valid. Grepping for "syntax is
+    # ok" catches real syntax errors while ignoring that runtime permission
+    # issue.
+    if [[ -n "$conf" ]]; then
+        nginx -t -c "$conf" 2>&1 | grep -q 'syntax is ok' || return
+    else
+        nginx -t 2>&1 | grep -q 'syntax is ok' || return
+    fi
+
+    # Generate and install the default index page with the sun emoji.
+    nginx-install-index "$index" || return
+
+    # Verify the page is being served by curling localhost.
+    local target=${url:-http://localhost/}
+    curl -sf "$target" | grep -q '🌞' || {
+        printf 'Sun emoji not found on default page\n' >&2
+        return 1
+    }
+    printf 'OK\n'
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# nginx-install-index()
+#
+# @internal
+# Generate and install the default nginx index page
+#
+nginx-install-index ()
+{
+    local index=${1:-/var/www/html/index.nginx-debian.html}
+    local indexDir; indexDir=$(dirname "$index")
+    [[ -d "$indexDir" ]] || mkdir -p "$indexDir" || return
+    nginx-gen-default-index > "$index" || return
 }
 
 
@@ -6341,14 +6324,14 @@ pull-app ()
 
 #-------------------------------------------------------------------------------
 #
-# pullAppInfo()
+# pull-app-info()
 #
 # Pull application metadata from etcd
 #
-pullAppInfo ()
+pull-app-info ()
 {
     # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: pullAppInfo infovar $user $appName\n' >&2; return 1; }
+    (( $# == 3 )) || { printf 'Usage: pull-app-info infovar $user $appName\n' >&2; return 1; }
     local -n _appInfo=$1
     local user=$2
     local name=$3
@@ -6919,6 +6902,24 @@ run-service ()
 
 #-------------------------------------------------------------------------------
 #
+# sanitize-label()
+#
+# Sanitize a human-readable label for use in a git tag.
+# Spaces become dashes; non-alphanumeric, non-dot, non-underscore,
+# non-hyphen characters are stripped.
+#
+sanitize-label ()
+{
+    (( $# == 1 )) || { printf 'Usage: sanitize-label $label\n' >&2; return 1; }
+    local label=$1
+    label=${label// /-}
+    label=${label//[^a-zA-Z0-9._-]/}
+    printf '%s' "$label"
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # setup-domain()
 #
 # Set up nginx and certbot for a domain
@@ -6950,24 +6951,6 @@ setup-domain ()
     tar -C /etc/nginx/ -czf "/tmp/setup/$domain-nginx.tar.gz" \
         "./sites-available/$domain" \
         "./sites-enabled/$domain"
-}
-
-
-#-------------------------------------------------------------------------------
-#
-# sanitize-label()
-#
-# Sanitize a human-readable label for use in a git tag.
-# Spaces become dashes; non-alphanumeric, non-dot, non-underscore,
-# non-hyphen characters are stripped.
-#
-sanitize-label ()
-{
-    (( $# == 1 )) || { printf 'Usage: sanitize-label $label\n' >&2; return 1; }
-    local label=$1
-    label=${label// /-}
-    label=${label//[^a-zA-Z0-9._-]/}
-    printf '%s' "$label"
 }
 
 
@@ -7263,47 +7246,17 @@ sync-run-service ()
 
 #-------------------------------------------------------------------------------
 #
-# trigger-nightly-release-batch()
+# sys-start()
 #
-# Trigger a GHA workflow for a given repo via workflow_dispatch.
-# Requires --workflow; accepts --token (falls back to GITHUB_TOKEN env var)
-# and --label. No interactivity, no token inference.
+# Start a systemd service and show journalctl on failure
 #
-trigger-nightly-release-batch ()
+sys-start ()
 {
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: trigger-nightly-release-batch --workflow <name> [--token <pat>] [--label <label>] $owner/$repo\n' >&2; return 1; }
-    local repo=$1
+    (( $# == 1 )) || { printf 'Usage: sys-start $service\n' >&2; return 1; }
+    local service=$1
 
-    local workflow=${argmap[workflow]}
-    [[ -n "$workflow" ]] || { printf 'error: --workflow is required\n' >&2; return 1; }
-
-    local token=${argmap[token]:-${GITHUB_TOKEN:?error: --token not given and GITHUB_TOKEN not set}}
-
-    local wf_name=${workflow%.yml}
-    wf_name=${wf_name%.yaml}
-    if ! curl -sf -o /dev/null \
-        "https://api.github.com/repos/$repo/actions/workflows/${wf_name}.yml"; then
-        printf 'error: workflow "%s" not found in %s\n' "$workflow" "$repo" >&2
-        return 1
-    fi
-
-    local -a flags=(--token "$token")
-    local data
-    if [[ -n "${argmap[label]}" ]]; then
-        local label
-        label=$(sanitize-label "${argmap[label]}") || return
-        data=$(printf '{"ref":"main","inputs":{"label":"%s"}}' "$label")
-    else
-        data='{"ref":"main"}'
-    fi
-    flags+=(--data "$data")
-
-    github-curl "${flags[@]}" "/repos/$repo/actions/workflows/${wf_name}.yml/dispatches" || return
+    systemctl restart "$service" || journalctl --unit "$service"
 }
 
 
@@ -7346,17 +7299,47 @@ trigger-nightly-release ()
 
 #-------------------------------------------------------------------------------
 #
-# sys-start()
+# trigger-nightly-release-batch()
 #
-# Start a systemd service and show journalctl on failure
+# Trigger a GHA workflow for a given repo via workflow_dispatch.
+# Requires --workflow; accepts --token (falls back to GITHUB_TOKEN env var)
+# and --label. No interactivity, no token inference.
 #
-sys-start ()
+trigger-nightly-release-batch ()
 {
+    local -A argmap=()
+    local nargs=0
+    github-curl-parse-args argmap nargs "$@" || return
+    shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: sys-start $service\n' >&2; return 1; }
-    local service=$1
+    (( $# == 1 )) || { printf 'Usage: trigger-nightly-release-batch --workflow <name> [--token <pat>] [--label <label>] $owner/$repo\n' >&2; return 1; }
+    local repo=$1
 
-    systemctl restart "$service" || journalctl --unit "$service"
+    local workflow=${argmap[workflow]}
+    [[ -n "$workflow" ]] || { printf 'error: --workflow is required\n' >&2; return 1; }
+
+    local token=${argmap[token]:-${GITHUB_TOKEN:?error: --token not given and GITHUB_TOKEN not set}}
+
+    local wf_name=${workflow%.yml}
+    wf_name=${wf_name%.yaml}
+    if ! curl -sf -o /dev/null \
+        "https://api.github.com/repos/$repo/actions/workflows/${wf_name}.yml"; then
+        printf 'error: workflow "%s" not found in %s\n' "$workflow" "$repo" >&2
+        return 1
+    fi
+
+    local -a flags=(--token "$token")
+    local data
+    if [[ -n "${argmap[label]}" ]]; then
+        local label
+        label=$(sanitize-label "${argmap[label]}") || return
+        data=$(printf '{"ref":"main","inputs":{"label":"%s"}}' "$label")
+    else
+        data='{"ref":"main"}'
+    fi
+    flags+=(--data "$data")
+
+    github-curl "${flags[@]}" "/repos/$repo/actions/workflows/${wf_name}.yml/dispatches" || return
 }
 
 
@@ -7652,40 +7635,6 @@ zabbly-validate-fingerprint ()
 
 #-------------------------------------------------------------------------------
 #
-# hello()
-#
-# Print a greeting and begin setting things up for the host in /opt/bin.
-# TODO: fix internals — mkdir, release download, etc (dedicated issue)
-#
-hello ()
-{
-    printf '%s\n' "Hello"
-    printf '\n'  
-    printf '%s\n' "It's nice to see you."
-    printf '\n'  
-    printf '%s\n' "Installing daylight ..."
-    printf '\n' 
-    url=https://raw.githubusercontent.com/daylight-public/daylight/main/daylight.sh
-    curl --silent --remote-name --output-dir /opt/bin "$url"
-    # shellcheck source=/dev/null
-    source /opt/bin/daylight.sh
-    printf '%s\n' "Installing fresh-daylight service ..."
-    printf '\n' 
-    install-fresh-daylight-svc
-    if [[ -f /home/rayray/.bashrc ]]; then
-    {
-        printf '%s\n' ""
-        printf '%s\n' "# hello from daylight"
-        printf '%s\n' "source /opt/bin/daylight.sh"
-    } >> /home/rayray/.bashrc;
-    fi
-    printf '%s\n' Done.
-    printf '\n' 
-}
-
-
-#-------------------------------------------------------------------------------
-#
 # main()
 #
 # Dispatch daylight.sh subcommands when invoked as a command
@@ -7700,7 +7649,7 @@ main ()
             activate-svc)                             activate-svc "$@";;
             activate-vm)                              activate-vm "$@";;
             add-container-user)                       add-container-user "$@";;
-            add-rayray)                                 add-rayray "$@";;
+            add-rayray)                               add-rayray "$@";;
             add-rayray-debian)                        add-rayray-debian "$@";;
             add-ssh-to-container)                     add-ssh-to-container "$@";;
             add-superuser)                            add-superuser "$@";;
@@ -7718,7 +7667,7 @@ main ()
             create-publish-image-service)             create-publish-image-service "$@";;
             create-service-from-dist-script)          create-service-from-dist-script "$@";;
             create-static-website)                    create-static-website "$@";;
-            delete-incus-instance)                   delete-incus-instance "$@";;
+            delete-incus-instance)                    delete-incus-instance "$@";;
             delete-lxd-instance)                      delete-lxd-instance "$@";;
             download-app)                             download-app "$@";;
             download-daylight)                        download-daylight "$@";;
@@ -7728,7 +7677,7 @@ main ()
             download-flask-app)                       download-flask-app "$@";;
             download-flask-service)                   download-flask-service "$@";;
             download-public-key)                      download-public-key "$@";;
-            shr-download-tarball)                     shr-download-tarball "$@";;
+            github-shr-download-tarball)              github-shr-download-tarball "$@";;
             download-svc)                             download-svc "$@";;
             download-to-temp-dir)                     download-to-temp-dir "$@";;
             download-vm)                              download-vm "$@";;
@@ -7763,7 +7712,7 @@ main ()
             github-detect-platform)                   github-detect-platform "$@";;
             github-download-latest-release)           github-download-latest-release "$@";;
             github-get-release-name-list)             github-get-release-name-list "$@";;
-            github-shr-swap-tokens)                     github-shr-swap-tokens "$@";;
+            github-shr-swap-tokens)                   github-shr-swap-tokens "$@";;
             github-is-gha-installed)                  github-is-gha-installed "$@";;
             github-release-install)                   github-release-install "$@";;
             github-curl-parse-args)                   github-curl-parse-args "$@";;
@@ -7774,17 +7723,16 @@ main ()
             github-release-get-latest-tag)            github-release-get-latest-tag "$@";;
             github-release-select-platform)           github-release-select-platform "$@";;
             github-shr-clean)                         github-shr-clean "$@";;
-            github-shr-create-folder)                         github-shr-create-folder "$@";;
-            github-shr-folder-name)                         github-shr-folder-name "$@";;
+            github-shr-create-folder)                 github-shr-create-folder "$@";;
+            github-shr-folder-name)                   github-shr-folder-name "$@";;
             github-shr-install)                       github-shr-install "$@";;
             github-shr-install-runner)                github-shr-install-runner "$@";;
-            github-shr-save-uat)                          github-shr-save-uat "$@";;
-	    github-shr-setup)                         github-shr-setup "$@";;
+            github-shr-save-uat)                      github-shr-save-uat "$@";;
+	        github-shr-setup)                         github-shr-setup "$@";;
             github-shr-start)                         github-shr-start "$@";;
             github-shr-test)                          github-shr-test "$@";;
             github-test-repo)                         github-test-repo "$@";;
             github-test-repo-with-auth)               github-test-repo-with-auth "$@";;
-            github-validate-uat)                      github-validate-uat "$@";;
             github-validate-uat)                      github-validate-uat "$@";;
             go-service-gen-nginx-domain-file)         go-service-gen-nginx-domain-file "$@";;
             go-service-install)                       go-service-install "$@";;
@@ -7814,7 +7762,7 @@ main ()
             install-dylt)                             install-dylt "$@";;
             install-etcd)                             install-etcd "$@";;
             install-flask-app)                        install-flask-app "$@";;
-            install-fresh-daylight-svc)               install-fresh-daylight-svc "$@";;
+            fresh-daylight-install-svc)               fresh-daylight-install-svc "$@";;
             install-gnome-keyring)                    install-gnome-keyring "$@";;
             install-latest-httpie)                    install-latest-httpie "$@";;
             install-mssql-tools)                      install-mssql-tools "$@";;
@@ -7848,7 +7796,7 @@ main ()
             pull-svc)                                 pull-svc "$@";;
             pull-vm)                                  pull-vm "$@";;
             pull-webapp)                              pull-webapp "$@";;
-            pullAppInfo)                              pullAppInfo "$@";;
+            pull-app-info)                            pull-app-info "$@";;
             push-app)                                 push-app "$@";;
             push-daylight)                            push-daylight "$@";;
             push-flask-app)                           push-flask-app "$@";;
