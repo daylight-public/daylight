@@ -2829,6 +2829,63 @@ github-curl-post ()
 
 #-------------------------------------------------------------------------------
 #
+# github-curl-parse-args()
+#
+# Parse common GitHub API arguments into an associative array
+#
+github-curl-parse-args ()
+{
+    # shellcheck disable=SC2016
+    (( $# >= 2 )) || { printf 'Usage: github-curl-parse-args infovar nargs [$args]\n' >&2; return 1; }
+    # shellcheck disable=SC2178
+    [[ $1 != argmap ]] && { local -n argmap; argmap=$1; }
+    # Check that argmap is either an assoc array or a nameref to an assoc array
+    [[ $(declare -p argmap 2>/dev/null) == "declare -A"* ]] \
+    || [[ $(declare -p "${!argmap}" 2>/dev/null) == "declare -A"* ]] \
+    || { printf "%s is not an associative array, and it's not a nameref to an associative array either\n" "argmap" >&2; return 1; }
+    # shellcheck disable=SC2178
+    [[ $2 != nargs ]] && { local -n nargs; nargs=$2; }
+
+    nargs=0
+    shift 2
+    while (( $# > 0 )); do
+        case $1 in
+            '--accept'     |\
+            '--data'       |\
+            '--output'     |\
+            '--output-dir' |\
+            '--per-page'   |\
+            '--token'      |\
+            '--label'      |\
+            '--platform'   |\
+            '--version'    |\
+            '--workflow'   \
+            )
+                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
+                argmap["${1##--}"]=$2
+                ((nargs+=2))
+                shift 2
+                ;;
+            '--remote-name')
+                argmap[remote-name]=1
+                ((nargs++))
+                shift
+                ;;
+            '--')
+                shift
+                ((nargs++))
+                break
+                ;;
+            *)
+                break
+                ;;
+        esac
+    done
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # github-detect-platform()
 #
 # Detect the OS and architecture as a platform string
@@ -4454,7 +4511,7 @@ go-service-install ()
 
 	# Pull app info from cluster
 	local -A appInfo
-	pullAppInfo appInfo "$user" "$name" || return
+	pull-app-info appInfo "$user" "$name" || return
 	declare -p appInfo
 
 	# Get name of vm to user
@@ -4603,7 +4660,7 @@ go-service-uninstall ()
 
 	# Pull app info from cluster
 	local -A appInfo
-	pullAppInfo appInfo "$user" "$name" || return
+	pull-app-info appInfo "$user" "$name" || return
 	declare -p appInfo
 	
 	# Get vm name for app from cluster	
@@ -7641,191 +7698,259 @@ main ()
         cmd=$1
         shift
         case "$cmd" in 
-            activate-flask-app)                       activate-flask-app "$@";;
-            activate-svc)                             activate-svc "$@";;
-            activate-vm)                              activate-vm "$@";;
-            add-container-user)                       add-container-user "$@";;
-            add-rayray)                               add-rayray "$@";;
-            add-rayray-debian)                        add-rayray-debian "$@";;
-            add-ssh-to-container)                     add-ssh-to-container "$@";;
-            add-superuser)                            add-superuser "$@";;
-            add-to-bashrc)                            add-to-bashrc "$@";;
-            add-user)                                 add-user "$@";;
-            add-user-to-idmap)                        add-user-to-idmap "$@";;
-            add-user-to-shadow-ids)                   add-user-to-shadow-ids "$@";;
-            cat-conf-script)                          cat-conf-script "$@";;
-            create-flask-app)                         create-flask-app "$@";;
-            create-github-user-access-token)          create-github-user-access-token "$@";;
-            create-home-filesystem)                   create-home-filesystem "$@";;
-            create-loopback)                          create-loopback "$@";;
-            create-lxd-user-data)                     create-lxd-user-data "$@";;
-            create-pubbo-service)                     create-pubbo-service "$@";;
-            create-publish-image-service)             create-publish-image-service "$@";;
-            create-service-from-dist-script)          create-service-from-dist-script "$@";;
-            create-static-website)                    create-static-website "$@";;
-            delete-incus-instance)                    delete-incus-instance "$@";;
-            delete-lxd-instance)                      delete-lxd-instance "$@";;
-            download-app)                             download-app "$@";;
-            download-daylight)                        download-daylight "$@";;
-            download-daylight-batch)                  download-daylight-batch "$@";;
-            download-dist)                            download-dist "$@";;
-            download-dylt)                            download-dylt "$@";;
-            download-flask-app)                       download-flask-app "$@";;
-            download-flask-service)                   download-flask-service "$@";;
-            download-public-key)                      download-public-key "$@";;
-            github-shr-download-tarball)              github-shr-download-tarball "$@";;
-            download-svc)                             download-svc "$@";;
-            download-to-temp-dir)                     download-to-temp-dir "$@";;
-            download-vm)                              download-vm "$@";;
-            edit-daylight)                            edit-daylight "$@";;
-            etcd-create-download-url)                 etcd-create-download-url "$@";;
-            etcd-download)                            etcd-download "$@";;
-            etcd-download-latest)                     etcd-download-latest "$@";;
-            etcd-gen-run-script)                      etcd-gen-run-script "$@";;
-            etcd-gen-unit-file)                       etcd-gen-unit-file "$@";;
-            etcd-get-latest-version)                  etcd-get-latest-version "$@";;
-            etcd-install-latest)                      etcd-install-latest "$@";;
-            etcd-setup-data-dir)                      etcd-setup-data-dir "$@";;
-            gen-completion-script)                    gen-completion-script "$@";;
-            gen-completion-script-batch)              gen-completion-script-batch "$@";;
-            gen-daylight-completion-script)           gen-daylight-completion-script "$@";;
-            gen-nginx-flask)                          gen-nginx-flask "$@";;
-            gen-nginx-static)                         gen-nginx-static "$@";;
-            generate-unit-file)                       generate-unit-file "$@";;
-            get-bucket)                               get-bucket "$@";;
-            get-container-ip)                         get-container-ip "$@";;
-            get-image-base)                           get-image-base "$@";;
-            get-image-name)                           get-image-name "$@";;
-            get-image-repo)                           get-image-repo "$@";;
-            get-service-environment-file)             get-service-environment-file "$@";;
-            get-service-exec-start)                   get-service-exec-start "$@";;
-            get-service-file-value)                   get-service-file-value "$@";;
-            get-service-working-directory)            get-service-working-directory "$@";;
-            github-app-get-client-id)                 github-app-get-client-id "$@";;
-            github-app-get-id)                        github-app-get-id "$@";;
-            github-create-uat)                        github-create-uat "$@";;
-            github-curl)                              github-curl "$@";;
-            github-detect-platform)                   github-detect-platform "$@";;
-            github-download-latest-release)           github-download-latest-release "$@";;
-            github-get-release-name-list)             github-get-release-name-list "$@";;
-            github-shr-swap-tokens)                   github-shr-swap-tokens "$@";;
-            github-is-gha-installed)                  github-is-gha-installed "$@";;
-            github-release-install)                   github-release-install "$@";;
-            github-curl-parse-args)                   github-curl-parse-args "$@";;
-            github-release-download)                  github-release-download "$@";;
-            github-release-get-asset-name)            github-release-get-asset-name "$@";;
-            github-release-get-data)                  github-release-get-data "$@";;
-            github-release-download-latest)           github-release-download-latest "$@";;
-            github-release-get-latest-tag)            github-release-get-latest-tag "$@";;
-            github-release-select-platform)           github-release-select-platform "$@";;
-            github-shr-clean)                         github-shr-clean "$@";;
-            github-shr-create-folder)                 github-shr-create-folder "$@";;
-            github-shr-folder-name)                   github-shr-folder-name "$@";;
-            github-shr-install)                       github-shr-install "$@";;
-            github-shr-install-runner)                github-shr-install-runner "$@";;
-            github-shr-save-uat)                      github-shr-save-uat "$@";;
-	    github-shr-setup)                         github-shr-setup "$@";;
-            github-shr-start)                         github-shr-start "$@";;
-            github-shr-test)                          github-shr-test "$@";;
-            github-test-repo)                         github-test-repo "$@";;
-            github-test-repo-with-auth)               github-test-repo-with-auth "$@";;
-            github-validate-uat)                      github-validate-uat "$@";;
-            go-service-gen-nginx-domain-file)         go-service-gen-nginx-domain-file "$@";;
-            go-service-install)                       go-service-install "$@";;
-            go-service-uninstall)                     go-service-uninstall "$@";;
-            go-upgrade)                               go-upgrade "$@";;
-            hello)                                    hello "$@";;
-            hello2)                                   hello2 "$@";;
-            host-init)                                host-init "$@";;
-            incus-config-snapshots)                   incus-config-snapshots "$@";;
-            incus-create-profiles)                    incus-create-profiles "$@";;
-            incus-dump-id-map)                        incus-dump-id-map "$@";;
-            incus-install)                            incus-install "$@";;
-            incus-instance-exists)                    incus-instance-exists "$@";;
-            incus-pull-file)                          incus-pull-file "$@";;
-            incus-push-file)                          incus-push-file "$@";;
-            incus-remove-file)                        incus-remove-file "$@";;
-            incus-set-id-map)                         incus-set-id-map "$@";;
-            incus-share-folder)                       incus-share-folder "$@";;
-            init-alpine)                              init-alpine "$@";;
-            init-incus)                               init-incus "$@";;
-            init-lxd)                                 init-lxd "$@";;
-            init-nginx)                               init-nginx "$@";;
-            init-rayray)                              init-rayray "$@";;
-            init-rpi)                                 init-rpi "$@";;
-            install-app)                              install-app "$@";;
-            install-awscli)                           install-awscli "$@";;
-            install-build-nightly-svc)                install-build-nightly-svc "$@";;
-            install-dylt)                             install-dylt "$@";;
-            install-etcd)                             install-etcd "$@";;
-            install-flask-app)                        install-flask-app "$@";;
-            fresh-daylight-install-svc)               fresh-daylight-install-svc "$@";;
-            install-gnome-keyring)                    install-gnome-keyring "$@";;
-            install-latest-httpie)                    install-latest-httpie "$@";;
-            install-mssql-tools)                      install-mssql-tools "$@";;
-            install-pubbo)                            install-pubbo "$@";;
-            install-public-key)                       install-public-key "$@";;
-            install-python)                           install-python "$@";;
-            install-service)                          install-service "$@";;
-            install-service-from-command)             install-service-from-command "$@";;
-            install-service-from-script)              install-service-from-script "$@";;
-            install-shellscript-part-handlers)        install-shellscript-part-handlers "$@";;
-            install-svc)                              install-svc "$@";;
-            install-venv)                             install-venv "$@";;
-            install-vm)                               install-vm "$@";;
-            list-apps)                                list-apps "$@";;
-            list-conf-scripts)                        list-conf-scripts "$@";;
-            list-funcs)                               list-funcs "$@";;
-            list-host-public-keys)                    list-host-public-keys "$@";;
-            list-public-keys)                         list-public-keys "$@";;
-            list-services)                            list-services "$@";;
-            list-vms)                                 list-vms "$@";;
-            nginx-init)                               nginx-init "$@";;
-            pgql-install-client)                      pgql-install-client "$@";;
-            prep-filesystem)                          prep-filesystem "$@";;
-            print-os-arch-vars)                       print-os-arch-vars "$@";;
-            pull-app)                                 pull-app "$@";;
-            pull-daylight)                            pull-daylight "$@";;
-            pull-flask-app)                           pull-flask-app "$@";;
-            pull-git-repo)                            pull-git-repo "$@";;
-            pull-image)                               pull-image "$@";;
-            pull-ssh-tarball)                         pull-ssh-tarball "$@";;
-            pull-svc)                                 pull-svc "$@";;
-            pull-vm)                                  pull-vm "$@";;
-            pull-webapp)                              pull-webapp "$@";;
-            pull-app-info)                            pull-app-info "$@";;
-            push-app)                                 push-app "$@";;
-            push-daylight)                            push-daylight "$@";;
-            push-flask-app)                           push-flask-app "$@";;
-            push-svc)                                 push-svc "$@";;
-            push-webapp)                              push-webapp "$@";;
-            replace-nginx-conf)                       replace-nginx-conf "$@";;
-            resolve-rel-path)                         resolve-rel-path "$@";;
-            run-conf-script)                          run-conf-script "$@";;
-            run-service)                              run-service "$@";;
-            sanitize-label)                           sanitize-label "$@";;
-            setup-domain)                             setup-domain "$@";;
-            source-daylight)                          source-daylight "$@";;
-            source-service-environment-file)          source-service-environment-file "$@";;
-            start-indexed-service)                    start-indexed-service "$@";;
-            start-service)                            start-service "$@";;
-            sync-add-service)                         sync-add-service "$@";;
-            sync-create-unit-name)                    sync-create-unit-name "$@";;
-            sync-daylight-install-service)            sync-daylight-install-service "$@";;
-            sync-follow-service)                      sync-follow-service "$@";;
-            sync-remove-service)                      sync-remove-service "$@";;
-            sync-run-service)                         sync-run-service "$@";;
-            trigger-nightly-release)                  trigger-nightly-release "$@";;
-            trigger-nightly-release-batch)            trigger-nightly-release-batch "$@";;
-            sys-start)                                sys-start "$@";;
-            uninstall-etcd)                           uninstall-etcd "$@";;
-            untar-to-temp-folder)                     untar-to-temp-folder "$@";;
-            update-and-restart)                       update-and-restart "$@";;
-            watch-daylight-gen-run-script)            watch-daylight-gen-run-script "$@";;
-            watch-daylight-gen-unit-file)             watch-daylight-gen-unit-file "$@";;
-            watch-daylight-install-service)           watch-daylight-install-service "$@";;
-            zabbly-init)                              zabbly-init "$@";;
-            *) printf 'Unknown command: %s \n' "$cmd" >&2; return 1;;
+            activate-flask-app)                               activate-flask-app "$@";;
+            activate-svc)                                     activate-svc "$@";;
+            activate-vm)                                      activate-vm "$@";;
+            add-container-user)                               add-container-user "$@";;
+            add-rayray)                                       add-rayray "$@";;
+            add-rayray-debian)                                add-rayray-debian "$@";;
+            add-ssh-to-container)                             add-ssh-to-container "$@";;
+            add-superuser)                                    add-superuser "$@";;
+            add-to-bashrc)                                    add-to-bashrc "$@";;
+            add-user)                                         add-user "$@";;
+            add-user-to-idmap)                                add-user-to-idmap "$@";;
+            add-user-to-shadow-ids)                           add-user-to-shadow-ids "$@";;
+            cat-conf-script)                                  cat-conf-script "$@";;
+            create-flask-app)                                 create-flask-app "$@";;
+            create-github-user-access-token)                  create-github-user-access-token "$@";;
+            create-home-filesystem)                           create-home-filesystem "$@";;
+            create-loopback)                                  create-loopback "$@";;
+            create-lxd-user-data)                             create-lxd-user-data "$@";;
+            create-pubbo-service)                             create-pubbo-service "$@";;
+            create-publish-image-service)                     create-publish-image-service "$@";;
+            create-service-from-dist-script)                  create-service-from-dist-script "$@";;
+            create-static-website)                            create-static-website "$@";;
+            create-sudo2-group)                               create-sudo2-group "$@";;
+            create-temp-file)                                 create-temp-file "$@";;
+            create-temp-folder)                               create-temp-folder "$@";;
+            delete-incus-instance)                            delete-incus-instance "$@";;
+            delete-lxd-instance)                              delete-lxd-instance "$@";;
+            detect-platform)                                  detect-platform "$@";;
+            detect-runner-platform)                           detect-runner-platform "$@";;
+            download-app)                                     download-app "$@";;
+            download-daylight)                                download-daylight "$@";;
+            download-daylight-batch)                          download-daylight-batch "$@";;
+            download-dist)                                    download-dist "$@";;
+            download-dylt)                                    download-dylt "$@";;
+            download-flask-app)                               download-flask-app "$@";;
+            download-flask-service)                           download-flask-service "$@";;
+            download-public-key)                              download-public-key "$@";;
+            download-svc)                                     download-svc "$@";;
+            download-to-temp-dir)                             download-to-temp-dir "$@";;
+            download-vm)                                      download-vm "$@";;
+            dylt-legacy-platform)                             dylt-legacy-platform "$@";;
+            ec)                                               ec "$@";;
+            edit-daylight)                                    edit-daylight "$@";;
+            emit-os-arch-vars)                                emit-os-arch-vars "$@";;
+            emit-vars)                                        emit-vars "$@";;
+            etcd-create-download-url)                         etcd-create-download-url "$@";;
+            etcd-create-release-name)                         etcd-create-release-name "$@";;
+            etcd-download)                                    etcd-download "$@";;
+            etcd-download-latest)                             etcd-download-latest "$@";;
+            etcd-gen-join-script)                             etcd-gen-join-script "$@";;
+            etcd-gen-run-script)                              etcd-gen-run-script "$@";;
+            etcd-gen-unit-file)                               etcd-gen-unit-file "$@";;
+            etcd-get-latest-version)                          etcd-get-latest-version "$@";;
+            etcd-install-latest)                              etcd-install-latest "$@";;
+            etcd-install-release)                             etcd-install-release "$@";;
+            etcd-install-service)                             etcd-install-service "$@";;
+            etcd-setup-data-dir)                              etcd-setup-data-dir "$@";;
+            fresh-daylight-gen-run-script)                    fresh-daylight-gen-run-script "$@";;
+            fresh-daylight-gen-service-file)                  fresh-daylight-gen-service-file "$@";;
+            fresh-daylight-gen-svc)                           fresh-daylight-gen-svc "$@";;
+            fresh-daylight-gen-timer-file)                    fresh-daylight-gen-timer-file "$@";;
+            fresh-daylight-install-svc)                       fresh-daylight-install-svc "$@";;
+            gen-completion-script)                            gen-completion-script "$@";;
+            gen-completion-script-batch)                      gen-completion-script-batch "$@";;
+            gen-daylight-completion-script)                   gen-daylight-completion-script "$@";;
+            gen-nginx-flask)                                  gen-nginx-flask "$@";;
+            gen-nginx-static)                                 gen-nginx-static "$@";;
+            generate-unit-file)                               generate-unit-file "$@";;
+            get-bucket)                                       get-bucket "$@";;
+            get-container-ip)                                 get-container-ip "$@";;
+            get-image-base)                                   get-image-base "$@";;
+            get-image-name)                                   get-image-name "$@";;
+            get-image-repo)                                   get-image-repo "$@";;
+            get-linux-version-codename)                       get-linux-version-codename "$@";;
+            get-service-environment-file)                     get-service-environment-file "$@";;
+            get-service-exec-start)                           get-service-exec-start "$@";;
+            get-service-file-value)                           get-service-file-value "$@";;
+            get-service-working-directory)                    get-service-working-directory "$@";;
+            getVmName)                                        getVmName "$@";;
+            github-app-get-client-id)                         github-app-get-client-id "$@";;
+            github-app-get-data)                              github-app-get-data "$@";;
+            github-app-get-id)                                github-app-get-id "$@";;
+            github-app-get-info)                              github-app-get-info "$@";;
+            github-create-flags)                              github-create-flags "$@";;
+            github-create-uat)                                github-create-uat "$@";;
+            github-create-url)                                github-create-url "$@";;
+            github-curl)                                      github-curl "$@";;
+            github-curl-parse-args)                           github-curl-parse-args "$@";;
+            github-curl-post)                                 github-curl-post "$@";;
+            github-detect-platform)                           github-detect-platform "$@";;
+            github-download-latest-release)                   github-download-latest-release "$@";;
+            github-get-release-data)                          github-get-release-data "$@";;
+            github-get-release-name-list)                     github-get-release-name-list "$@";;
+            github-get-release-package-data)                  github-get-release-package-data "$@";;
+            github-get-release-package-info)                  github-get-release-package-info "$@";;
+            github-is-gha-installed)                          github-is-gha-installed "$@";;
+            github-release-create-url-path)                   github-release-create-url-path "$@";;
+            github-release-download)                          github-release-download "$@";;
+            github-release-download-latest)                   github-release-download-latest "$@";;
+            github-release-get-asset-name)                    github-release-get-asset-name "$@";;
+            github-release-get-data)                          github-release-get-data "$@";;
+            github-release-get-latest-tag)                    github-release-get-latest-tag "$@";;
+            github-release-get-package-data)                  github-release-get-package-data "$@";;
+            github-release-get-package-info)                  github-release-get-package-info "$@";;
+            github-release-install)                           github-release-install "$@";;
+            github-release-install-latest)                    github-release-install-latest "$@";;
+            github-release-list)                              github-release-list "$@";;
+            github-release-list-platforms)                    github-release-list-platforms "$@";;
+            github-release-select)                            github-release-select "$@";;
+            github-release-select-platform)                   github-release-select-platform "$@";;
+            github-release-verify-checksum)                   github-release-verify-checksum "$@";;
+            github-shr-clean)                                 github-shr-clean "$@";;
+            github-shr-create-folder)                         github-shr-create-folder "$@";;
+            github-shr-download-tarball)                      github-shr-download-tarball "$@";;
+            github-shr-folder-name)                           github-shr-folder-name "$@";;
+            github-shr-install)                               github-shr-install "$@";;
+            github-shr-install-runner)                        github-shr-install-runner "$@";;
+            github-shr-load-uat)                              github-shr-load-uat "$@";;
+            github-shr-save-uat)                              github-shr-save-uat "$@";;
+            github-shr-setup)                                 github-shr-setup "$@";;
+            github-shr-start)                                 github-shr-start "$@";;
+            github-shr-swap-tokens)                           github-shr-swap-tokens "$@";;
+            github-shr-test)                                  github-shr-test "$@";;
+            github-shr-uat-path)                              github-shr-uat-path "$@";;
+            github-test-repo)                                 github-test-repo "$@";;
+            github-test-repo-with-auth)                       github-test-repo-with-auth "$@";;
+            github-validate-uat)                              github-validate-uat "$@";;
+            go-service-gen-nginx-domain-file)                 go-service-gen-nginx-domain-file "$@";;
+            go-service-gen-run-script)                        go-service-gen-run-script "$@";;
+            go-service-gen-stop-script)                       go-service-gen-stop-script "$@";;
+            go-service-gen-unit-file)                         go-service-gen-unit-file "$@";;
+            go-service-install)                               go-service-install "$@";;
+            go-service-uninstall)                             go-service-uninstall "$@";;
+            go-upgrade)                                       go-upgrade "$@";;
+            hello)                                            hello "$@";;
+            host-init)                                        host-init "$@";;
+            incus-api-call)                                   incus-api-call "$@";;
+            incus-api-curl)                                   incus-api-curl "$@";;
+            incus-api-instances)                              incus-api-instances "$@";;
+            incus-api-versions)                               incus-api-versions "$@";;
+            incus-config-snapshots)                           incus-config-snapshots "$@";;
+            incus-create-profiles)                            incus-create-profiles "$@";;
+            incus-create-ssh-profile)                         incus-create-ssh-profile "$@";;
+            incus-create-www-profile)                         incus-create-www-profile "$@";;
+            incus-dump-id-map)                                incus-dump-id-map "$@";;
+            incus-install)                                    incus-install "$@";;
+            incus-instance-exists)                            incus-instance-exists "$@";;
+            incus-pull-file)                                  incus-pull-file "$@";;
+            incus-push-file)                                  incus-push-file "$@";;
+            incus-remove-file)                                incus-remove-file "$@";;
+            incus-set-id-map)                                 incus-set-id-map "$@";;
+            incus-share-folder)                               incus-share-folder "$@";;
+            init-alpine)                                      init-alpine "$@";;
+            init-incus)                                       init-incus "$@";;
+            init-lxd)                                         init-lxd "$@";;
+            init-nginx)                                       init-nginx "$@";;
+            init-rayray)                                      init-rayray "$@";;
+            init-rpi)                                         init-rpi "$@";;
+            install-app)                                      install-app "$@";;
+            install-awscli)                                   install-awscli "$@";;
+            install-build-nightly-svc)                        install-build-nightly-svc "$@";;
+            install-dylt)                                     install-dylt "$@";;
+            install-etcd)                                     install-etcd "$@";;
+            install-flask-app)                                install-flask-app "$@";;
+            install-gnome-keyring)                            install-gnome-keyring "$@";;
+            install-latest-httpie)                            install-latest-httpie "$@";;
+            install-mssql-tools)                              install-mssql-tools "$@";;
+            install-pubbo)                                    install-pubbo "$@";;
+            install-public-key)                               install-public-key "$@";;
+            install-python)                                   install-python "$@";;
+            install-service)                                  install-service "$@";;
+            install-service-from-command)                     install-service-from-command "$@";;
+            install-service-from-script)                      install-service-from-script "$@";;
+            install-shellscript-part-handlers)                install-shellscript-part-handlers "$@";;
+            install-svc)                                      install-svc "$@";;
+            install-venv)                                     install-venv "$@";;
+            install-vm)                                       install-vm "$@";;
+            is-debian)                                        is-debian "$@";;
+            list-apps)                                        list-apps "$@";;
+            list-bash-funcs)                                  list-bash-funcs "$@";;
+            list-conf-scripts)                                list-conf-scripts "$@";;
+            list-git-repos)                                   list-git-repos "$@";;
+            list-host-public-keys)                            list-host-public-keys "$@";;
+            list-public-keys)                                 list-public-keys "$@";;
+            list-services)                                    list-services "$@";;
+            list-shr-entries)                                 list-shr-entries "$@";;
+            list-vms)                                         list-vms "$@";;
+            lxd-dump-id-map)                                  lxd-dump-id-map "$@";;
+            lxd-instance-exists)                              lxd-instance-exists "$@";;
+            lxd-set-id-map)                                   lxd-set-id-map "$@";;
+            lxd-share-folder)                                 lxd-share-folder "$@";;
+            nginx-gen-default-index)                          nginx-gen-default-index "$@";;
+            nginx-init)                                       nginx-init "$@";;
+            nginx-install-index)                              nginx-install-index "$@";;
+            pgql-add-repo)                                    pgql-add-repo "$@";;
+            pgql-install-client)                              pgql-install-client "$@";;
+            pgql-install-repo-key)                            pgql-install-repo-key "$@";;
+            prep-filesystem)                                  prep-filesystem "$@";;
+            prep-service)                                     prep-service "$@";;
+            print-os-arch-vars)                               print-os-arch-vars "$@";;
+            print-vars)                                       print-vars "$@";;
+            pull-app)                                         pull-app "$@";;
+            pull-app-info)                                    pull-app-info "$@";;
+            pull-daylight)                                    pull-daylight "$@";;
+            pull-flask-app)                                   pull-flask-app "$@";;
+            pull-git-repo)                                    pull-git-repo "$@";;
+            pull-image)                                       pull-image "$@";;
+            pull-ssh-tarball)                                 pull-ssh-tarball "$@";;
+            pull-svc)                                         pull-svc "$@";;
+            pull-vm)                                          pull-vm "$@";;
+            pull-webapp)                                      pull-webapp "$@";;
+            push-app)                                         push-app "$@";;
+            push-daylight)                                    push-daylight "$@";;
+            push-flask-app)                                   push-flask-app "$@";;
+            push-svc)                                         push-svc "$@";;
+            push-webapp)                                      push-webapp "$@";;
+            read-kvs)                                         read-kvs "$@";;
+            replace-nginx-conf)                               replace-nginx-conf "$@";;
+            resolve-rel-path)                                 resolve-rel-path "$@";;
+            restart-nginx)                                    restart-nginx "$@";;
+            run-conf-script)                                  run-conf-script "$@";;
+            run-service)                                      run-service "$@";;
+            sanitize-label)                                   sanitize-label "$@";;
+            setup-domain)                                     setup-domain "$@";;
+            source-daylight)                                  source-daylight "$@";;
+            source-service-environment-file)                  source-service-environment-file "$@";;
+            start-indexed-service)                            start-indexed-service "$@";;
+            start-service)                                    start-service "$@";;
+            sync-add-service)                                 sync-add-service "$@";;
+            sync-create-unit-name)                            sync-create-unit-name "$@";;
+            sync-daylight-gen-run-script)                     sync-daylight-gen-run-script "$@";;
+            sync-daylight-gen-unit-file)                      sync-daylight-gen-unit-file "$@";;
+            sync-daylight-install-service)                    sync-daylight-install-service "$@";;
+            sync-follow-service)                              sync-follow-service "$@";;
+            sync-remove-service)                              sync-remove-service "$@";;
+            sync-run-service)                                 sync-run-service "$@";;
+            sys-start)                                        sys-start "$@";;
+            trigger-nightly-release)                          trigger-nightly-release "$@";;
+            trigger-nightly-release-batch)                    trigger-nightly-release-batch "$@";;
+            uninstall-etcd)                                   uninstall-etcd "$@";;
+            untar-to-temp-folder)                             untar-to-temp-folder "$@";;
+            update-and-restart)                               update-and-restart "$@";;
+            watch-daylight-gen-run-script)                    watch-daylight-gen-run-script "$@";;
+            watch-daylight-gen-unit-file)                     watch-daylight-gen-unit-file "$@";;
+            watch-daylight-install-service)                   watch-daylight-install-service "$@";;
+            yesno)                                            yesno "$@";;
+            zabbly-add-package-repo)                          zabbly-add-package-repo "$@";;
+            zabbly-get-fingerprint)                           zabbly-get-fingerprint "$@";;
+            zabbly-init)                                      zabbly-init "$@";;
+            zabbly-save-key)                                  zabbly-save-key "$@";;
+            zabbly-validate-fingerprint)                      zabbly-validate-fingerprint "$@";;
+            *) printf 'Unknown command: %s 
+' "$cmd" >&2; return 1;;
         esac
     fi
 }
