@@ -2485,6 +2485,48 @@ getVmName ()
 
 #-------------------------------------------------------------------------------
 #
+# ghr-url-path()
+#
+# Create a URL path for a GitHub release by version, or latest
+#
+# Flags
+#       [--version] specific release version (default: latest)
+#
+# API endpoint(s)
+#                 --version         /repos/$org/$repo/releases/tags/$tag
+#                  No --version     /repos/$org/$repo/releases/latest
+#
+ghr-url-path ()
+{
+    # parse github args
+    local -A argmap=()
+    local nargs=0
+    github-curl-parse-args argmap nargs "$@" || return
+    shift "$nargs"
+    # shellcheck disable=SC2016
+    (( $# >= 2 )) || { printf 'Usage: ghr-url-path $org $repo\n' >&2; return 1; }
+    local org=$1
+    local repo=$2
+
+    local tag=${argmap[version]:-''}
+    local urlPath
+    if [[ -n "$tag" ]]; then
+        local urlPath="/repos/$org/$repo/releases/tags/$tag"
+    else
+        local urlPath="/repos/$org/$repo/releases/latest"
+    fi
+
+    # printf with \n if interactive
+    if [[ -t 0 ]]; then
+        printf '%s\n' "$urlPath"
+    else
+        printf '%s' "$urlPath"
+    fi
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # github-app-get-client-id()
 #
 # Get the OAuth client ID for a GitHub App
@@ -3111,6 +3153,11 @@ github-is-gha-installed ()
 #
 # Create a URL path for a GitHub release
 #
+# If --version is set   url for tagged release   
+#                       /repos/$org/$repo/releases/tags/$tag
+# If --version not set  url for latest release
+#                       /repos/$org/$repo/releases/latest
+#
 github-release-create-url-path ()
 {
     # parse github args
@@ -3699,7 +3746,7 @@ github-release-list-platforms ()
     github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
 	# shellcheck disable=SC2016
-	(( $# = 2 )) || { printf 'Usage: github-release-list [flags] $org $repo\n' >&2; return 1; }
+	(( $# = 2 )) || { printf 'Usage: github-release-list-platforms [flags] $org $repo\n' >&2; return 1; }
 	local org=$1
 	local repo=$2
 
@@ -3756,7 +3803,7 @@ github-release-select-platform ()
     github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
 	# shellcheck disable=SC2016
-	(( $# = 2 )) || { printf 'Usage: github-release-select-platforms [flags] $org $repo' >&2; return 1; }
+	(( $# = 2 )) || { printf 'Usage: github-release-select-platform [flags] $org $repo' >&2; return 1; }
     local platforms
     readarray -t -d $'\n' platforms < <(github-release-list-platforms "$@")
 	select platform in "${platforms[@]}"; do
@@ -7779,6 +7826,7 @@ main ()
             get-service-file-value)                           get-service-file-value "$@";;
             get-service-working-directory)                    get-service-working-directory "$@";;
             getVmName)                                        getVmName "$@";;
+            ghr-url-path)                                     ghr-url-path "$@";;
             github-app-get-client-id)                         github-app-get-client-id "$@";;
             github-app-get-data)                              github-app-get-data "$@";;
             github-app-get-id)                                github-app-get-id "$@";;
