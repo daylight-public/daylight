@@ -2506,10 +2506,10 @@ ghr-url-path ()
     # shellcheck disable=SC2016
     (( $# >= 1 )) || { printf 'Usage: ghr-url-path $org/$repo\n' >&2; return 1; }
     local orgRepo=$1
-    local rx=([a-zA-Z09._-]+)/([a-zA-Z09._-]+/)
-    [[ "$orgRepo" =~ $rx]] || { printf 'expecting org/repo (%s)\n "$orgRepo"; return 1; }
-    local org="${BASH_REMATCH[1]}
-    local org="${BASH_REMATCH[2]}
+    local rx="(^[a-zA-Z0-9._-]+)/([a-zA-Z0-9._-]+$)"
+    [[ "$orgRepo" =~ $rx ]] || { printf 'expecting org/repo (%s)\n' "$orgRepo"; return 1; }
+    local org=${BASH_REMATCH[1]}
+    local repo=${BASH_REMATCH[2]}
 
     local tag=${argmap[version]:-''}
     local urlPath
@@ -2524,7 +2524,7 @@ ghr-url-path ()
         printf '%s\n' "$urlPath"
     else
         printf '%s' "$urlPath"
-    /urli
+    fi
 }
 
 
