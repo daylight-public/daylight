@@ -2485,7 +2485,7 @@ getVmName ()
 
 #-------------------------------------------------------------------------------
 #
-# ghr-url-path()
+# ghr-url-path() org/repo
 #
 # Create a URL path for a GitHub release by version, or latest
 #
@@ -2504,9 +2504,12 @@ ghr-url-path ()
     github-curl-parse-args argmap nargs "$@" || return
     shift "$nargs"
     # shellcheck disable=SC2016
-    (( $# >= 2 )) || { printf 'Usage: ghr-url-path $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
+    (( $# >= 1 )) || { printf 'Usage: ghr-url-path $org/$repo\n' >&2; return 1; }
+    local orgRepo=$1
+    local rx=([a-zA-Z09._-]+)/([a-zA-Z09._-]+/)
+    [[ "$orgRepo" =~ $rx]] || { printf 'expecting org/repo (%s)\n "$orgRepo"; return 1; }
+    local org="${BASH_REMATCH[1]}
+    local org="${BASH_REMATCH[2]}
 
     local tag=${argmap[version]:-''}
     local urlPath
@@ -2521,7 +2524,7 @@ ghr-url-path ()
         printf '%s\n' "$urlPath"
     else
         printf '%s' "$urlPath"
-    fi
+    /urli
 }
 
 
