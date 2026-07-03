@@ -2468,14 +2468,14 @@ get-service-working-directory ()
 
 #-------------------------------------------------------------------------------
 #
-# getVmName()
+# get-vm-name()
 #
 # Get the Incus VM name for an application
 #
-getVmName ()
+get-vm-name ()
 {
     # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: getVmName infovar $user\n' >&2; return 1; }
+    (( $# == 2 )) || { printf 'Usage: get-vm-name infovar $user\n' >&2; return 1; }
     local -n _appInfo=$1
     local user=$2
 
@@ -4564,7 +4564,7 @@ go-service-install ()
 	declare -p appInfo
 
 	# Get name of vm to user
-	local vmName; vmName=$(getVmName appInfo "$user") || return
+	local vmName; vmName=$(get-vm-name appInfo "$user") || return
 	declare -p vmName
 
 	# Get release info, in preparation for downloading the release binary
@@ -7825,7 +7825,7 @@ main ()
             get-service-exec-start)                           get-service-exec-start "$@";;
             get-service-file-value)                           get-service-file-value "$@";;
             get-service-working-directory)                    get-service-working-directory "$@";;
-            getVmName)                                        getVmName "$@";;
+	    get-vm-name)                                      get-vm-name "$@";;
             ghr-url-path)                                     ghr-url-path "$@";;
             github-app-get-client-id)                         github-app-get-client-id "$@";;
             github-app-get-data)                              github-app-get-data "$@";;
