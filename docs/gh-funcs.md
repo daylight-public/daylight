@@ -1,6 +1,6 @@
 ### user functions (ufs) and kernel functions (kfs)
 
-Parsing is a Hard Problem in bash. It's Harder when functions that take lots of flags meet callchains of a depth greater than 1, ie when a function calls even one other functions. When it comes to github functions both are true. A central function accepts many flags, most of which are optional, so user-facing edge functions need to support a number of flags before delegating to core functionality.
+Parsing is a Hard Problem in bash. It's Harder when functions that take lots of flags, and Even Harder when functions that take lots of flags all other functions that take lots of flags. Github functions fall into this catebory. There are central functions that accept many flags, most of which are optional, and user-facing edge functions form callchains with these core functions. Things could get very ugly.
 
 To avoid turning this into a flag-parsing effort rather than a delivering-features issue, care needs to be taken in choosing the right development model and idioms.
 
