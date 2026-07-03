@@ -18,7 +18,7 @@ To avoid turning this into a flag-parsing effort rather than a delivering-featur
         - absence/presence are also handled nicely by an argmap
         - does a missing positional argument = missing argmap key? or an argmap entry explicitly indicating absence. Up to downstream.
 1. Once a user function has its argmap setup, it calls a downstream function called a kernel function
-1. A kernel function ends with a trailing underscore.
+1. Kernel function names end with a trailing underscore. This clearly disambiguates them from user functions.
 1. Kernel functions will have coresponding user functions
     - user function name = kernel function name minus the trailing underscore
     - these user funcs serve as nice references for how to call the kernel func
