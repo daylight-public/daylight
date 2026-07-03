@@ -51,13 +51,16 @@ gh-curl is a kernel function, which makes sense since it's the most important gi
 Most callers will only use a subset of these commands. The corresponding user function should use them all.
 
 The beginning of the function looks something like this
-
+```
     # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: getVmName infovar $user\n' >&2; return 1; }
     local -n appMap=$1
     local -n flags args
     local accept data output output_dir per_page remote_name token
-    github-create-args argmap args
+    gh-curl-args argmap args
+```
+
+`gh-curl_` ultimately needs to call curl, and curl takes flags and positional args. Mostly it takes flags; the positional args it takes is a sequence of URLs. `gh-curl-args` translates from an argmap back into a series of cmdline args for `curl`. 
 
 #### gh-curl
 gh-curl is the user function that invokes the gh-curl_ kernel function. The beginning of the function turns flags and args into an argmap
