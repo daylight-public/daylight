@@ -37,7 +37,7 @@ To avoid turning this into a flag-parsing effort rather than a delivering-featur
 ### example: gh-curl, gh-curl_, and ghr-list
 
 #### gh-curl_
-gh-curl is a kernel function, which makes sense since it's the most important github function. It takes a good number of arguments - a combo of flags commonly used by curl, and flags commonly used by the GitHub REST API. That roughly looks like this as of this writing
+`gh-curl_` is a kernel function, which makes sense since it's the most important github function. It takes a good number of arguments - a combo of flags commonly used by curl, and flags commonly used by the GitHub REST API. That roughly looks like this as of this writing
 ```
 #       [output]         Full path to output file
 #       [output-dir]     Output folder
@@ -58,6 +58,7 @@ The beginning of the function looks something like this
     local -n flags args
     local accept data output output_dir per_page remote_name token
     gh-curl-args argmap args
+    curl "$args[@]"
 ```
 
 `gh-curl_` ultimately needs to call curl, and curl takes flags and positional args. Mostly it takes flags; the positional args it takes is a sequence of URLs. `gh-curl-args` translates from an argmap back into a series of cmdline args for `curl`. 
@@ -66,14 +67,14 @@ The beginning of the function looks something like this
 gh-curl is the user function that invokes the gh-curl_ kernel function. The beginning of the function turns flags and args into an argmap
 by calling gh-parse-args
 
-    # flagmap   nameref to an assoc array to receive flag values
-    # posargs   nameref to an array to receive positional arguments
-    # nargs     nameref to a variable to hold number of cmdline args consumed
-    github-curl-parse-args flagmap posargs nargs "$@"
+    # argmap   nameref to an array to receive flags and positional arguments
+    gh-parse-args argmap "$@"
+    gh-curl_ argmap
 
 At the end of this, gh-curl has sorted out all its args and can call gh-curl_, possibly after enriching argmap with positional argument data
 
-#### gh-list
+For more details consult the gh-curl.md document
 
-gh-list has a simple interface. All it needs is a token
+#### gh-list
+`gh-list` has a simple interface. All it needs is a org, a repo and an optional token.
 
