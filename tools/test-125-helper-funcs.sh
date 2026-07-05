@@ -33,35 +33,108 @@ source "$SCRIPT_DIR/test-utils.sh" || exit 1
 FIXTURES_DIR="$SCRIPT_DIR/fixtures/headers"
 
 
-#--------
-# lookup-content-disposition
+#-------------------------------------------------------------------------------
 #
-# filter
-# stdin - header file
-# stdout - filename element from header
-# return 1 if header not found
+# lookup-content-disposition()
 #
-# sample
-# 	content-disposition: attachment; filename=etcd-v3.6.13-darwin-amd64.zip
+# Read a headers file from stdin and extract the filename from the
+# Content-Disposition header.  Internally uses lookup-header to find
+# the raw header line, then parses the filename value from it.
+#
+# Content-Disposition values use the format defined in RFC 6266:
+#
+#   content-disposition: attachment; filename=etcd-v3.6.13-darwin-amd64.zip
+#   content-disposition: attachment; filename="etcd-v3.6.13-darwin-amd64.zip"
+#
+# The filename may be quoted or unquoted.  This function tries the
+# quoted form first (filename="..."), then falls back to unquoted
+# (filename=... without whitespace or semicolons).  This mirrors how
+# curl --remote-header-name parses Content-Disposition.
+#
+# Stdin:            a headers file in HTTP format
+#
+# Stdout:           the filename from Content-Disposition, or nothing
+#                   if no matching header was found or no filename
+#                   could be extracted
+#
+# Returns:          0   filename found and printed
+#                   1   Content-Disposition header not found
+#                   2   header found but no extractable filename
 #
 lookup-content-disposition ()
 {
-	# lookup content disp or fail
-	# use bash paramter sub or a regex to find the filename
-	# printf the filename, + newline if terminal
+    # Use lookup-header to get the raw Content-Disposition line
+    local line
+    line=$(lookup-header 'content-disposition') || return 1
+
+    local filename
+
+    # Try quoted filename first:  filename="value"
+    # This is the more common form in modern responses.
+    if [[ "$line" =~ filename=\"([^\"]+)\" ]]; then
+        filename="${BASH_REMATCH[1]}"
+
+    # Fall back to unquoted:  filename=value
+    # The value extends to the next semicolon, whitespace, or end of line.
+    elif [[ "$line" =~ filename=([^\";[:space:]]+) ]]; then
+        filename="${BASH_REMATCH[1]}"
+
+    else
+        return 2
+    fi
+
+    printf '%s' "$filename"
+    if [[ -t 1 ]]; then
+        printf '\n'
+    fi
 }
 
 
-
+#-------------------------------------------------------------------------------
 #
-# Same as lookup-content-disposition
-# But we don't use grep in helper functions when bash will do.
-# As our reward we get to use base to confirm our test results
-# which is very nice when that data is dynamic and needs to be 
-# looked up.
+# grep-content-disposition()
+#
+# Same purpose as lookup-content-disposition, but implemented with grep
+# instead of bash builtins.  This exists specifically as a cross-check:
+# a second, independent implementation to compare results against
+# lookup-content-disposition in tests.  Both functions should produce
+# the same output for the same input.
+#
+# Stdin:            a headers file in HTTP format
+#
+# Stdout:           the filename from Content-Disposition, or nothing
+#                   if no matching header was found
+#
+# Returns:          0   filename found and printed
+#                   1   no Content-Disposition header found
 #
 grep-content-disposition ()
 {
+    # Find the Content-Disposition header line, case-insensitive,
+    # anchored to the start of the line.  Strip carriage returns
+    # from curl's CRLF line endings.
+    local line
+    line=$(grep -i '^content-disposition:' | head -1 | tr -d '\r')
+
+    if [[ -z "$line" ]]; then
+        return 1
+    fi
+
+    # Extract the filename= portion.  [^;]* stops at the next
+    # semicolon or end of line, handling both quoted and
+    # unquoted filenames.  Strip any surrounding quotes and the
+    # filename= prefix.
+    local filename
+    filename=$(printf '%s' "$line" | grep -o 'filename=[^;]*' | sed 's/^filename=//;s/"//g')
+
+    if [[ -z "$filename" ]]; then
+        return 1
+    fi
+
+    printf '%s' "$filename"
+    if [[ -t 1 ]]; then
+        printf '\n'
+    fi
 }
 
 #-------------------
@@ -183,6 +256,72 @@ test-headers-single-json ()
 }
 
 
+test-lookup-cds ()
+{
+    local failed=0
+
+    test-lookup-cd-hit "$FIXTURES_DIR/headers-content-disposition.txt" || ((failed++))
+
+    test-lookup-cd-miss "$FIXTURES_DIR/headers-paginated-json-list.txt" || ((failed++))
+    test-lookup-cd-miss "$FIXTURES_DIR/headers-paginated-object-list.txt" || ((failed++))
+    test-lookup-cd-miss "$FIXTURES_DIR/headers-single-json.txt" || ((failed++))
+
+    return "$failed"
+}
+
+
+#
+# test-lookup-cd-hit
+#
+# Confirm lookup-content-disposition succeeds and its result
+# matches what grep-content-disposition produces.
+#
+test-lookup-cd-hit ()
+{
+    local fixture=$1
+    local lookup lookup_rc
+
+    lookup=$(lookup-content-disposition < "$fixture") || true
+    lookup_rc=$?
+
+    local grep grep_rc
+    grep=$(grep-content-disposition < "$fixture") || true
+    grep_rc=$?
+
+    if [[ "$lookup_rc" -ne 0 ]]; then
+        printf '  FAIL: lookup failed (no CD found)\n'
+        return 1
+    fi
+
+    if [[ "$lookup" != "$grep" ]]; then
+        printf '  FAIL: mismatch — lookup got "%s", grep got "%s"\n' "$lookup" "$grep"
+        return 1
+    fi
+
+    printf '  PASS (cd: %s)\n' "$lookup"
+    return 0
+}
+
+
+#
+# test-lookup-cd-miss
+#
+# Confirm lookup-content-disposition returns non-zero (no CD header).
+#
+test-lookup-cd-miss ()
+{
+    local fixture=$1
+
+    lookup-content-disposition < "$fixture" >/dev/null && {
+        printf '  FAIL: unexpected CD found\n'
+        return 1
+    }
+
+    printf '  PASS (cd absent)\n'
+    return 0
+}
+
+
 #
 # test-lookup-header $headerName
 #
@@ -226,6 +365,7 @@ all()
         test-headers-paginated-json
         test-headers-paginated-object
         test-headers-single-json
+        test-lookup-cds
     )
     local total=${#tests[@]}
     local passed=0
@@ -250,7 +390,10 @@ main()
         test-headers-content-disposition|\
         test-headers-paginated-json|\
         test-headers-paginated-object|\
-        test-headers-single-json)             "$@" ;;
+        test-headers-single-json|\
+        test-lookup-cd-hit|\
+        test-lookup-cd-miss|\
+        test-lookup-cds)                      "$@" ;;
         *)                                    printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }
