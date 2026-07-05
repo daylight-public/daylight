@@ -11,7 +11,8 @@
 #
 # flags
 #       [--data]           POST data
-#       [--output]         Specify output          
+#       [--output]         Output specifier
+#       [--per-page]       Number of results to retrieve per page
 #       [--token]          GitHub API token
 #
 # --output + --remote-name: last one wins (curl allows, does not define)
@@ -53,18 +54,11 @@ gh-api ()
 #
 #
 # assoc array elements
-#       [accept]         Accept header value
 #       [data]           POST data
-#       [output]         Full path to output file
-#       [output-dir]     Output folder
-#       [per-page]       Results per page (max 100)
-#       [remote-name]    Derive filename from Content-Disposition
+#       [output]         output path specifier
+#       [per-page]       Results per page
 #       [token]          GitHub API token
 #
-# Response shape auto-detection (first page):
-#   type: array          -> key = "."
-#   object + total_count -> key = array field
-#   otherwise            -> key = ".items"
 gh-api_ ()
 {
 }
