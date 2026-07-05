@@ -200,6 +200,127 @@ lookup-header ()
 }
 
 
+
+#
+#-------------------------------------------------------------------------------
+#
+# lookup-next-link()
+#
+# Read a headers file from stdin and extract the URL from the Link
+# header with rel="next".  Internally uses lookup-header to find the
+# raw header line, then parses the next-link URL from it.
+#
+# RFC 8288 Link header format:
+#
+#   link: <https://api.github.com/...?page=2>; rel="next",
+#         <https://api.github.com/...?page=288>; rel="last"
+#
+# Whitespace around the semicolon is optional per the RFC.
+#
+# Stdin:            a headers file in HTTP format
+#
+# Stdout:           the next link URL, or nothing if no Link header
+#                   or no rel="next" link was found
+#
+# Returns:          0   next link found and printed
+#                   1   Link header not found
+#                   2   header found but no rel="next" link
+#
+lookup-next-link ()
+{
+    local line
+    line=$(lookup-header 'link') || return 1
+
+    # Extract the URL angle bracket before ; rel="next"
+    # Whitespace around ; is optional per RFC 8288: <url>;rel="next",
+    # <url> ; rel="next", <url>; rel="next", etc.
+    if [[ "$line" =~ \<([^\>]+)\>[[:space:]]*\;[[:space:]]*rel=\"next\" ]]; then
+        printf '%s' "${BASH_REMATCH[1]}"
+        if [[ -t 1 ]]; then
+            printf '\n'
+        fi
+        return 0
+    fi
+
+    return 2
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# grep-next-link()
+#
+# Same as lookup-next-link but implemented with grep for cross-checking
+# in tests.  Both functions should produce the same output for the same
+# input.
+#
+# Stdin:            a headers file in HTTP format
+#
+# Stdout:           the next link URL, or nothing if not found
+#
+# Returns:          0   next link found and printed
+#                   1   Link header or rel="next" not found
+#
+grep-next-link ()
+{
+    local line
+    line=$(grep -i '^link:' | head -1 | tr -d '\r')
+    [[ -n "$line" ]] || return 1
+
+    # Extract <URL> then ; with optional whitespace, then rel="next"
+    local url
+    url=$(printf '%s' "$line" | grep -o '<[^>]*>[[:space:]]*\;[[:space:]]*rel="next"' | sed 's/^<\([^>]*\)>.*/\1/')
+    [[ -n "$url" ]] || return 1
+
+    printf '%s' "$url"
+    if [[ -t 1 ]]; then
+        printf '\n'
+    fi
+}
+
+
+#
+# test-lookup-next-link-hit
+#
+# Confirm lookup-next-link succeeds and its result matches grep-next-link
+#
+lookup-next-link-hit ()
+{
+    local fixture=$1
+    local lookup url_grep
+
+    lookup=$(lookup-next-link < "$fixture") || { printf '  FAIL: lookup failed\n'; return 1; }
+    url_grep=$(grep-next-link < "$fixture") || { printf '  FAIL: grep failed\n'; return 1; }
+
+    if [[ "$lookup" != "$url_grep" ]]; then
+        printf '  FAIL: mismatch — lookup got "%s", grep got "%s"\n' "$lookup" "$url_grep"
+        return 1
+    fi
+
+    printf '  PASS (next: %s)\n' "$lookup"
+    return 0
+}
+
+
+#
+# test-lookup-next-link-miss
+#
+# Confirm lookup-next-link returns non-zero (no next link)
+#
+lookup-next-link-miss ()
+{
+    local fixture=$1
+
+    lookup-next-link < "$fixture" >/dev/null && {
+        printf '  FAIL: unexpected next link found\n'
+        return 1
+    }
+
+    printf '  PASS (next absent)\n'
+    return 0
+}
+
+
 test-headers-content-disposition ()
 {
     local fixture="$FIXTURES_DIR/headers-content-disposition.txt"
@@ -265,6 +386,19 @@ test-lookup-cds ()
     test-lookup-cd-miss "$FIXTURES_DIR/headers-paginated-json-list.txt" || ((failed++))
     test-lookup-cd-miss "$FIXTURES_DIR/headers-paginated-object-list.txt" || ((failed++))
     test-lookup-cd-miss "$FIXTURES_DIR/headers-single-json.txt" || ((failed++))
+
+    return "$failed"
+}
+
+
+test-lookup-next-links ()
+{
+    local failed=0
+
+    lookup-next-link-miss "$FIXTURES_DIR/headers-content-disposition.txt" || ((failed++))
+    lookup-next-link-hit  "$FIXTURES_DIR/headers-paginated-json-list.txt" || ((failed++))
+    lookup-next-link-hit  "$FIXTURES_DIR/headers-paginated-object-list.txt" || ((failed++))
+    lookup-next-link-miss "$FIXTURES_DIR/headers-single-json.txt" || ((failed++))
 
     return "$failed"
 }
@@ -366,6 +500,7 @@ all()
         test-headers-paginated-object
         test-headers-single-json
         test-lookup-cds
+        test-lookup-next-links
     )
     local total=${#tests[@]}
     local passed=0
@@ -393,7 +528,10 @@ main()
         test-headers-single-json|\
         test-lookup-cd-hit|\
         test-lookup-cd-miss|\
-        test-lookup-cds)                      "$@" ;;
+        test-lookup-cds|\
+        test-lookup-next-links|\
+        lookup-next-link-hit|\
+        lookup-next-link-miss)                 "$@" ;;
         *)                                    printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }
