@@ -6,63 +6,63 @@ source "$SCRIPT_DIR/../gh-funcs.sh" || exit 1
 
 
 # In    cmdline     --token abc --per-page 50 /repos/org/repo
-# Out   flagmap     { token: abc, per-page: 50}
+# Out   flagMap     { token: abc, per-page: 50}
 #       posargs     [ /repos/org/repo ]
 test-parse-basic()
 {
-    local -A flagmap=()
+    local -A flagMap=()
     local -a posargs=()
-    gh-parse-args flagmap posargs --token abc --per-page 50 /repos/org/repo
+    gh-parse-args flagMap posargs --token abc --per-page 50 /repos/org/repo
 
-    [[ "${flagmap[token]}" == "abc" ]] || { printf '  FAIL: token\n'; return 1; }
-    [[ "${flagmap[per-page]}" == "50" ]] || { printf '  FAIL: per-page\n'; return 1; }
+    [[ "${flagMap[token]}" == "abc" ]] || { printf '  FAIL: token\n'; return 1; }
+    [[ "${flagMap[per-page]}" == "50" ]] || { printf '  FAIL: per-page\n'; return 1; }
     [[ "${posargs[0]}" == "/repos/org/repo" ]] || { printf '  FAIL: url\n'; return 1; }
     printf '  PASS\n'
 }
 
 
 # In    cmdline     --token abc /repos/org/repo --output foo.json
-# Out   flagmap     { token: abc, output: foo.json}
+# Out   flagMap     { token: abc, output: foo.json}
 #       posargs     [ /repos/org/repo ]
 test-parse-interleaved()
 {
-    local -A flagmap=()
+    local -A flagMap=()
     local -a posargs=()
-    gh-parse-args flagmap posargs --token abc /repos/org/repo --output foo.json
+    gh-parse-args flagMap posargs --token abc /repos/org/repo --output foo.json
 
-    [[ "${flagmap[token]}" == "abc" ]] || { printf '  FAIL: token\n'; return 1; }
-    [[ "${flagmap[output]}" == "foo.json" ]] || { printf '  FAIL: output\n'; return 1; }
+    [[ "${flagMap[token]}" == "abc" ]] || { printf '  FAIL: token\n'; return 1; }
+    [[ "${flagMap[output]}" == "foo.json" ]] || { printf '  FAIL: output\n'; return 1; }
     [[ "${posargs[0]}" == "/repos/org/repo" ]] || { printf '  FAIL: url\n'; return 1; }
     printf '  PASS\n'
 }
 
 
 # In    cmdline     --remote-name /repos/org/repo
-# Out   flagmap     { remote-name: 1}
+# Out   flagMap     { remote-name: 1}
 #       posargs     [ /repos/org/repo ]
 test-parse-bool-flag()
 {
-    local -A flagmap=()
+    local -A flagMap=()
     local -a posargs=()
-    gh-parse-args flagmap posargs --remote-name /repos/org/repo
+    gh-parse-args flagMap posargs --remote-name /repos/org/repo
 
-    [[ -v flagmap[remote-name] ]] || { printf '  FAIL: remote-name not set\n'; return 1; }
-    [[ "${flagmap[remote-name]}" == "1" ]] || { printf '  FAIL: remote-name value\n'; return 1; }
+    [[ -v flagMap[remote-name] ]] || { printf '  FAIL: remote-name not set\n'; return 1; }
+    [[ "${flagMap[remote-name]}" == "1" ]] || { printf '  FAIL: remote-name value\n'; return 1; }
     [[ "${posargs[0]}" == "/repos/org/repo" ]] || { printf '  FAIL: url\n'; return 1; }
     printf '  PASS\n'
 }
 
 
 # In    cmdline     --token abc -- /repos/org/repo --output foo
-# Out   flagmap     { token: abc}
+# Out   flagMap     { token: abc}
 #       posargs     [ /repos/org/repo, --output, foo ]
 test-parse-terminal()
 {
-    local -A flagmap=()
+    local -A flagMap=()
     local -a posargs=()
-    gh-parse-args flagmap posargs --token abc -- /repos/org/repo --output foo
+    gh-parse-args flagMap posargs --token abc -- /repos/org/repo --output foo
 
-    [[ "${flagmap[token]}" == "abc" ]] || { printf '  FAIL: token\n'; return 1; }
+    [[ "${flagMap[token]}" == "abc" ]] || { printf '  FAIL: token\n'; return 1; }
     [[ "${#posargs[@]}" -eq 3 ]] || { printf '  FAIL: posargs count (%d)\n' "${#posargs[@]}"; return 1; }
     [[ "${posargs[0]}" == "/repos/org/repo" ]] || { printf '  FAIL: posarg 0\n'; return 1; }
     [[ "${posargs[1]}" == "--output" ]] || { printf '  FAIL: posarg 1\n'; return 1; }
@@ -71,17 +71,17 @@ test-parse-terminal()
 }
 
 
-# In    flagmap     { token: abc }
+# In    flagMap     { token: abc }
 # Out   curlFlags   [ --header "Authorization: Bearer abc" ]
 test-unparse-basic()
 {
-    local -A flagmap=()
+    local -A flagMap=()
 
-    flagmap[token]=abc
+    flagMap[token]=abc
 
     local -a curlFlags=()
 
-    gh-unparse-curl-args flagmap curlFlags
+    gh-unparse-curl-args flagMap curlFlags
 
     local foundAuth=false
     for arg in "${curlFlags[@]}"; do
@@ -95,13 +95,13 @@ test-unparse-basic()
 
 test-unparse-data()
 {
-    local -A flagmap=()
+    local -A flagMap=()
 
-    flagmap[data]='{"title":"test"}'
+    flagMap[data]='{"title":"test"}'
 
     local -a curlFlags=()
 
-    gh-unparse-curl-args flagmap curlFlags
+    gh-unparse-curl-args flagMap curlFlags
 
     local foundData=false
     local i
@@ -116,7 +116,7 @@ test-unparse-data()
 }
 
 
-test-api-empty-flagmap()
+test-api-empty-flagMap()
 {
     # Empty flagMap, public endpoint — verifies gh-api_ works with
     # no flags at all.
@@ -155,9 +155,9 @@ test-api-per-page()
 
 test-parse-unknown-flag()
 {
-    local -A flagmap=()
+    local -A flagMap=()
     local -a posargs=()
-    gh-parse-args flagmap posargs --nonexistent /repos/org/repo && {
+    gh-parse-args flagMap posargs --nonexistent /repos/org/repo && {
         printf '  FAIL: expected error for unknown flag\n'
         return 1
     }
