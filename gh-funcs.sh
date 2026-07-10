@@ -165,6 +165,11 @@ gh-parse-args ()
 #   $1  nameref to flagMap (assoc array from gh-parse-args)
 #   $2  nameref to array for receiving curl flags
 #
+# Handles flagMap keys:
+#       [accept]   → --header "Accept: ..."
+#       [token]    → --header "Authorization: Bearer ..."
+#       [data]     → --data "..."
+#
 gh-unparse-curl-args ()
 {
     local -n _flagMap=$1
