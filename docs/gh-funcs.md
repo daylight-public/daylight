@@ -64,45 +64,13 @@ To avoid turning this into a flag-parsing effort rather than a delivering-featur
     - Kernel functions can call kernel functions
     - Neither can call user functions
 
-### example: gh-curl, gh-curl_, and ghr-list
+### example: gh-api, gh-api_, and ghr-api
 
 #### gh-api_
-`gh-api_` is a kernel function, which makes sense since it's the most important github function. It takes a good number of arguments - a combo of flags commonly used by curl, and flags commonly used by the GitHub REST API. That roughly looks like this as of this writing
-```
-#       [output]         Full path to output file
-#       [accept]         Accept header value
-#       [data]           POST data
-#       [per-page]       Results per page (max 100)
-#       [token]          GitHub API token
-```
-
-Most callers will only use a subset of these commands. The corresponding user function should use them all.
-
-The beginning of the function looks something like this
-```
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: getVmName infovar $user\n' >&2; return 1; }
-    local -n appMap=$1
-    local -n flags args
-    local accept data output output_dir per_page remote_name token
-    gh-api-args argmap args
-    curl "$args[@]"
-```
-
-`gh-api_` ultimately needs to call curl, and curl takes flags and positional args. Mostly it takes flags; the positional args it takes is a sequence of URLs. `gh-api-args` translates from an argmap back into a series of cmdline args for `curl`. 
 
 #### gh-api
-gh-api is the user function that invokes the gh-api_ kernel function. The beginning of the function turns flags and args into an argmap
-by calling gh-parse-args
-
-    # argmap   nameref to an array to receive flags and positional arguments
-    gh-parse-args argmap "$@"
-    gh-api_ argmap
-
-At the end of this, gh-api has sorted out all its args and can call gh-api_, possibly after enriching argmap with positional argument data
-
-For more details consult the gh-curl.md document
 
 #### gh-list
 `gh-list` has a simple interface. All it needs is a org, a repo and an optional token.
 
+### Helper functions
