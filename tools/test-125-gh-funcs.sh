@@ -5,6 +5,9 @@ source "$SCRIPT_DIR/test-utils.sh" || exit 1
 source "$SCRIPT_DIR/../gh-funcs.sh" || exit 1
 
 
+# In    cmdline     --token abc --per-page 50 /repos/org/repo
+# Out   flagmap     { token: abc, per-page: 50}
+#       posargs     [ /repos/org/repo ]
 test-parse-basic()
 {
     local -A flagmap=()
