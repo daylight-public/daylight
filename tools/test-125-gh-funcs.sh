@@ -37,22 +37,6 @@ test-parse-interleaved()
 }
 
 
-# In    cmdline     --remote-name /repos/org/repo
-# Out   flagMap     { remote-name: 1}
-#       posargs     [ /repos/org/repo ]
-test-parse-bool-flag()
-{
-    local -A flagMap=()
-    local -a posargs=()
-    gh-parse-args flagMap posargs --remote-name /repos/org/repo
-
-    [[ -v flagMap[remote-name] ]] || { printf '  FAIL: remote-name not set\n'; return 1; }
-    [[ "${flagMap[remote-name]}" == "1" ]] || { printf '  FAIL: remote-name value\n'; return 1; }
-    [[ "${posargs[0]}" == "/repos/org/repo" ]] || { printf '  FAIL: url\n'; return 1; }
-    printf '  PASS\n'
-}
-
-
 # In    cmdline     --token abc -- /repos/org/repo --output foo
 # Out   flagMap     { token: abc}
 #       posargs     [ /repos/org/repo, --output, foo ]
@@ -175,18 +159,117 @@ test-parse-unknown-flag()
 }
 
 
+test-resolve-output-remote-name()
+{
+    local -a curlFlags=()
+    resolve-output-spec "" curlFlags
+
+    local found=false
+    for arg in "${curlFlags[@]}"; do
+        [[ "$arg" == "--remote-name" ]] && found=true
+    done
+    $found || { printf '  FAIL: --remote-name not set for empty output\n'; return 1; }
+    printf '  PASS\n'
+}
+
+
+test-resolve-output-abs-file()
+{
+    local tmpFile
+    tmpFile=$(mktemp --tmpdir rayguntest.XXXXXXXX)
+    rm -f "$tmpFile"  # dir exists, file does not
+
+    local -a curlFlags=()
+    resolve-output-spec "$tmpFile" curlFlags
+
+    local found=false
+    for arg in "${curlFlags[@]}"; do
+        [[ "$arg" == "--output" ]] && found=true
+    done
+    $found || { printf '  FAIL: --output not set for file path\n'; return 1; }
+
+    local foundPath=false
+    for arg in "${curlFlags[@]}"; do
+        [[ "$arg" == "$tmpFile" ]] && foundPath=true
+    done
+    $foundPath || { printf '  FAIL: file path not in curlFlags\n'; return 1; }
+
+    rm -f "$tmpFile"
+    printf '  PASS\n'
+}
+
+
+test-resolve-output-dir-trailing-slash()
+{
+    local tmpDir
+    tmpDir=$(mktemp -d --tmpdir rayguntest.XXXXXXXX)
+
+    local -a curlFlags=()
+    resolve-output-spec "$tmpDir/" curlFlags
+
+    local found=false
+    for arg in "${curlFlags[@]}"; do
+        [[ "$arg" == "--output-dir" ]] && found=true
+    done
+    $found || { printf '  FAIL: --output-dir not set for dir with slash\n'; return 1; }
+
+    rm -rf "$tmpDir"
+    printf '  PASS\n'
+}
+
+
+test-resolve-output-dir-no-slash()
+{
+    local tmpDir
+    tmpDir=$(mktemp -d --tmpdir rayguntest.XXXXXXXX)
+
+    local -a curlFlags=()
+    resolve-output-spec "$tmpDir" curlFlags
+
+    local found=false
+    for arg in "${curlFlags[@]}"; do
+        [[ "$arg" == "--output-dir" ]] && found=true
+    done
+    $found || { printf '  FAIL: --output-dir not set for existing dir without slash\n'; return 1; }
+
+    rm -rf "$tmpDir"
+    printf '  PASS\n'
+}
+
+
+test-resolve-output-file-exists()
+{
+    local tmpFile
+    tmpFile=$(mktemp --tmpdir rayguntest.XXXXXXXX)
+
+    local -a curlFlags=()
+    resolve-output-spec "$tmpFile" curlFlags && {
+        printf '  FAIL: expected error for existing file\n'
+        rm -f "$tmpFile"
+        return 1
+    }
+
+    rm -f "$tmpFile"
+    printf '  PASS\n'
+}
+
+
 run-tests()
 {
     local tests=(
         test-parse-basic
         test-parse-interleaved
-        test-parse-bool-flag
         test-parse-terminal
         test-parse-unknown-flag
         test-unparse-basic
         test-unparse-data
         test-api-empty-flagmap
         test-api-per-page
+        test-resolve-output-remote-name
+        test-resolve-output-abs-file
+        test-resolve-output-dir-trailing-slash
+        test-resolve-output-dir-no-slash
+        test-resolve-output-file-exists
     )
     local total=${#tests[@]}
     local passed=0
@@ -210,13 +293,17 @@ main()
         all|run-tests|"")  run-tests ;;
         test-parse-basic|\
         test-parse-interleaved|\
-        test-parse-bool-flag|\
         test-parse-terminal|\
         test-parse-unknown-flag|\
         test-unparse-basic|\
         test-unparse-data|\
         test-api-empty-flagmap|\
-        test-api-per-page)  "$@" ;;
+        test-api-per-page|\
+        test-resolve-output-remote-name|\
+        test-resolve-output-abs-file|\
+        test-resolve-output-dir-trailing-slash|\
+        test-resolve-output-dir-no-slash|\
+        test-resolve-output-file-exists)  "$@" ;;
         *)                 printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }

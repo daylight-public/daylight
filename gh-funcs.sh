@@ -58,12 +58,17 @@ gh-api_ ()
 
     gh-unparse-curl-args _flagMap _curlFlags
 
+    # Resolve output specifier if provided
+    if [[ -v _flagMap[output] ]]; then
+        resolve-output-spec "${_flagMap[output]}" _curlFlags || return
+    fi
+
     local url="https://api.github.com/$_urlPath"
     if [[ -v _flagMap[per-page] ]]; then
         url+="?per_page=${_flagMap[per-page]}"
     fi
 
-    curl "${_curlFlags[@]}" "$url"
+    curl --fail-with-body --location --silent "${_curlFlags[@]}" "$url"
 }
 
 
@@ -112,7 +117,6 @@ gh-parse-args ()
             --data|\
             --extract|\
             --output|\
-            --output-dir|\
             --per-page|\
             --token|\
             --label|\
@@ -122,10 +126,6 @@ gh-parse-args ()
                 (( $# >= 2 )) || { printf '%s specified but no value provided.\n' "$1" >&2; return 1; }
                 _flagMap["${1##--}"]=$2
                 shift 2
-                ;;
-            --remote-name)
-                _flagMap[remote-name]=1
-                shift
                 ;;
             --)
                 shift
@@ -191,4 +191,76 @@ gh-unparse-curl-args ()
     if [[ -v _flagMap[data] ]]; then
         _curlFlags+=(--data "${_flagMap[data]}")
     fi
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# resolve-output-spec()
+#
+# Translate an --output flagMap value into the corresponding curl flags
+# for controlling where the response body is saved.
+#
+# Semantics per the gh-funcs design doc:
+#
+#   empty              → --remote-name                 (current dir, CD naming)
+#   ends with /        → directory mode                (fail if dir missing)
+#   is existing dir    → directory mode, no slash      (fail if dir missing)
+#   is existing file   → fail (no clobber)
+#   else               → file mode                     (parent dir must exist)
+#
+# Positional args:
+#   $1  output value from flagMap (or empty string)
+#   $2  nameref to array for receiving curl flags
+#
+resolve-output-spec ()
+{
+    local outputValue=$1
+    local -n _curlFlags=$2
+
+    if [[ -z "$outputValue" ]]; then
+        # No output specified — use remote name
+        _curlFlags+=(--remote-name)
+        return
+    fi
+
+    # Strip trailing slash for consistent checks, but remember
+    # whether one was provided (explicit directory indicator).
+    local explicitDir=false
+    if [[ "$outputValue" == */ ]]; then
+        explicitDir=true
+        outputValue="${outputValue%/}"
+    fi
+
+    if $explicitDir; then
+        # Ends with / — explicit directory mode
+        if [[ ! -d "$outputValue" ]]; then
+            printf 'resolve-output-spec: directory does not exist: %s\n' "$outputValue" >&2
+            return 1
+        fi
+        _curlFlags+=(--output-dir "$outputValue" --remote-name)
+        return
+    fi
+
+    if [[ -d "$outputValue" ]]; then
+        # Existing directory, no trailing slash
+        _curlFlags+=(--output-dir "$outputValue" --remote-name)
+        return
+    fi
+
+    if [[ -e "$outputValue" ]]; then
+        # File already exists — no clobber
+        printf 'resolve-output-spec: file already exists: %s\n' "$outputValue" >&2
+        return 1
+    fi
+
+    # File mode — parent directory must exist
+    local parentDir
+    parentDir=$(dirname "$outputValue")
+    if [[ ! -d "$parentDir" ]]; then
+        printf 'resolve-output-spec: parent directory does not exist: %s\n' "$parentDir" >&2
+        return 1
+    fi
+
+    _curlFlags+=(--output "$outputValue")
 }
