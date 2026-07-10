@@ -254,7 +254,7 @@ test-resolve-output-file-exists()
 }
 
 
-run-tests()
+all()
 {
     local tests=(
         test-parse-basic
@@ -290,7 +290,7 @@ run-tests()
 main()
 {
     case ${1:-all} in
-        all|run-tests|"")  run-tests ;;
+        all|"")  all;;
         test-parse-basic|\
         test-parse-interleaved|\
         test-parse-terminal|\
