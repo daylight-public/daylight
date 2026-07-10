@@ -68,9 +68,78 @@ To avoid turning this into a flag-parsing effort rather than a delivering-featur
 
 #### gh-api_
 
+Receives a flagMap (associative array) and a urlPath.  All HTTP calls go
+through this function.  Constructs curl flags via gh-unparse-curl-args,
+resolves the --output specifier via resolve-output-spec, adds standard
+curl infrastructure flags (--fail-with-body --location --silent), and
+executes the curl call against https://api.github.com/$urlPath.
+
+flagMap keys:
+  [accept]       Accept header value (omitted if not set — curl default)
+  [data]         POST data
+  [output]       Output specifier — resolved by resolve-output-spec
+  [per-page]     Appended as ?per_page=N to the URL
+  [token]        Authorization: Bearer header
+
 #### gh-api
+
+User function.  Parses CLI flags via gh-parse-args, enriches the flagMap,
+then calls gh-api_ with the flagMap and a urlPath.
+
+flags:
+  [--data]       POST data
+  [--output]     Output specifier (see --output section above)
+  [--per-page]   Results per page
+  [--token]      GitHub API token
 
 #### gh-list
 `gh-list` has a simple interface. All it needs is a org, a repo and an optional token.
 
 ### Helper functions
+
+#### gh-parse-args
+
+Parses CLI flags and positional args into a flagMap (associative array)
+and a posargs (indexed array).  Flags and positional args can be
+interleaved.  Anything starting with -- is a flag; anything else is a
+positional arg.
+
+Known flags:
+  --accept, --data, --extract, --output, --per-page, --token,
+  --label, --platform, --version, --workflow  (all value flags)
+  (boolean flags: none currently)
+
+  --                 Terminator.  Everything after -- is a positional arg,
+                     even if it starts with --.
+  --* (unknown)      Error: "Unknown flag" with non-zero exit.
+
+Output:
+  flagMap     flag values indexed by flag name (without leading --)
+  posargs     positional arguments in order
+
+#### gh-unparse-curl-args
+
+Translates a flagMap (from gh-parse-args) into an array of curl flags.
+Does not construct the URL — the caller provides it separately.
+
+flagMap keys:
+  [accept]   → --header "Accept: ..."
+  [token]    → --header "Authorization: Bearer ..."
+  [data]     → --data "..."
+
+Output:
+  curlFlags   array of curl flags and their values
+
+#### resolve-output-spec
+
+Translates the --output flagMap value into the corresponding curl output
+flags.  See the ### --output section above for semantics.
+
+  (empty)         → --remote-name                       (default)
+  ends with /     → --output-dir "$path" --remote-name  (directory mode)
+  existing dir    → --output-dir "$path" --remote-name  (directory mode, no slash)
+  existing file   → error (no clobber)
+  otherwise       → --output "$path"                    (file mode)
+
+Fails with non-zero and an error message if the target directory doesn't
+exist or the target file already exists (leave no trace philosophy).
