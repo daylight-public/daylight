@@ -28,6 +28,7 @@
 #
 gh-api ()
 {
+    :
 }
 
 
@@ -61,6 +62,7 @@ gh-api ()
 #
 gh-api_ ()
 {
+    :
 }
 
 
@@ -68,29 +70,86 @@ gh-api_ ()
 #
 # gh-parse-args()
 #
-# translate the flags and positional args for a github API request into an
-# argmap of keys and values for consumption by a github kernel function, eg
-# gh-api_.
+# Translate CLI flags and positional args into a flagMap (associative array)
+# and a positional arguments indexed array, suitable for passing to gh-api_
+# or other kernel functions.
 #
-# flags 
-#       [--accept]         Accept header value
-#       [--data]           POST data
-#       [--output]         Full path to output file
-#       [--output-dir]     Output folder
-#       [--per-page]       Results per page (max 100)
-#       [--remote-name]    Derive filename from Content-Disposition
-#       [--token]          GitHub API token
+# Flags and positional args can be interleaved.  Anything that starts with
+# -- is treated as a flag; everything else is a positional arg.
 #
-# positional args
-#       $1                 nameref of associative array to populate
-#       $2 	           path of url for GitHub api endpoint
+# Usage:
+#   local -A flagMap=()
+#   local -a posargs=()
+#   gh-parse-args flagMap posargs "$@"
 #
-# returns
-#       argmap             the incoming nameref which is populated with args,
-#                          from both flags and positional args
+# Positional args:
+#   $1  nameref to an associative array (flagMap)
+#   $2  nameref to an indexed array (posargs)
 #
 gh-parse-args ()
 {
+    local -n _flagMap=$1
+    local -n _posargs=$2
+    shift 2
+
+    # Check that _flagMap is an assoc array (follow nameref)
+    [[ $(declare -p _flagMap 2>/dev/null) == "declare -A"* ]] \
+    || [[ $(declare -p "${!_flagMap}" 2>/dev/null) == "declare -A"* ]] \
+    || { printf "_flagMap is not an associative array\n" >&2; return 1; }
+
+    # Check that _posargs is an indexed array (follow nameref)
+    [[ $(declare -p _posargs 2>/dev/null) == "declare -a"* ]] \
+    || [[ $(declare -p "${!_posargs}" 2>/dev/null) == "declare -a"* ]] \
+    || { printf "_posargs is not an indexed array\n" >&2; return 1; }
+
+    _flagMap=()
+    _posargs=()
+
+    while (( $# > 0 )); do
+        case $1 in
+            --accept|\
+            --data|\
+            --output|\
+            --output-dir|\
+            --per-page|\
+            --token|\
+            --label|\
+            --platform|\
+            --version|\
+            --workflow)
+                (( $# >= 2 )) || { printf '%s specified but no value provided.\n' "$1" >&2; return 1; }
+                _flagMap["${1##--}"]=$2
+                shift 2
+                ;;
+            --remote-name)
+                _flagMap[remote-name]=1
+                shift
+                ;;
+            --)
+                shift
+                while (( $# > 0 )); do
+                    _posargs+=("$1")
+                    shift
+                done
+                break
+                ;;
+            --*)
+                # Unknown flag: store it anyway, caller decides what to do
+                if (( $# >= 2 )) && [[ $2 != --* ]]; then
+                    _flagMap["${1##--}"]=$2
+                    shift 2
+                else
+                    _flagMap["${1##--}"]=1
+                    shift
+                fi
+                ;;
+            *)
+                # Not a flag — positional argument
+                _posargs+=("$1")
+                shift
+                ;;
+        esac
+    done
 }
 
 
@@ -98,19 +157,69 @@ gh-parse-args ()
 #
 # gh-unparse-curl-args()
 #
-# translate an assoc array into a series of flags and positional args that can
-# be used to call curl. 
+# Translate a flagMap + posargs (from gh-parse-args) into arrays suitable
+# for passing to curl: an array of curl flags and an array of positional
+# args (the URL).
 #
-# flags
-# 	none
+# url-base defaults to https://api.github.com.  The URL is constructed from
+# the first positional arg (url-path) prepended with the base URL.
 #
-# positional args
-# 	$1	nameref to an assoc array of argument data
-# 	$2	nameref to an array for receiving curl flags + values
-# 	$3	nameref to an array for 	
+# Usage:
+#   local -a curlFlags=()
+#   local -a curlPosArgs=()
+#   gh-unparse-curl-args flagMap posargs curlFlags curlPosArgs
+#   curl "${curlFlags[@]}" "${curlPosArgs[@]}"
+#
+# Positional args:
+#   $1  nameref to flagMap (assoc array from gh-parse-args)
+#   $2  nameref to posargs (indexed array from gh-parse-args)
+#   $3  nameref to array for receiving curl flags
+#   $4  nameref to array for receiving curl positional args (URL)
 #
 gh-unparse-curl-args ()
 {
+    local -n _flagMap=$1
+    local -n _posargs=$2
+    local -n _curlFlags=$3
+    local -n _curlPosargs=$4
+
+    _curlFlags=()
+    _curlPosargs=()
+
+    # Accept header
+    if [[ -v _flagMap[accept] ]]; then
+        _curlFlags+=(--header "Accept: ${_flagMap[accept]}")
+    fi
+
+    # Auth token
+    if [[ -v _flagMap[token] ]]; then
+        _curlFlags+=(--header "Authorization: Bearer ${_flagMap[token]}")
+    fi
+
+    # POST data
+    if [[ -v _flagMap[data] ]]; then
+        _curlFlags+=(--data "${_flagMap[data]}")
+    fi
+
+    # Build the URL
+    local urlBase='https://api.github.com'
+    local urlPath=''
+
+    if (( ${#_posargs[@]} >= 1 )); then
+        urlPath="${_posargs[0]}"
+    fi
+
+    # Strip leading slash if present
+    urlPath="${urlPath#/}"
+
+    local url="$urlBase/$urlPath"
+
+    # Append per-page query parameter
+    if [[ -v _flagMap[per-page] ]]; then
+        url+="?per_page=${_flagMap[per-page]}"
+    fi
+
+    _curlPosargs+=("$url")
 }
 
 # The output folder contains:
