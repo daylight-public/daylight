@@ -310,3 +310,173 @@ resolve-output-spec ()
 
     _curlFlags+=(--output "$outputValue")
 }
+
+
+#-------------------------------------------------------------------------------
+#
+# lookup-content-disposition()
+#
+# Read a headers file from stdin and extract the filename from the
+# Content-Disposition header.  Internally uses lookup-header to find
+# the raw header line, then parses the filename value from it.
+#
+# Content-Disposition values use the format defined in RFC 6266:
+#
+#   content-disposition: attachment; filename=etcd-v3.6.13-darwin-amd64.zip
+#   content-disposition: attachment; filename="etcd-v3.6.13-darwin-amd64.zip"
+#
+# The filename may be quoted or unquoted.  This function tries the
+# quoted form first (filename="..."), then falls back to unquoted
+# (filename=... without whitespace or semicolons).  This mirrors how
+# curl --remote-header-name parses Content-Disposition.
+#
+# Stdin:            a headers file in HTTP format
+#
+# Stdout:           the filename from Content-Disposition, or nothing
+#                   if no matching header was found or no filename
+#                   could be extracted
+#
+# Returns:          0   filename found and printed
+#                   1   Content-Disposition header not found
+#                   2   header found but no extractable filename
+#
+lookup-content-disposition ()
+{
+    # Use lookup-header to get the raw Content-Disposition line
+    local line
+    line=$(lookup-header 'content-disposition') || return 1
+
+    local filename
+
+    # Try quoted filename first:  filename="value"
+    # This is the more common form in modern responses.
+    if [[ "$line" =~ filename=\"([^\"]+)\" ]]; then
+        filename="${BASH_REMATCH[1]}"
+
+    # Fall back to unquoted:  filename=value
+    # The value extends to the next semicolon, whitespace, or end of line.
+    elif [[ "$line" =~ filename=([^\";[:space:]]+) ]]; then
+        filename="${BASH_REMATCH[1]}"
+
+    else
+        return 2
+    fi
+
+    printf '%s' "$filename"
+    if [[ -t 1 ]]; then
+        printf '\n'
+    fi
+}
+
+
+#-------------------
+#
+# lookup-header()
+#
+# Read a header file (as produced by curl --dump-header) from stdin and look
+# up a header by name.  Returns the full header line on stdout.
+#
+# Positional args:  $1   header name to search for (case-insensitive)
+#
+# Stdin:            a headers file in HTTP format (CRLF line endings
+#                   produced by curl --dump-header are handled)
+#
+# Stdout:           the matching header line, with trailing CRLF stripped,
+#                   or nothing if not found
+#
+# Returns:          0   header found
+#                   1   header not found
+#
+# How it works:
+#   Reads stdin line by line.  For each line, strips the trailing CR
+#   byte (\r) that curl --dump-header adds as part of CRLF line endings.
+#   Both the search term and the line are lower-cased via bash's ${var,,}
+#   parameter expansion to get a case-insensitive match.  The regex
+#   /^name:.*/ anchors at the start — header names only appear at the
+#   beginning of a line in HTTP header dumps, so no false matches.
+#
+# Edge cases:
+#   Extra colon — if the user passes "content-type:" or "content-type",
+#                 both work because the regex expects a colon anyway.
+#   Arbitrary values — header values can contain colons, spaces, special
+#                      characters; the (.*) capture handles them all.
+#   CRLF endings — curl's --dump-header uses CRLF; the CR is stripped
+#                  before matching and before printing.
+#   Case mismatch — HTTP headers are case-insensitive by spec; ${,,}
+#                   on both sides normalizes for comparison while
+#                   preserving the original line for output.
+#   Empty value — header: (with nothing after the colon) is a valid HTTP
+#                 header; the regex matches and the line is printed.
+#   Multiple matches — only the first match is returned, which matches
+#                      curl's behavior (first header wins on duplicates).
+#
+lookup-header ()
+{
+    local headerName=$1
+    local search="${headerName,,}"
+    local line
+
+	# confirm stdin is non-interactive / won't hang waiting for data
+	[[ ! -t 0 ]] || { printf 'stdin cannot be a terminal\n'; return 1; }
+
+	while IFS= read -r line; do
+        line=${line%$'\r'}
+
+        # Compare lower-cased to lower-cased (HTTP headers are
+        # case-insensitive per RFC 7230).  The ${var,,} expansion
+        # converts var to all lowercase.
+        if [[ "${line,,}" =~ ^"$search":(.*) ]]; then
+            printf '%s' "$line"
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+
+
+#-------------------------------------------------------------------------------
+#
+# lookup-next-link()
+#
+# Read a headers file from stdin and extract the URL from the Link
+# header with rel="next".  Internally uses lookup-header to find the
+# raw header line, then parses the next-link URL from it.
+#
+# RFC 8288 Link header format:
+#
+#   link: <https://api.github.com/...?page=2>; rel="next",
+#         <https://api.github.com/...?page=288>; rel="last"
+#
+# Whitespace around the semicolon is optional per the RFC.
+#
+# Stdin:            a headers file in HTTP format
+#
+# Stdout:           the next link URL, or nothing if no Link header
+#                   or no rel="next" link was found
+#
+# Returns:          0   next link found and printed
+#                   1   Link header not found
+#                   2   header found but no rel="next" link
+#
+lookup-next-link ()
+{
+    local line
+    line=$(lookup-header 'link') || return 1
+
+    # Extract the URL angle bracket before ; rel="next"
+    # Whitespace around ; is optional per RFC 8288: <url>;rel="next",
+    # <url> ; rel="next", <url>; rel="next", etc.
+    if [[ "$line" =~ \<([^\>]+)\>[[:space:]]*\;[[:space:]]*rel=\"next\" ]]; then
+        printf '%s' "${BASH_REMATCH[1]}"
+        if [[ -t 1 ]]; then
+            printf '\n'
+        fi
+        return 0
+    fi
+
+    return 2
+}
+
+
