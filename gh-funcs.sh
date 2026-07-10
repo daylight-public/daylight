@@ -4,10 +4,7 @@
 #
 # gh-api()
 #
-# Make an authenticated request to the GitHub API. Pagination is automatic.
-# All responses and headers are saved to a folder; the folder path is
-# printed to stdout.
-#
+# Make an authenticated request to the GitHub API.
 #
 # flags
 #       [--data]           POST data
@@ -15,16 +12,9 @@
 #       [--per-page]       Number of results to retrieve per page
 #       [--token]          GitHub API token
 #
-# --output + --remote-name: last one wins (curl allows, does not define)
-#
 # positional args
 #
 #	$1	url
-#
-# Response shape auto-detection (first page):
-#   type: array          -> key = "."
-#   object + total_count -> key = array field
-#   otherwise            -> key = ".items"
 #
 gh-api ()
 {
