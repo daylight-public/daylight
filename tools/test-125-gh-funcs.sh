@@ -93,6 +93,8 @@ test-unparse-basic()
 }
 
 
+# In    flagMap     { data: {"title":"test"}}
+# Out   curlFlags   [ --data '{"title":"test"}' ]
 test-unparse-data()
 {
     local -A flagMap=()
@@ -116,7 +118,10 @@ test-unparse-data()
 }
 
 
-test-api-empty-flagMap()
+# In    flagMap     {}
+#       urlPath     /repos/org/repo
+# Out   url         https://api.github.com/repos/org/repo
+test-api-empty-flagmap()
 {
     # Empty flagMap, public endpoint — verifies gh-api_ works with
     # no flags at all.
@@ -135,6 +140,9 @@ test-api-empty-flagMap()
 }
 
 
+# In    flagMap     { per-page: 50}
+#       urlPath     /repos/org/repo
+# Out   url         https://api.github.com/...?per_page=50
 test-api-per-page()
 {
     local -A flagMap=()
@@ -153,6 +161,8 @@ test-api-per-page()
 }
 
 
+# In    cmdline     --nonexistent /repos/org/repo
+# Out   result      exit != 0
 test-parse-unknown-flag()
 {
     local -A flagMap=()
