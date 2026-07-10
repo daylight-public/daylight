@@ -116,18 +116,19 @@ test-unparse-data()
 }
 
 
-test-api-shortcut()
+test-api-empty-flagmap()
 {
-    # Shortcut form: just a urlPath, no flags
-    # gh-api_ calls curl with the constructed URL.
-    # Mock curl to capture the URL without making a real request.
+    # Empty flagMap, public endpoint — verifies gh-api_ works with
+    # no flags at all.
+    local -A flagMap=()
+
     local capturedUrl
     curl() { capturedUrl="$*"; return 0; }
 
-    gh-api_ "/repos/org/repo" 2>/dev/null
+    gh-api_ flagMap "/repos/org/repo" 2>/dev/null
 
     [[ "$capturedUrl" == *"api.github.com/repos/org/repo" ]] \
-        || { printf '  FAIL: shortcut URL mismatch: %s\n' "$capturedUrl"; return 1; }
+        || { printf '  FAIL: empty flagMap URL mismatch: %s\n' "$capturedUrl"; return 1; }
 
     unset -f curl
     printf '  PASS\n'
@@ -136,13 +137,13 @@ test-api-shortcut()
 
 test-api-per-page()
 {
-    local -A flagmap=()
-    flagmap[per-page]=50
+    local -A flagMap=()
+    flagMap[per-page]=50
 
     local capturedUrl
     curl() { capturedUrl="$*"; return 0; }
 
-    gh-api_ flagmap "/repos/org/repo" 2>/dev/null
+    gh-api_ flagMap "/repos/org/repo" 2>/dev/null
 
     [[ "$capturedUrl" == *"per_page=50" ]] \
         || { printf '  FAIL: per_page not in URL: %s\n' "$capturedUrl"; return 1; }
@@ -174,7 +175,7 @@ run-tests()
         test-parse-unknown-flag
         test-unparse-basic
         test-unparse-data
-        test-api-shortcut
+        test-api-empty-flagmap
         test-api-per-page
     )
     local total=${#tests[@]}
@@ -204,7 +205,7 @@ main()
         test-parse-unknown-flag|\
         test-unparse-basic|\
         test-unparse-data|\
-        test-api-shortcut|\
+        test-api-empty-flagmap|\
         test-api-per-page)  "$@" ;;
         *)                 printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac

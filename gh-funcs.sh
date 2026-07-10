@@ -39,10 +39,10 @@ gh-api ()
 #
 # Make an authenticated request to the GitHub API.
 #
-# Two calling forms:
+# Requires a flagMap (associative array) and a urlPath.
+# Even for public endpoints with no flags, pass an empty flagMap.
 #
-#   gh-api_ "flagMap" "urlPath"     full form: flagMap for flags, urlPath for path
-#   gh-api_ "/repos/org/repo"       shortcut: just the urlPath, no flags (public)
+# Call:  gh-api_ "flagMap" "urlPath"
 #
 # flagMap uses keys:
 #       [accept]         Accept header value
@@ -50,26 +50,15 @@ gh-api ()
 #       [per-page]       Results per page
 #       [token]          GitHub API token
 #
-# $1  flagMap (assoc array) or urlPath (starts with /)
-# $2  urlPath (required when $1 is a flagMap; ignored in shortcut mode)
-#
 gh-api_ ()
 {
-    local _urlPath
+    local -n _flagMap=$1
+    local _urlPath=${2#/}
     local -a _curlFlags=()
 
-    if [[ $1 == /* ]]; then
-        # Shortcut: no flags, just urlPath
-        _urlPath=${1#/}
-    else
-        local -n _flagMap=$1
-        _urlPath=${2#/}
-        gh-unparse-curl-args _flagMap _curlFlags
-    fi
+    gh-unparse-curl-args _flagMap _curlFlags
 
     local url="https://api.github.com/$_urlPath"
-
-    # Per-page query parameter (must be set on the URL)
     if [[ -v _flagMap[per-page] ]]; then
         url+="?per_page=${_flagMap[per-page]}"
     fi
