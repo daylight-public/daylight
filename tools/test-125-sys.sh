@@ -11,21 +11,17 @@ prompt_yn()
 {
     local promptText=${1:-'Proceed?'}
     local response
-    printf '  %s [y/N] ' "$promptText"
-    read -r response
-    [[ "$response" =~ ^[Yy] ]]
+    printf '  %s [Y/n] ' "$promptText"
+    read -n 1 response
+    echo
+    [[ "$response" =~ ^[Yy]?$ ]]
 }
 
 
 # Walk the user through an end-to-end system test of gh-api_.
-# The caller provides the full command line as arguments:
-#   bash test-125-sys.sh test-list-orgs --token abc /user/orgs
-#
-# Steps:
-#   Parse args via gh-parse-args, confirm flagMap and posargs
-#   Visual inspection of parsed data
-#   Unparse to curl flags, user inspects
-#   Execute curl, user verifies output
+# This function tests a single known endpoint with the token resolved
+# automatically from gh auth token.
+# Invoke:  bash test-125-sys.sh test-list-orgs
 test-list-orgs ()
 {
     # Resolve token from gh automatically — system test users are expected
@@ -36,10 +32,9 @@ test-list-orgs ()
         return 1
     }
 
-    # Caller provides path and optional flags; token is injected automatically.
     local -A flagMap=()
     local -a posargs=()
-    gh-parse-args flagMap posargs --token "$token" "$@"
+    gh-parse-args flagMap posargs --token "$token"
 
     # Confirm parsing results
     [[ -v flagMap[token] ]] || { printf '  FAIL: token not in flagMap\n'; return 1; }
@@ -49,10 +44,6 @@ test-list-orgs ()
     printf '  flagMap keys:\n'
     for key in "${!flagMap[@]}"; do
         printf '    [%s] = %s\n' "$key" "${flagMap[$key]}"
-    done
-    printf '  posargs:\n'
-    for arg in "${posargs[@]}"; do
-        printf '    %s\n' "$arg"
     done
 
     prompt_yn 'Proceed with unparse?' || { printf '  Aborted\n'; return 0; }
@@ -68,12 +59,12 @@ test-list-orgs ()
 
     prompt_yn 'Proceed with curl?' || { printf '  Aborted\n'; return 0; }
 
-    # Build URL from the first positional arg
+    # Hardcoded URL path — this test exercises a specific endpoint
     local url="https://api.github.com/organizations"
 
     # Display the full curl command
     printf '  curl call:\n'
-    printf '    %s' "curl --fail-with-body --location --silent"
+    printf '    curl --fail-with-body --location --silent'
     for f in "${curlFlags[@]}"; do
         printf " '%s'" "$f"
     done
