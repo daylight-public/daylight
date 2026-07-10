@@ -21,6 +21,9 @@ test-parse-basic()
 }
 
 
+# In    cmdline     --token abc /repos/org/repo --output foo.json
+# Out   flagmap     { token: abc, output: foo.json}
+#       posargs     [ /repos/org/repo ]
 test-parse-interleaved()
 {
     local -A flagmap=()
@@ -34,6 +37,9 @@ test-parse-interleaved()
 }
 
 
+# In    cmdline     --remote-name /repos/org/repo
+# Out   flagmap     { remote-name: 1}
+#       posargs     [ /repos/org/repo ]
 test-parse-bool-flag()
 {
     local -A flagmap=()
@@ -47,6 +53,9 @@ test-parse-bool-flag()
 }
 
 
+# In    cmdline     --token abc -- /repos/org/repo --output foo
+# Out   flagmap     { token: abc}
+#       posargs     [ /repos/org/repo, --output, foo ]
 test-parse-terminal()
 {
     local -A flagmap=()
@@ -62,6 +71,10 @@ test-parse-terminal()
 }
 
 
+# In    flagmap     { token: abc }
+#       posargs     [ /repos/org/repo ]
+# Out   curlFlags   [ --header "Authorization: Bearer abc" ]
+#       curlPosArgs [ https://api.github.com/repos/org/repo ]
 test-unparse-basic()
 {
     local -A flagmap=()
@@ -90,6 +103,10 @@ test-unparse-basic()
 }
 
 
+# In    flagmap     { per-page: 50}
+#       posargs     [ /repos/org/repo ]
+# Out   curlFlags   [ ]
+#       curlPosArgs [ https://api.github.com/repos/org/repo?per_page=50 ]
 test-unparse-per-page()
 {
     local -A flagmap=()
@@ -110,6 +127,10 @@ test-unparse-per-page()
 }
 
 
+# In    flagmap     { data: {"title":"test"}}
+#       posargs     [ /repos/org/repo/issues ]
+# Out   curlFlags   [ --data '{"title":"test"}' ]
+#       curlPosArgs [ https://api.github.com/repos/org/repo/issues ]
 test-unparse-data()
 {
     local -A flagmap=()
@@ -136,6 +157,18 @@ test-unparse-data()
 }
 
 
+test-parse-unknown-flag()
+{
+    local -A flagmap=()
+    local -a posargs=()
+    gh-parse-args flagmap posargs --nonexistent /repos/org/repo && {
+        printf '  FAIL: expected error for unknown flag\n'
+        return 1
+    }
+    printf '  PASS\n'
+}
+
+
 run-tests()
 {
     local tests=(
@@ -143,6 +176,7 @@ run-tests()
         test-parse-interleaved
         test-parse-bool-flag
         test-parse-terminal
+        test-parse-unknown-flag
         test-unparse-basic
         test-unparse-per-page
         test-unparse-data
@@ -171,6 +205,7 @@ main()
         test-parse-interleaved|\
         test-parse-bool-flag|\
         test-parse-terminal|\
+        test-parse-unknown-flag|\
         test-unparse-basic|\
         test-unparse-per-page|\
         test-unparse-data)  "$@" ;;

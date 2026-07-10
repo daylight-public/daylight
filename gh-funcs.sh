@@ -109,6 +109,7 @@ gh-parse-args ()
         case $1 in
             --accept|\
             --data|\
+            --extract|\
             --output|\
             --output-dir|\
             --per-page|\
@@ -134,14 +135,8 @@ gh-parse-args ()
                 break
                 ;;
             --*)
-                # Unknown flag: store it anyway, caller decides what to do
-                if (( $# >= 2 )) && [[ $2 != --* ]]; then
-                    _flagMap["${1##--}"]=$2
-                    shift 2
-                else
-                    _flagMap["${1##--}"]=1
-                    shift
-                fi
+                printf 'Unknown flag: %s\n' "$1" >&2
+                return 1
                 ;;
             *)
                 # Not a flag — positional argument
