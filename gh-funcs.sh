@@ -37,32 +37,44 @@ gh-api ()
 #
 # gh-api_ ()
 #
-# Make an authenticated request to the GitHub API. Pagination is automatic.
-# All responses and headers are saved to a folder; the folder path is
-# printed to stdout.
+# Make an authenticated request to the GitHub API.
 #
-# The output folder contains:
-#   data.json                                 Merged items across all pages
-#   $filename                                 Raw response (non-paginated)
-#   $(filename minus ext).headers.txt         Response headers (non-paginated)
-#   $filename.nnnnnn                          Raw response page N (paginated)
-#   $(filename minus ext).headers.txt.nnnnnn  Headers page N (paginated)
+# Two calling forms:
 #
-# flags
+#   gh-api_ "flagMap" "urlPath"     full form: flagMap for flags, urlPath for path
+#   gh-api_ "/repos/org/repo"       shortcut: just the urlPath, no flags (public)
 #
-# positional args
-# 	$1		  assoc array of arguments
-#
-#
-# assoc array elements
+# flagMap uses keys:
+#       [accept]         Accept header value
 #       [data]           POST data
-#       [output]         output path specifier
 #       [per-page]       Results per page
 #       [token]          GitHub API token
 #
+# $1  flagMap (assoc array) or urlPath (starts with /)
+# $2  urlPath (required when $1 is a flagMap; ignored in shortcut mode)
+#
 gh-api_ ()
 {
-    :
+    local _urlPath
+    local -a _curlFlags=()
+
+    if [[ $1 == /* ]]; then
+        # Shortcut: no flags, just urlPath
+        _urlPath=${1#/}
+    else
+        local -n _flagMap=$1
+        _urlPath=${2#/}
+        gh-unparse-curl-args _flagMap _curlFlags
+    fi
+
+    local url="https://api.github.com/$_urlPath"
+
+    # Per-page query parameter (must be set on the URL)
+    if [[ -v _flagMap[per-page] ]]; then
+        url+="?per_page=${_flagMap[per-page]}"
+    fi
+
+    curl "${_curlFlags[@]}" "$url"
 }
 
 
@@ -152,34 +164,24 @@ gh-parse-args ()
 #
 # gh-unparse-curl-args()
 #
-# Translate a flagMap + posargs (from gh-parse-args) into arrays suitable
-# for passing to curl: an array of curl flags and an array of positional
-# args (the URL).
-#
-# url-base defaults to https://api.github.com.  The URL is constructed from
-# the first positional arg (url-path) prepended with the base URL.
+# Translate a flagMap (from gh-parse-args) into an array of curl flags.
+# Does not construct the URL — the caller passes it separately.
 #
 # Usage:
 #   local -a curlFlags=()
-#   local -a curlPosArgs=()
-#   gh-unparse-curl-args flagMap posargs curlFlags curlPosArgs
-#   curl "${curlFlags[@]}" "${curlPosArgs[@]}"
+#   gh-unparse-curl-args flagMap curlFlags
+#   curl "${curlFlags[@]}" "https://api.github.com/$urlPath"
 #
 # Positional args:
 #   $1  nameref to flagMap (assoc array from gh-parse-args)
-#   $2  nameref to posargs (indexed array from gh-parse-args)
-#   $3  nameref to array for receiving curl flags
-#   $4  nameref to array for receiving curl positional args (URL)
+#   $2  nameref to array for receiving curl flags
 #
 gh-unparse-curl-args ()
 {
     local -n _flagMap=$1
-    local -n _posargs=$2
-    local -n _curlFlags=$3
-    local -n _curlPosargs=$4
+    local -n _curlFlags=$2
 
     _curlFlags=()
-    _curlPosargs=()
 
     # Accept header
     if [[ -v _flagMap[accept] ]]; then
@@ -195,31 +197,4 @@ gh-unparse-curl-args ()
     if [[ -v _flagMap[data] ]]; then
         _curlFlags+=(--data "${_flagMap[data]}")
     fi
-
-    # Build the URL
-    local urlBase='https://api.github.com'
-    local urlPath=''
-
-    if (( ${#_posargs[@]} >= 1 )); then
-        urlPath="${_posargs[0]}"
-    fi
-
-    # Strip leading slash if present
-    urlPath="${urlPath#/}"
-
-    local url="$urlBase/$urlPath"
-
-    # Append per-page query parameter
-    if [[ -v _flagMap[per-page] ]]; then
-        url+="?per_page=${_flagMap[per-page]}"
-    fi
-
-    _curlPosargs+=("$url")
 }
-
-# The output folder contains:
-#   data.json                                 Merged items across all pages
-#   $filename                                 Raw response (non-paginated)
-#   $(filename minus ext).headers.txt         Response headers (non-paginated)
-#   $filename.nnnnnn                          Raw response page N (paginated)
-#   $(filename minus ext).headers.txt.nnnnnn  Headers page N (paginated)

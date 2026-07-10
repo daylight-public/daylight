@@ -72,77 +72,36 @@ test-parse-terminal()
 
 
 # In    flagmap     { token: abc }
-#       posargs     [ /repos/org/repo ]
 # Out   curlFlags   [ --header "Authorization: Bearer abc" ]
-#       curlPosArgs [ https://api.github.com/repos/org/repo ]
 test-unparse-basic()
 {
     local -A flagmap=()
-    local -a posargs=()
 
     flagmap[token]=abc
-    posargs=("/repos/org/repo")
 
     local -a curlFlags=()
-    local -a curlPosArgs=()
 
-    gh-unparse-curl-args flagmap posargs curlFlags curlPosArgs
+    gh-unparse-curl-args flagmap curlFlags
 
-    # Should have Authorization header
     local foundAuth=false
     for arg in "${curlFlags[@]}"; do
         [[ "$arg" == *"Authorization"* ]] && foundAuth=true
     done
     $foundAuth || { printf '  FAIL: no auth header\n'; return 1; }
 
-    # URL should be constructed correctly
-    [[ "${curlPosArgs[0]}" == "https://api.github.com/repos/org/repo" ]] \
-        || { printf '  FAIL: url is %s\n' "${curlPosArgs[0]}"; return 1; }
-
     printf '  PASS\n'
 }
 
 
-# In    flagmap     { per-page: 50}
-#       posargs     [ /repos/org/repo ]
-# Out   curlFlags   [ ]
-#       curlPosArgs [ https://api.github.com/repos/org/repo?per_page=50 ]
-test-unparse-per-page()
-{
-    local -A flagmap=()
-    local -a posargs=()
-
-    flagmap[per-page]=50
-    posargs=("/repos/org/repo")
-
-    local -a curlFlags=()
-    local -a curlPosArgs=()
-
-    gh-unparse-curl-args flagmap posargs curlFlags curlPosArgs
-
-    [[ "${curlPosArgs[0]}" == "https://api.github.com/repos/org/repo?per_page=50" ]] \
-        || { printf '  FAIL: url is %s\n' "${curlPosArgs[0]}"; return 1; }
-
-    printf '  PASS\n'
-}
-
-
-# In    flagmap     { data: {"title":"test"}}
-#       posargs     [ /repos/org/repo/issues ]
-# Out   curlFlags   [ --data '{"title":"test"}' ]
-#       curlPosArgs [ https://api.github.com/repos/org/repo/issues ]
 test-unparse-data()
 {
     local -A flagmap=()
-    local -a posargs=()
 
     flagmap[data]='{"title":"test"}'
-    posargs=("/repos/org/repo/issues")
 
     local -a curlFlags=()
-    local -a curlPosArgs=()
 
-    gh-unparse-curl-args flagmap posargs curlFlags curlPosArgs
+    gh-unparse-curl-args flagmap curlFlags
 
     local foundData=false
     local i
@@ -153,6 +112,42 @@ test-unparse-data()
     done
     $foundData || { printf '  FAIL: data flag not found\n'; return 1; }
 
+    printf '  PASS\n'
+}
+
+
+test-api-shortcut()
+{
+    # Shortcut form: just a urlPath, no flags
+    # gh-api_ calls curl with the constructed URL.
+    # Mock curl to capture the URL without making a real request.
+    local capturedUrl
+    curl() { capturedUrl="$*"; return 0; }
+
+    gh-api_ "/repos/org/repo" 2>/dev/null
+
+    [[ "$capturedUrl" == *"api.github.com/repos/org/repo" ]] \
+        || { printf '  FAIL: shortcut URL mismatch: %s\n' "$capturedUrl"; return 1; }
+
+    unset -f curl
+    printf '  PASS\n'
+}
+
+
+test-api-per-page()
+{
+    local -A flagmap=()
+    flagmap[per-page]=50
+
+    local capturedUrl
+    curl() { capturedUrl="$*"; return 0; }
+
+    gh-api_ flagmap "/repos/org/repo" 2>/dev/null
+
+    [[ "$capturedUrl" == *"per_page=50" ]] \
+        || { printf '  FAIL: per_page not in URL: %s\n' "$capturedUrl"; return 1; }
+
+    unset -f curl
     printf '  PASS\n'
 }
 
@@ -178,8 +173,9 @@ run-tests()
         test-parse-terminal
         test-parse-unknown-flag
         test-unparse-basic
-        test-unparse-per-page
         test-unparse-data
+        test-api-shortcut
+        test-api-per-page
     )
     local total=${#tests[@]}
     local passed=0
@@ -207,8 +203,9 @@ main()
         test-parse-terminal|\
         test-parse-unknown-flag|\
         test-unparse-basic|\
-        test-unparse-per-page|\
-        test-unparse-data)  "$@" ;;
+        test-unparse-data|\
+        test-api-shortcut|\
+        test-api-per-page)  "$@" ;;
         *)                 printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }
