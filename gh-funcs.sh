@@ -1,3 +1,59 @@
+#-------------------------------------------------------------------------------
+#
+# ghapi-create-tmp-folder-prefix()
+#
+# Create a temp-folder template prefix from a GitHub API URL or path.
+# Drops protocol and domain, truncates each path segment to 8 characters,
+# joins them with '.', and appends .XXXXXX.
+#
+#   ghapi-create-tmp-folder-prefix "/organizations"
+#     →  organizat.XXXXXX
+#
+#   ghapi-create-tmp-folder-prefix "https://api.github.com/repos/etcd-io/etcd/releases"
+#     →  repos.etcd-i.XXXXXX
+#
+ghapi-create-tmp-folder-prefix ()
+{
+    local input=$1
+    local path
+
+    # Strip protocol + domain if present
+    path="${input#https://api.github.com}"
+
+    # Strip leading and trailing slashes
+    path="${path#/}"
+    path="${path%/}"
+
+    # Strip query string if present
+    path="${path%%\?*}"
+
+    # Fallback if path was empty after stripping
+    if [[ -z "$path" ]]; then
+        printf 'default.XXXXXX'
+        if [[ -t 1 ]]; then
+            printf '\n'
+        fi
+        return
+    fi
+
+    # Split on '/' using read -d '/', take first 8 chars of each segment,
+    # join with '.'.  Append a trailing slash so last segment terminates.
+    local prefix=''
+    local segment
+    while read -r -d '/' segment || [[ -n "$segment" ]]; do
+        local slug="${segment:0:8}"
+        if [[ -z "$prefix" ]]; then
+            prefix="$slug"
+        else
+            prefix="$prefix.$slug"
+        fi
+    done <<< "$path/"
+
+    printf 'ghapi.%s.XXXXXX' "$prefix"
+    if [[ -t 1 ]]; then
+        printf '\n'
+    fi
+}
 
 
 #-------------------------------------------------------------------------------
