@@ -29,6 +29,22 @@ print-filesize ()
 }
 
 
+# Assert a file exists and is non-empty; print PASS with size on success.
+check-file ()
+{
+    local path=$1
+    if [[ ! -f "$path" ]]; then
+        printf '  FAIL: file not found (%s)\n' "$path"
+        return 1
+    fi
+    if [[ ! -s "$path" ]]; then
+        printf '  FAIL: file is empty\n' "$path"
+        return 1
+    fi
+    print-filesize "$path"
+}
+
+
 
 # Walk the user through an end-to-end system test of gh-api_ with
 # a file download endpoint.  Uses the dylt release checksums file
@@ -42,7 +58,6 @@ test-gh-api-kf-no-output ()
     # produces ./{cdFilename}).
     local tmpDir
     tmpDir=$(mktemp -d --tmpdir ghapi-kf-no-output.XXXXXX)
-    pushd "$tmpDir" >/dev/null || return 1
 
 	# set --token
 	local token; token=$(get-token) || return
@@ -57,6 +72,8 @@ test-gh-api-kf-no-output ()
     # dylt checksums asset — smallest available (~900 bytes)
     local urlPath="/repos/dylt-dev/dylt/releases/assets/449914893"
 
+    pushd "$tmpDir" >/dev/null || return 1
+
     # Call the kernel function directly.  gh-api_ handles everything:
     # curl, CD detection, resolve-output-spec, copy, and path output.
     local output
@@ -66,29 +83,14 @@ test-gh-api-kf-no-output ()
         return 1
     }
 
+    popd >/dev/null
+
     # The CD filename from the release asset — hardcoded so we can
     # assert it was correctly extracted and used by resolve-output-spec.
     local expectedFile="dylt_0.0.11-nightly.20260617-test_checksums.txt"
-	local expectedPath="$(pwd)/$expectedFile"
-    # Assert the file exists in the current directory (no --output
-    # means it lands here via resolve-output-spec's default behavior)
-    if [[ ! -f "$expectedPath" ]]; then
-        printf '  FAIL: downloaded file not found (%s)\n' "$expectedPath"
-        ls "$tmpDir"
-        popd >/dev/null
-        return 1
-    fi
+    local expectedPath="$tmpDir/$expectedFile"
 
-    # Assert the file is non-empty (895 bytes expected for checksums)
-    if [[ ! -s "$expectedPath" ]]; then
-        printf '  FAIL: downloaded file is empty\n'
-        popd >/dev/null
-        return 1
-    fi
-
-	print-filesize "$expectedPath"
-
-	popd >/dev/null
+    check-file "$expectedPath" || return 1
     printf '  Temp folder: %s\n' "$tmpDir"
 }
 
@@ -133,22 +135,7 @@ test-gh-api-kf-output-folder ()
     local expectedFile="dylt_0.0.11-nightly.20260617-test_checksums.txt"
     local expectedPath="${outputDir%/}/$expectedFile"
 
-    # Assert the file exists in the output directory
-    if [[ ! -f "$expectedPath" ]]; then
-        printf '  FAIL: file not found at %s\n' "$expectedPath"
-        ls "$outputDir"
-        return 1
-    fi
-
-    # Assert the file is non-empty
-    if [[ ! -s "$expectedPath" ]]; then
-        printf '  FAIL: file is empty\n'
-        return 1
-    fi
-
-    local fileSize
-    fileSize=$(stat -c%s "$expectedPath" 2>/dev/null)
-    printf '  PASS (file: %s, size: %d)\n' "$output" "$fileSize"
+    check-file "$expectedPath" || return 1
 }
 
 
