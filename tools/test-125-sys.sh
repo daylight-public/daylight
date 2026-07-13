@@ -76,7 +76,7 @@ test-list-orgs ()
     # Display the full curl command
     printf '  curl call:\n'
     printf '    curl --fail-with-body --location --silent'
-    printf " --dump-header '%s/headers.txt'" "$tmpFolder"
+    printf " --dump-header '%s/headers.txt' --output '%s/response.txt'" "$tmpFolder" "$tmpFolder"
     for f in "${curlFlags[@]}"; do
         printf " '%s'" "$f"
     done
@@ -88,20 +88,49 @@ test-list-orgs ()
     # Execute the actual curl call
     curl --fail-with-body --location --silent \
         --dump-header "$tmpFolder/headers.txt" \
+        --output "$tmpFolder/response.txt" \
         "${curlFlags[@]}" "$url" || {
         printf '  FAIL: curl exited with error\n'
         return 1
     }
-
-    printf '\n'
-    prompt_yn 'Verify output. Looks OK?' || { printf '  FAIL: user rejected output\n'; return 1; }
-	echo
 
 	# list tmp folder contents after download
 	ls -1 "$tmpFolder"
 	echo
 	prompt_yn "tmpFolder contents ($tmpFolder). Looks OK?" || { printf '  FAIL: user rejected output\n'; return 1; }
 	echo
+
+    printf '  PASS\n'
+	
+	# cat headers file
+	local headersPath="$tmpFolder/headers.txt"
+	[[ -f "$headersPath" ]] || { printf 'headers file not found (%s)\n' "$headersPath"; return 1; }
+	echo "headers file contents"
+	echo
+	cat "$headersPath"
+	echo
+	prompt_yn "headers file. Looks OK?" || { printf '  FAIL: user rejected output\n'; return 1; }
+	echo
+
+	# cat response file
+	local responsePath="$tmpFolder/response.txt"
+	[[ -f "$responsePath" ]] || { printf 'response file not found (%s)\n' "$responsePath"; return 1; }
+	echo "response file contents"
+	echo
+	cat "$responsePath"
+	echo
+	prompt_yn "response file. Looks OK?" || { printf '  FAIL: user rejected output\n'; return 1; }
+	echo
+
+	# show status of download
+	hasCdHeader=$(lookup-content-disposition < "$tmpFolder/headers.txt")
+	hasNextLink=$(lookup-next-link < "$tmpFolder/headers.txt")
+	printf '%-32s %s\n' "Has CD Header" "$hasCdHeader"
+	printf '%-32s %s\n' "Has Next Link" "$hasNextLink"
+	echo
+	prompt_yn "response facts. Looks OK?" || { printf '  FAIL: user rejected output\n'; return 1; }
+	echo
+
 
     printf '  PASS\n'
 }
