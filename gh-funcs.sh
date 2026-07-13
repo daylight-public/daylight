@@ -116,7 +116,7 @@ gh-api_ ()
 	# if set, add the --per-page flag to query string, creating qs if necessary
 	local perPage=${_flagMap[per-page]}
 	if [[ -n "$perPage" ]]; then
-		if [[ "$urlPath" == '*?*' ]]; then		
+		if [[ "$urlPath" == *\?* ]]; then		
 			urlPath+="&per_page=$perPage"		# if url contains ? append to query string w `&per_page=...`
 		else
 			urlPath+="?per_page=$perPage"		# if not, create qs w `?per_page=...`
