@@ -122,9 +122,9 @@ gh-api_ ()
     }
 
     # check if it's a download or not 
-	hasCdHeader=$(lookup-content-disposition < "$tmpFolder/headers.txt" || return)
-
-    if [[ -n "$hasCdHeader" ]]; then
+	contentDisp=$(lookup-content-disposition < "$tmpFolder/headers.txt" || return)
+    if [[ -n "$contentDisp" ]]; then
+        outputSpec=${_flagMap[output]}
         echo "this is a download"
     else
         echo "this is data"
@@ -276,25 +276,27 @@ gh-unparse-curl-args ()
 #
 # resolve-output-spec()
 #
-# Translate an --output flagMap value into the corresponding curl flags
-# for controlling where the response body is saved.
+# Translate an --output flagMap value and a content-disposition value into an
+# absolutePath of the destination for a file download.
 #
 # Semantics per the gh-funcs design doc:
 #
-#   empty              → --remote-name                 (current dir, CD naming)
-#   ends with /        → directory mode                (fail if dir missing)
-#   is existing dir    → directory mode, no slash      (fail if dir missing)
-#   is existing file   → fail (no clobber)
-#   else               → file mode                     (parent dir must exist)
+#   empty                (current dir, CD name)              $cwd/$cdName
+#   relative file        latest_release.tgz                  $cwd/$file            
+#   relative dir         downloads/                          $cwd/dir/$cdName
+#   relative dir 2       downloads (existing dir)            $cwd/dir/$cdName
+#   absolute path        /opt/downloads/latest_release.tgz   $absPath
+#   absolute dir         /opt/downloads/                     $dir/$cdName
+#   absolute dir 2       /opt/downloads (existing dir)       $dir/$cdName
 #
 # Positional args:
 #   $1  output value from flagMap (or empty string)
-#   $2  nameref to array for receiving curl flags
+#   $2  value from Content-Disposition header -- might be ignored
 #
 resolve-output-spec ()
 {
-    local outputValue=$1
-    local -n _curlFlags=$2
+    local outputSpec=$1
+    local cdName=$2
 
     if [[ -z "$outputValue" ]]; then
         # No output specified — use remote name
