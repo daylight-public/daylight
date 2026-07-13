@@ -116,10 +116,10 @@ gh-api_ ()
 	# if set, add the --per-page flag to query string, creating qs if necessary
 	local perPage=${_flagMap[per-page]}
 	if [[ -n "$perPage" ]]; then
-		if [[ "$urlPath" == *\?* ]]; then            # if url contains ? append to query string w `&per_page=...`
-			urlPath+="&per_page=$perPage"
-		else                                   # if not, create qs w `?per_page=...`
-			urlPath+="?per_page=$perPage"
+		if [[ "$urlPath" == '*?*' ]]; then		
+			urlPath+="&per_page=$perPage"		# if url contains ? append to query string w `&per_page=...`
+		else
+			urlPath+="?per_page=$perPage"		# if not, create qs w `?per_page=...`
 		fi
 	fi
 
@@ -136,10 +136,39 @@ gh-api_ ()
     }
 
     # check if it's a download or not 
-	contentDisp=$(lookup-content-disposition < "$tmpFolder/headers.txt" || return)
+	contentDisp=$(lookup-content-disposition < "$tmpFolder/headers.txt")
     if [[ -n "$contentDisp" ]]; then
+        # echo "this is a download"
+		# If it's a download, we resolve the outputSpec to get the final destination
+		# Then we validate in case the file already exists, or if the dir path they
+		# 	would like to save to does not exist.
+		# If all is well we copy the file to its final destination, if any, and then
+		# 	we emit the path
+		# Edge cases
+		# 	specified file exists						[[ -f "$path" ]]
+		# 	specified file exists as a folder           [[ -d "$path" ]]
+		# 	specified parent folder does not exist      cp + let it write to stderr
+		# 	specified parent folder is not writeable    cp + let it write to stderr
+		# 
         outputSpec=${_flagMap[output]}
-        echo "this is a download"
+		outputPath=$(resolve-output-spec "$outputSpec" "$contentDisp") || return
+
+		# val: does file exist?
+		if [[ -f "$outputPath" ]]; then
+			printf 'output path exists (%s); aborting\n' "$outputPath" >&2
+			return 2
+		fi
+
+		# val: does path exist but is a folder and doesn't end with a slash?
+		if [[ -d "$outputPath" ]] && [[ "$outputPath" != */ ]]; then
+			printf 'path is a file but exists as a folder (%s)\n' "$outputPath" >&2
+			return 3
+		fi
+
+		# cp to final destination - let any other failures be naturally emitted by cp
+		cp "$tmpFolder/response.txt" "$outputPath" || return
+		printf "$outputPath"
+		if [[ -t 1 ]]; then printf '\n'; fi
     else
         echo "this is data"
     fi
