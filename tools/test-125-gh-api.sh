@@ -45,6 +45,18 @@ check-file ()
 }
 
 
+# Call gh-api_ and capture stdout + exit code.  Prints error on failure.
+download-file ()
+{
+    local res
+    res=$(gh-api_ "$1" "$2" 2>/dev/null) || {
+        printf '  FAIL: gh-api_ returned non-zero\n'
+        return 1
+    }
+    printf '%s' "$res"
+}
+
+
 
 # Walk the user through an end-to-end system test of gh-api_ with
 # a file download endpoint.  Uses the dylt release checksums file
@@ -74,14 +86,8 @@ test-gh-api-kf-no-output ()
 
     pushd "$tmpDir" >/dev/null || return 1
 
-    # Call the kernel function directly.  gh-api_ handles everything:
-    # curl, CD detection, resolve-output-spec, copy, and path output.
     local output
-    output=$(gh-api_ flagMap "$urlPath" 2>/dev/null) || {
-        printf '  FAIL: gh-api_ returned non-zero\n'
-        popd >/dev/null
-        return 1
-    }
+    output=$(download-file flagMap "$urlPath") || { popd >/dev/null; return 1; }
 
     popd >/dev/null
 
@@ -127,10 +133,7 @@ test-gh-api-kf-output-folder ()
 
     # call gh-api_ to download the file
     local output
-    output=$(gh-api_ flagMap "$urlPath" 2>/dev/null) || {
-        printf '  FAIL: gh-api_ returned non-zero\n'
-        return 1
-    }
+    output=$(download-file flagMap "$urlPath") || return 1
 
     local expectedFile="dylt_0.0.11-nightly.20260617-test_checksums.txt"
     local expectedPath="${outputDir%/}/$expectedFile"
