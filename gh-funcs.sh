@@ -298,9 +298,12 @@ gh-unparse-curl-args ()
 
     _curlFlags=()
 
-    # Accept header
+    # Accept header — defaults to application/vnd.github+json
+    # Caller can override with --accept
     if [[ -v _flagMap[accept] ]]; then
         _curlFlags+=(--header "Accept: ${_flagMap[accept]}")
+    else
+        _curlFlags+=(--header "Accept: application/vnd.github+json")
     fi
 
     # Auth token

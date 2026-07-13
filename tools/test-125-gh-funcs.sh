@@ -103,6 +103,23 @@ test-unparse-data()
 
 
 # In    flagMap     {}
+# Out   curlFlags   contains application/vnd.github+json
+test-unparse-default-accept()
+{
+    local -A flagMap=()
+    local -a curlFlags=()
+    gh-unparse-curl-args flagMap curlFlags
+
+    local found=false
+    for arg in "${curlFlags[@]}"; do
+        [[ "$arg" == *"application/vnd.github+json"* ]] && found=true
+    done
+    $found || { printf '  FAIL: default Accept not set\n'; return 1; }
+    printf '  PASS\n'
+}
+
+
+# In    flagMap     {}
 #       urlPath     /repos/org/repo
 # Out   url         https://api.github.com/repos/org/repo
 test-api-empty-flagmap()
@@ -228,6 +245,7 @@ all()
         test-parse-unknown-flag
         test-unparse-basic
         test-unparse-data
+        test-unparse-default-accept
         test-api-empty-flagmap
         test-api-per-page
         test-api-per-page-with-qs
@@ -261,6 +279,7 @@ main()
         test-parse-unknown-flag|\
         test-unparse-basic|\
         test-unparse-data|\
+        test-unparse-default-accept|\
         test-api-empty-flagmap|\
         test-api-per-page|\
         test-api-per-page-with-qs|\
