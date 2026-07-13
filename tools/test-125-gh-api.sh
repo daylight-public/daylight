@@ -5,6 +5,31 @@ source "$SCRIPT_DIR/test-utils.sh" || exit 1
 source "$SCRIPT_DIR/../gh-funcs.sh" || exit 1
 
 
+get-token ()
+{
+    # Resolve the token from gh auth — system test users are expected
+    # to have gh installed and authenticated.
+    local token
+    token=$(gh auth token) || {
+        printf '  FAIL: gh auth token failed\n'
+        return 1
+    }
+	printf '%s' "$token"
+	if [[ -t 1 ]]; then printf '\n'; fi
+}
+
+
+print-filesize ()
+{
+	local path=$1
+
+    local fileSize
+    fileSize=$(stat -c%s "$path" 2>/dev/null)
+    printf '  PASS (file: %s, size: %d)\n' "$path" "$fileSize"
+}
+
+
+
 # Walk the user through an end-to-end system test of gh-api_ with
 # a file download endpoint.  Uses the dylt release checksums file
 # (~900 bytes).  No --output specified — file lands in current dir
@@ -19,16 +44,10 @@ test-gh-api-kf-no-output ()
     tmpDir=$(mktemp -d --tmpdir ghapi-kf-no-output.XXXXXX)
     pushd "$tmpDir" >/dev/null || return 1
 
-    # Resolve the token from gh auth — system test users are expected
-    # to have gh installed and authenticated.
-    local token
-    token=$(gh auth token) || {
-        printf '  FAIL: gh auth token failed\n'
-        popd >/dev/null
-        return 1
-    }
+	# set --token
+	local token; token=$(get-token) || return
 
-    # Build the flagMap the same way gh-api (UF) would after parsing
+	# Build the flagMap the same way gh-api (UF) would after parsing
     # CLI args: token for auth, octet-stream to trigger the redirect
     # to cloud storage, which returns Content-Disposition.
     local -A flagMap=()
@@ -50,27 +69,26 @@ test-gh-api-kf-no-output ()
     # The CD filename from the release asset — hardcoded so we can
     # assert it was correctly extracted and used by resolve-output-spec.
     local expectedFile="dylt_0.0.11-nightly.20260617-test_checksums.txt"
-
+	local expectedPath="$(pwd)/$expectedFile"
     # Assert the file exists in the current directory (no --output
     # means it lands here via resolve-output-spec's default behavior)
-    if [[ ! -f "$expectedFile" ]]; then
-        printf '  FAIL: downloaded file not found (%s)\n' "$expectedFile"
+    if [[ ! -f "$expectedPath" ]]; then
+        printf '  FAIL: downloaded file not found (%s)\n' "$expectedPath"
         ls "$tmpDir"
         popd >/dev/null
         return 1
     fi
 
     # Assert the file is non-empty (895 bytes expected for checksums)
-    if [[ ! -s "$expectedFile" ]]; then
+    if [[ ! -s "$expectedPath" ]]; then
         printf '  FAIL: downloaded file is empty\n'
         popd >/dev/null
         return 1
     fi
 
-    local fileSize
-    fileSize=$(stat -c%s "$expectedFile" 2>/dev/null)
-    printf '  PASS (file: %s, size: %d)\n' "$output" "$fileSize"
-    popd >/dev/null
+	print-filesize "$expectedPath"
+
+	popd >/dev/null
     printf '  Temp folder: %s\n' "$tmpDir"
 }
 
@@ -94,11 +112,8 @@ test-gh-api-kf-output-folder ()
     # directory, not a file path, appending the CD filename.
     outputDir="${outputDir%/}/"
 
-    local token
-    token=$(gh auth token) || {
-        printf '  FAIL: gh auth token failed\n'
-        return 1
-    }
+	# set token
+	local token; token=$(get-token) || return
 
     # flagMap includes --output pointing to the destination folder
     local -A flagMap=()
@@ -108,7 +123,7 @@ test-gh-api-kf-output-folder ()
 
     local urlPath="/repos/dylt-dev/dylt/releases/assets/449914893"
 
-    # No pushd/popd needed — the output goes to a separate directory.
+    # call gh-api_ to download the file
     local output
     output=$(gh-api_ flagMap "$urlPath" 2>/dev/null) || {
         printf '  FAIL: gh-api_ returned non-zero\n'
@@ -137,13 +152,26 @@ test-gh-api-kf-output-folder ()
 }
 
 
+all()
+{
+    local tests=(test-gh-api-kf-no-output test-gh-api-kf-output-folder)
+    local total=${#tests[@]} passed=0 failed=0
+    for t in "${tests[@]}"; do
+        printf 'Test: %s\n' "$t"
+        if "$t"; then (( passed++ )); else (( failed++ )); fi
+    done
+    printf '\n%d passed, %d failed, %d total\n' "$passed" "$failed" "$total"
+    return "$failed"
+}
+
+
 main()
 {
-    case ${1:-} in
-        test-gh-api-kf-no-output)      test-gh-api-kf-no-output "$@";;
-        test-gh-api-kf-output-folder)  test-gh-api-kf-output-folder "$@";;
-        "")                            printf 'Usage: %s <test-name>\n' "$0" >&2; exit 1 ;;
-        *)                             printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
+    case ${1:-all} in
+        all|"")                            all;;
+        test-gh-api-kf-no-output)          test-gh-api-kf-no-output "$@";;
+        test-gh-api-kf-output-folder)      test-gh-api-kf-output-folder "$@";;
+        *)                                 printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }
 
