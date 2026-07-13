@@ -142,9 +142,75 @@ test-gh-api-kf-output-folder ()
 }
 
 
+#
+#	test a download to an absolute path.
+#	The folder will be a temporary folder
+#	The filename will be my-download-target.tgz
+#	The expected path for the download will be "$tmpFolder/$filename"
+#
+test-gh-api-kf-output-path ()
+{
+    local tmpDir
+    tmpDir=$(mktemp -d --tmpdir ghapi-kf-output-path.XXXXXX)
+
+    local token; token=$(get-token) || return
+
+    local outputPath="$tmpDir/my-download-target.tgz"
+
+    local -A flagMap=()
+    flagMap[token]="$token"
+    flagMap[accept]='application/octet-stream'
+    flagMap[output]="$outputPath"
+
+    local urlPath="/repos/dylt-dev/dylt/releases/assets/449914893"
+
+    local output
+    output=$(download-file flagMap "$urlPath") || return 1
+
+    check-file "$outputPath" || return 1
+}
+
+
+#
+#	test a download to an relative filename.
+#	The folder current dir, ie make a tmp dstFolder and hop in
+#	The filename will be my-download-target.tgz
+#	The expected path for the download will be "$dstFolder/$filename"
+#
+test-gh-api-kf-output-filename ()
+{
+    local tmpDir
+    tmpDir=$(mktemp -d --tmpdir ghapi-kf-output-filename.XXXXXX)
+
+    local dstDir="$tmpDir/dst"
+    mkdir -p "$dstDir"
+
+    local token; token=$(get-token) || return
+
+    local -A flagMap=()
+    flagMap[token]="$token"
+    flagMap[accept]='application/octet-stream'
+    flagMap[output]='my-download-target.tgz'
+
+    local urlPath="/repos/dylt-dev/dylt/releases/assets/449914893"
+
+    pushd "$dstDir" >/dev/null || return 1
+    local output
+    output=$(download-file flagMap "$urlPath") || { popd >/dev/null; return 1; }
+    popd >/dev/null
+
+    check-file "$dstDir/my-download-target.tgz" || return 1
+}
+
+
 all()
 {
-    local tests=(test-gh-api-kf-no-output test-gh-api-kf-output-folder)
+    local tests=(
+        test-gh-api-kf-no-output
+        test-gh-api-kf-output-folder
+        test-gh-api-kf-output-path
+        test-gh-api-kf-output-filename
+    )
     local total=${#tests[@]} passed=0 failed=0
     for t in "${tests[@]}"; do
         printf 'Test: %s\n' "$t"
@@ -161,6 +227,8 @@ main()
         all|"")                            all;;
         test-gh-api-kf-no-output)          test-gh-api-kf-no-output "$@";;
         test-gh-api-kf-output-folder)      test-gh-api-kf-output-folder "$@";;
+        test-gh-api-kf-output-path)        test-gh-api-kf-output-path "$@";;
+        test-gh-api-kf-output-filename)    test-gh-api-kf-output-filename "$@";;
         *)                                 printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }
