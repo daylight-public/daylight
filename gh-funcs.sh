@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 #-------------------------------------------------------------------------------
 #
 # ghapi-create-tmp-folder-prefix()
@@ -99,24 +101,36 @@ gh-api ()
 gh-api_ ()
 {
     local -n _flagMap=$1
-    local _urlPath=${2#/}
+    local urlPath=${2#/}
     local -a _curlFlags=()
 
-    gh-unparse-curl-args _flagMap _curlFlags
+	gh-unparse-curl-args _flagMap _curlFlags
 
     # create a temp folder for downloaded content
     local prefix
-    prefix=$(ghapi-create-tmp-folder-prefix "$url") || { printf '  Aborted\n'; return 0; }
+    prefix=$(ghapi-create-tmp-folder-prefix "$urlPath") || { printf '  Aborted\n'; return 0; }
     local tmpFolder
     tmpFolder=$(mktemp -t --directory "$prefix") || { printf '  Aborted\n'; return 0; }
 
-    # execute the actual curl call
+
+	# if set, add the --per-page flag to query string, creating qs if necessary
+	local perPage=${_flagMap[per-page]}
+	if [[ -n "$perPage" ]]; then
+		if [[ "$urlPath" == *\?* ]]; then            # if url contains ? append to query string w `&per_page=...`
+			urlPath+="&per_page=$perPage"
+		else                                   # if not, create qs w `?per_page=...`
+			urlPath+="?per_page=$perPage"
+		fi
+	fi
+
+	# execute the actual curl call
     curl --fail-with-body \
          --location \
          --silent \
          --dump-header "$tmpFolder/headers.txt" \
          --output "$tmpFolder/response.txt" \
-         "${curlFlags[@]}" "$url" || {
+         "${_curlFlags[@]}" \
+		 "https://api.github.com/$urlPath" || {
             printf '  FAIL: curl exited with error\n'
             return 1
     }
@@ -141,7 +155,7 @@ gh-api_ ()
 #         resolve-output-spec "${_flagMap[output]}" _curlFlags || return
 #     fi
 
-#    local url="https://api.github.com/$_urlPath"
+#    local url="https://api.github.com/$urlPath"
 #    if [[ -v _flagMap[per-page] ]]; then
 #        url+="?per_page=${_flagMap[per-page]}"
 #    fi
@@ -276,7 +290,6 @@ gh-unparse-curl-args ()
 #
 # resolve-output-spec()
 #
-<<<<<<< HEAD
 # Construct a destination file path from an --output specifier and a
 # Content-Disposition filename.
 #

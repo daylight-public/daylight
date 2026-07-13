@@ -145,6 +145,27 @@ test-api-per-page()
 }
 
 
+# In    flagMap     { per-page: 50}
+#       urlPath     /search?q=test
+# Out   url         https://api.github.com/...?q=test&per_page=50
+test-api-per-page-with-qs()
+{
+    local -A flagMap=()
+    flagMap[per-page]=50
+
+    local capturedUrl
+    curl() { capturedUrl="$*"; return 0; }
+
+    gh-api_ flagMap "/search?q=test" 2>/dev/null
+
+    [[ "$capturedUrl" == *"?q=test&per_page=50" ]] \
+        || { printf '  FAIL: per_page with existing QS mismatch: %s\n' "$capturedUrl"; return 1; }
+
+    unset -f curl
+    printf '  PASS\n'
+}
+
+
 # In    cmdline     --nonexistent /repos/org/repo
 # Out   result      exit != 0
 test-parse-unknown-flag()
@@ -209,6 +230,7 @@ all()
         test-unparse-data
         test-api-empty-flagmap
         test-api-per-page
+        test-api-per-page-with-qs
         test-resolve-output-empty
         test-resolve-output-trailing-slash
         test-resolve-output-explicit-file
@@ -241,6 +263,7 @@ main()
         test-unparse-data|\
         test-api-empty-flagmap|\
         test-api-per-page|\
+        test-api-per-page-with-qs|\
         test-resolve-output-empty|\
         test-resolve-output-trailing-slash|\
         test-resolve-output-explicit-file)  "$@" ;;
