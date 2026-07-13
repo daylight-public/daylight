@@ -104,17 +104,49 @@ gh-api_ ()
 
     gh-unparse-curl-args _flagMap _curlFlags
 
+    # create a temp folder for downloaded content
+    local prefix
+    prefix=$(ghapi-create-tmp-folder-prefix "$url") || { printf '  Aborted\n'; return 0; }
+    local tmpFolder
+    tmpFolder=$(mktemp -t --directory "$prefix") || { printf '  Aborted\n'; return 0; }
+
+    # execute the actual curl call
+    curl --fail-with-body \
+         --location \
+         --silent \
+         --dump-header "$tmpFolder/headers.txt" \
+         --output "$tmpFolder/response.txt" \
+         "${curlFlags[@]}" "$url" || {
+            printf '  FAIL: curl exited with error\n'
+            return 1
+    }
+
+    # check if it's a download or not 
+	hasCdHeader=$(lookup-content-disposition < "$tmpFolder/headers.txt" || return)
+
+    if [[ -n "$hasCdHeader" ]]; then
+        echo "this is a download"
+    else
+        echo "this is data"
+    fi
+
+    # check if it's a download
+    #   Yes - get the file do its destination
+    #   No - while next; do download-next-page
+    #        concatenate responses
+    #        write responses to stdout
+
     # Resolve output specifier if provided
-    if [[ -v _flagMap[output] ]]; then
-        resolve-output-spec "${_flagMap[output]}" _curlFlags || return
-    fi
+#     if [[ -v _flagMap[output] ]]; then
+#         resolve-output-spec "${_flagMap[output]}" _curlFlags || return
+#     fi
 
-    local url="https://api.github.com/$_urlPath"
-    if [[ -v _flagMap[per-page] ]]; then
-        url+="?per_page=${_flagMap[per-page]}"
-    fi
+#    local url="https://api.github.com/$_urlPath"
+#    if [[ -v _flagMap[per-page] ]]; then
+#        url+="?per_page=${_flagMap[per-page]}"
+#    fi
 
-    curl --fail-with-body --location --silent "${_curlFlags[@]}" "$url"
+#    curl --fail-with-body --location --silent "${_curlFlags[@]}" "$url"
 }
 
 
