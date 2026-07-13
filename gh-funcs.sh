@@ -276,71 +276,36 @@ gh-unparse-curl-args ()
 #
 # resolve-output-spec()
 #
-# Translate an --output flagMap value into the corresponding curl flags
-# for controlling where the response body is saved.
+# Construct a destination file path from an --output specifier and a
+# Content-Disposition filename.
 #
-# Semantics per the gh-funcs design doc:
-#
-#   empty              → --remote-name                 (current dir, CD naming)
-#   ends with /        → directory mode                (fail if dir missing)
-#   is existing dir    → directory mode, no slash      (fail if dir missing)
-#   is existing file   → fail (no clobber)
-#   else               → file mode                     (parent dir must exist)
+#   empty      →  ./{cdFilename}       (pwd + CD name)
+#   ends with /→  {value}{cdFilename}  (explicit directory + CD name)
+#   otherwise →  {value}               (explicit file path, CD ignored)
 #
 # Positional args:
 #   $1  output value from flagMap (or empty string)
-#   $2  nameref to array for receiving curl flags
+#   $2  cdFilename (filename from Content-Disposition header)
+#
+# Stdout:  the resolved destination path
+# Returns: always 0 (no filesystem checks)
 #
 resolve-output-spec ()
 {
     local outputValue=$1
-    local -n _curlFlags=$2
+    local cdFilename=$2
 
     if [[ -z "$outputValue" ]]; then
-        # No output specified — use remote name
-        _curlFlags+=(--remote-name)
-        return
+        printf './%s' "$cdFilename"
+    elif [[ "$outputValue" == */ ]]; then
+        printf '%s%s' "$outputValue" "$cdFilename"
+    else
+        printf '%s' "$outputValue"
     fi
 
-    # Strip trailing slash for consistent checks, but remember
-    # whether one was provided (explicit directory indicator).
-    local explicitDir=false
-    if [[ "$outputValue" == */ ]]; then
-        explicitDir=true
-        outputValue="${outputValue%/}"
+    if [[ -t 1 ]]; then
+        printf '\n'
     fi
-
-    if $explicitDir; then
-        # Ends with / — explicit directory mode
-        if [[ ! -d "$outputValue" ]]; then
-            printf 'resolve-output-spec: directory does not exist: %s\n' "$outputValue" >&2
-            return 1
-        fi
-        _curlFlags+=(--output-dir "$outputValue" --remote-name)
-        return
-    fi
-
-    if [[ -d "$outputValue" ]]; then
-        # Existing directory, no trailing slash
-        _curlFlags+=(--output-dir "$outputValue" --remote-name)
-        return
-    fi
-
-    if [[ -e "$outputValue" ]]; then
-        # File already exists — no clobber
-        printf 'resolve-output-spec: file already exists: %s\n' "$outputValue" >&2
-        return 1
-    fi
-
-    # File mode — parent directory must exist
-    local parentDir
-    parentDir=$(dirname "$outputValue")
-    if [[ ! -d "$parentDir" ]]; then
-        printf 'resolve-output-spec: parent directory does not exist: %s\n' "$parentDir" >&2
-        return 1
-    fi
-
-    _curlFlags+=(--output "$outputValue")
 }
 
 
@@ -449,7 +414,7 @@ lookup-header ()
     local line
 
 	# confirm stdin is non-interactive / won't hang waiting for data
-	[[ ! -t 0 ]] || { printf 'stdin cannot be a terminal\n'; return 1; }
+	[[ ! -t 0 ]] || { printf 'stdin cannot be a terminal\n' >&2; return 1; }
 
 	while IFS= read -r line; do
         line=${line%$'\r'}

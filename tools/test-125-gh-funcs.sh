@@ -159,97 +159,41 @@ test-parse-unknown-flag()
 }
 
 
-test-resolve-output-remote-name()
+# In    output       ""
+#       cdFilename   "etcd.tar.gz"
+# Out   path         ./etcd.tar.gz
+test-resolve-output-empty()
 {
-    local -a curlFlags=()
-    resolve-output-spec "" curlFlags
-
-    local found=false
-    for arg in "${curlFlags[@]}"; do
-        [[ "$arg" == "--remote-name" ]] && found=true
-    done
-    $found || { printf '  FAIL: --remote-name not set for empty output\n'; return 1; }
+    local result
+    result=$(resolve-output-spec "" "etcd.tar.gz")
+    [[ "$result" == "./etcd.tar.gz" ]] \
+        || { printf '  FAIL: expected "./etcd.tar.gz", got "%s"\n' "$result"; return 1; }
     printf '  PASS\n'
 }
 
 
-test-resolve-output-abs-file()
+# In    output       "/tmp/out/"
+#       cdFilename   "etcd.tar.gz"
+# Out   path         /tmp/out/etcd.tar.gz
+test-resolve-output-trailing-slash()
 {
-    local tmpFile
-    tmpFile=$(mktemp --tmpdir rayguntest.XXXXXXXX)
-    rm -f "$tmpFile"  # dir exists, file does not
-
-    local -a curlFlags=()
-    resolve-output-spec "$tmpFile" curlFlags
-
-    local found=false
-    for arg in "${curlFlags[@]}"; do
-        [[ "$arg" == "--output" ]] && found=true
-    done
-    $found || { printf '  FAIL: --output not set for file path\n'; return 1; }
-
-    local foundPath=false
-    for arg in "${curlFlags[@]}"; do
-        [[ "$arg" == "$tmpFile" ]] && foundPath=true
-    done
-    $foundPath || { printf '  FAIL: file path not in curlFlags\n'; return 1; }
-
-    rm -f "$tmpFile"
+    local result
+    result=$(resolve-output-spec "/tmp/out/" "etcd.tar.gz")
+    [[ "$result" == "/tmp/out/etcd.tar.gz" ]] \
+        || { printf '  FAIL: expected "/tmp/out/etcd.tar.gz", got "%s"\n' "$result"; return 1; }
     printf '  PASS\n'
 }
 
 
-test-resolve-output-dir-trailing-slash()
+# In    output       "/tmp/pkg.tar.gz"
+#       cdFilename   "etcd.tar.gz"
+# Out   path         /tmp/pkg.tar.gz
+test-resolve-output-explicit-file()
 {
-    local tmpDir
-    tmpDir=$(mktemp -d --tmpdir rayguntest.XXXXXXXX)
-
-    local -a curlFlags=()
-    resolve-output-spec "$tmpDir/" curlFlags
-
-    local found=false
-    for arg in "${curlFlags[@]}"; do
-        [[ "$arg" == "--output-dir" ]] && found=true
-    done
-    $found || { printf '  FAIL: --output-dir not set for dir with slash\n'; return 1; }
-
-    rm -rf "$tmpDir"
-    printf '  PASS\n'
-}
-
-
-test-resolve-output-dir-no-slash()
-{
-    local tmpDir
-    tmpDir=$(mktemp -d --tmpdir rayguntest.XXXXXXXX)
-
-    local -a curlFlags=()
-    resolve-output-spec "$tmpDir" curlFlags
-
-    local found=false
-    for arg in "${curlFlags[@]}"; do
-        [[ "$arg" == "--output-dir" ]] && found=true
-    done
-    $found || { printf '  FAIL: --output-dir not set for existing dir without slash\n'; return 1; }
-
-    rm -rf "$tmpDir"
-    printf '  PASS\n'
-}
-
-
-test-resolve-output-file-exists()
-{
-    local tmpFile
-    tmpFile=$(mktemp --tmpdir rayguntest.XXXXXXXX)
-
-    local -a curlFlags=()
-    resolve-output-spec "$tmpFile" curlFlags && {
-        printf '  FAIL: expected error for existing file\n'
-        rm -f "$tmpFile"
-        return 1
-    }
-
-    rm -f "$tmpFile"
+    local result
+    result=$(resolve-output-spec "/tmp/pkg.tar.gz" "etcd.tar.gz")
+    [[ "$result" == "/tmp/pkg.tar.gz" ]] \
+        || { printf '  FAIL: expected "/tmp/pkg.tar.gz", got "%s"\n' "$result"; return 1; }
     printf '  PASS\n'
 }
 
@@ -265,11 +209,9 @@ all()
         test-unparse-data
         test-api-empty-flagmap
         test-api-per-page
-        test-resolve-output-remote-name
-        test-resolve-output-abs-file
-        test-resolve-output-dir-trailing-slash
-        test-resolve-output-dir-no-slash
-        test-resolve-output-file-exists
+        test-resolve-output-empty
+        test-resolve-output-trailing-slash
+        test-resolve-output-explicit-file
     )
     local total=${#tests[@]}
     local passed=0
@@ -299,11 +241,9 @@ main()
         test-unparse-data|\
         test-api-empty-flagmap|\
         test-api-per-page|\
-        test-resolve-output-remote-name|\
-        test-resolve-output-abs-file|\
-        test-resolve-output-dir-trailing-slash|\
-        test-resolve-output-dir-no-slash|\
-        test-resolve-output-file-exists)  "$@" ;;
+        test-resolve-output-empty|\
+        test-resolve-output-trailing-slash|\
+        test-resolve-output-explicit-file)  "$@" ;;
         *)                 printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }
