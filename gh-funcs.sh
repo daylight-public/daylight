@@ -482,6 +482,23 @@ lookup-header ()
 
 #-------------------------------------------------------------------------------
 #
+# lookup-mediatype()
+#
+# Read a JSON response body from stdin and extract the Content-Type value
+# from the content_type field.
+#
+# Stdin:  raw JSON response body
+# Stdout: value of content_type, or empty if not present
+# Returns: always 0
+#
+lookup-mediatype ()
+{
+    jq -r '.content_type // empty' 2>/dev/null || true
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # lookup-next-link()
 #
 # Read a headers file from stdin and extract the URL from the Link
