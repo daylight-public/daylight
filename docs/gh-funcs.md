@@ -63,6 +63,13 @@ To avoid turning this into a flag-parsing effort rather than a delivering-featur
     - User functions can call kernel functions
     - Kernel functions can call kernel functions
     - Neither can call user functions
+1. Never pass a nameref to another function.  When a function receives a
+   nameref, it uses the original variable name (the string `$1`, `$2`, etc.)
+   when passing that reference downstream.  This avoids double indirection
+   and the "circular name reference" warnings that come with it.
+    - Kernel function does:      `local -n _flagMap=$1`
+    - Downstream call does:      `some-kf "$1" _otherFlags`
+    - NOT:                       `some-kf _flagMap _otherFlags`
 
 ### example: gh-api, gh-api_, and ghr-api
 

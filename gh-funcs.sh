@@ -102,9 +102,9 @@ gh-api_ ()
 {
     local -n _flagMap=$1
     local urlPath=${2#/}
-    local -a _curlFlags=()
+    local -a curlFlags=()
 
-	gh-unparse-curl-args _flagMap _curlFlags
+	gh-unparse-curl-args "$1" curlFlags
 
     # create a temp folder for downloaded content
     local prefix
@@ -129,7 +129,7 @@ gh-api_ ()
          --silent \
          --dump-header "$tmpFolder/headers.txt" \
          --output "$tmpFolder/response.txt" \
-         "${_curlFlags[@]}" \
+         "${curlFlags[@]}" \
 		 "https://api.github.com/$urlPath" || {
             printf '  FAIL: curl exited with error\n'
             return 1
@@ -181,7 +181,7 @@ gh-api_ ()
 
     # Resolve output specifier if provided
 #     if [[ -v _flagMap[output] ]]; then
-#         resolve-output-spec "${_flagMap[output]}" _curlFlags || return
+#         resolve-output-spec "${_flagMap[output]}" curlFlags || return
 #     fi
 
 #    local url="https://api.github.com/$urlPath"
@@ -189,7 +189,7 @@ gh-api_ ()
 #        url+="?per_page=${_flagMap[per-page]}"
 #    fi
 
-#    curl --fail-with-body --location --silent "${_curlFlags[@]}" "$url"
+#    curl --fail-with-body --location --silent "${curlFlags[@]}" "$url"
 }
 
 
