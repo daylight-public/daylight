@@ -63,7 +63,7 @@ download-file ()
 # (~900 bytes).  No --output specified — file lands in current dir
 # with Content-Disposition filename.
 # Invoke: bash test-125-gh-api.sh test-gh-api-kf-no-output
-test-gh-api-kf-no-output ()
+test-gh-api-kf-output-none ()
 {
     # Isolated temp directory — we pushd into it so the download
     # lands here by default (resolve-output-spec with empty output
@@ -105,7 +105,7 @@ test-gh-api-kf-no-output ()
 # to a directory (trailing slash).  The file should land in that
 # directory with the Content-Disposition filename.
 # Invoke: bash test-125-gh-api.sh test-gh-api-kf-output-folder
-test-gh-api-kf-output-folder ()
+test-gh-api-kf-output-absfolder ()
 {
     # Isolated temp directory for test artifacts (raw files, headers)
     local tmpDir
@@ -148,7 +148,7 @@ test-gh-api-kf-output-folder ()
 #	The filename will be my-download-target.tgz
 #	The expected path for the download will be "$tmpFolder/$filename"
 #
-test-gh-api-kf-output-path ()
+test-gh-api-kf-output-absfilename ()
 {
     local tmpDir
     tmpDir=$(mktemp -d --tmpdir ghapi-kf-output-path.XXXXXX)
@@ -177,7 +177,7 @@ test-gh-api-kf-output-path ()
 #	The filename will be my-download-target.tgz
 #	The expected path for the download will be "$dstFolder/$filename"
 #
-test-gh-api-kf-output-filename ()
+test-gh-api-kf-output-relfilename ()
 {
     local tmpDir
     tmpDir=$(mktemp -d --tmpdir ghapi-kf-output-filename.XXXXXX)
@@ -203,13 +203,45 @@ test-gh-api-kf-output-filename ()
 }
 
 
+# Walk the user through gh-api_ download path with --output pointing
+# to a relative directory (trailing slash).  The file should land in that
+# directory with the Content-Disposition filename.
+# Invoke: bash test-125-gh-api.sh test-gh-api-kf-output-relfolder
+test-gh-api-kf-output-relfolder ()
+{
+    local tmpDir
+    tmpDir=$(mktemp -d --tmpdir ghapi-kf-output-relfolder.XXXXXX)
+
+    # Relative subdirectory — pushd into tmpDir so sub/ resolves correctly
+    mkdir -p "$tmpDir/sub"
+
+    local token; token=$(get-token) || return
+
+    local -A flagMap=()
+    flagMap[token]="$token"
+    flagMap[accept]='application/octet-stream'
+    flagMap[output]='sub/'
+
+    local urlPath="/repos/dylt-dev/dylt/releases/assets/449914893"
+
+    pushd "$tmpDir" >/dev/null || return 1
+    local output
+    output=$(download-file flagMap "$urlPath") || { popd >/dev/null; return 1; }
+    popd >/dev/null
+
+    local expectedFile="dylt_0.0.11-nightly.20260617-test_checksums.txt"
+    check-file "$tmpDir/sub/$expectedFile" || return 1
+}
+
+
 all()
 {
     local tests=(
-        test-gh-api-kf-no-output
-        test-gh-api-kf-output-folder
-        test-gh-api-kf-output-path
-        test-gh-api-kf-output-filename
+        test-gh-api-kf-output-none
+        test-gh-api-kf-output-absfolder
+        test-gh-api-kf-output-absfilename
+        test-gh-api-kf-output-relfilename
+        test-gh-api-kf-output-relfolder
     )
     local total=${#tests[@]} passed=0 failed=0
     for t in "${tests[@]}"; do
@@ -224,11 +256,12 @@ all()
 main()
 {
     case ${1:-all} in
-        all|"")                            all;;
-        test-gh-api-kf-no-output)          test-gh-api-kf-no-output "$@";;
-        test-gh-api-kf-output-folder)      test-gh-api-kf-output-folder "$@";;
-        test-gh-api-kf-output-path)        test-gh-api-kf-output-path "$@";;
-        test-gh-api-kf-output-filename)    test-gh-api-kf-output-filename "$@";;
+        all|"")                                   all;;
+        test-gh-api-kf-output-none)               test-gh-api-kf-output-none "$@";;
+        test-gh-api-kf-output-absfolder)          test-gh-api-kf-output-absfolder "$@";;
+        test-gh-api-kf-output-absfilename)        test-gh-api-kf-output-absfilename "$@";;
+        test-gh-api-kf-output-relfilename)        test-gh-api-kf-output-relfilename "$@";;
+        test-gh-api-kf-output-relfolder)          test-gh-api-kf-output-relfolder "$@";;
         *)                                 printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }
