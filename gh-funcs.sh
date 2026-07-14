@@ -110,6 +110,43 @@ ghapi-save-file ()
 
 #-------------------------------------------------------------------------------
 #
+# handle-file-endpoint()
+#
+# Called after a successful fetch where Content-Disposition is present.
+# Resolves the output path, saves the file, and prints the path.
+#
+handle-file-endpoint ()
+{
+    local tmpFolder=$1
+    local contentDisp=$2
+
+    local outputSpec=${_flagMap[output]}
+    local outputPath
+    outputPath=$(resolve-output-spec "$outputSpec" "$contentDisp") || return
+
+    ghapi-save-file "$tmpFolder/response.txt" "$outputPath" || return
+
+    printf '%s' "$outputPath"
+    if [[ -t 1 ]]; then printf '\n'; fi
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# handle-data-endpoint()
+#
+# Called after a successful fetch where Content-Disposition is absent and
+# no media type recovery applies.  The response is data, not a download.
+# (currently a placeholder)
+#
+handle-data-endpoint ()
+{
+    echo "this is data"
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # gh-api_ ()
 #
 # Make an authenticated request to the GitHub API.
@@ -150,73 +187,52 @@ gh-api_ ()
 		fi
 	fi
 
-	# execute the actual curl call
-    curl --fail-with-body \
-         --location \
-         --silent \
-         --dump-header "$tmpFolder/headers.txt" \
-         --output "$tmpFolder/response.txt" \
-         "${curlFlags[@]}" \
-		 "https://api.github.com/$urlPath" || {
-            printf '  FAIL: curl exited with error\n'
+    local url="https://api.github.com/$urlPath"
+
+    local contentDisp=''
+    local maxRetries=10
+
+    while (( maxRetries-- > 0 )); do
+        curl --location --silent \
+             --dump-header "$tmpFolder/headers.txt" \
+             --output "$tmpFolder/response.txt" \
+             "${curlFlags[@]}" \
+             "$url"
+
+        local httpStatus
+        httpStatus=$(lookup-http-status < "$tmpFolder/headers.txt")
+
+        # Terminal: HTTP error (non-recoverable)
+        if [[ "$httpStatus" -ge 400 ]]; then
+            printf '  gh-api_: HTTP %s\n' "$httpStatus" >&2
             return 1
-    }
+        fi
 
-    # check if it's a download or not 
-	contentDisp=$(lookup-content-disposition < "$tmpFolder/headers.txt")
+        # Terminal: 200 with CD → file; 200 with no mediaType → data
+        if [[ "$httpStatus" -eq 200 ]]; then
+            contentDisp=$(lookup-content-disposition < "$tmpFolder/headers.txt")
+            if [[ -n "$contentDisp" ]]; then break; fi
+
+            local mediaType
+            mediaType=$(lookup-mediatype < "$tmpFolder/response.txt")
+            if [[ -z "$mediaType" ]]; then break; fi
+
+            # 200, no CD, yes mediaType — file endpoint returned metadata
+            # (recovery cases will be added here)
+            break
+        fi
+
+        # Unknown status — give up
+        printf '  gh-api_: unexpected HTTP %s\n' "$httpStatus" >&2
+        return 1
+    done
+
+    # Post-loop: dispatch to file or data handler
     if [[ -n "$contentDisp" ]]; then
-        # echo "this is a download"
-		# If it's a download, we resolve the outputSpec to get the final destination
-		# Then we validate in case the file already exists, or if the dir path they
-		# 	would like to save to does not exist.
-		# If all is well we copy the file to its final destination, if any, and then
-		# 	we emit the path
-		# Edge cases
-		# 	specified file exists						[[ -f "$path" ]]
-		# 	specified file exists as a folder           [[ -d "$path" ]]
-		# 	specified parent folder does not exist      cp + let it write to stderr
-		# 	specified parent folder is not writeable    cp + let it write to stderr
-		# 
-        outputSpec=${_flagMap[output]}
-		outputPath=$(resolve-output-spec "$outputSpec" "$contentDisp") || return
-
-		# val: does file exist?
-		if [[ -f "$outputPath" ]]; then
-			printf 'output path exists (%s); aborting\n' "$outputPath" >&2
-			return 2
-		fi
-
-		# val: does path exist but is a folder and doesn't end with a slash?
-		if [[ -d "$outputPath" ]] && [[ "$outputPath" != */ ]]; then
-			printf 'path is a file but exists as a folder (%s)\n' "$outputPath" >&2
-			return 3
-		fi
-
-		# cp to final destination - let any other failures be naturally emitted by cp
-		cp "$tmpFolder/response.txt" "$outputPath" || return
-		printf "$outputPath"
-		if [[ -t 1 ]]; then printf '\n'; fi
+        handle-file-endpoint "$tmpFolder" "$contentDisp"
     else
-        echo "this is data"
+        handle-data-endpoint
     fi
-
-    # check if it's a download
-    #   Yes - get the file do its destination
-    #   No - while next; do download-next-page
-    #        concatenate responses
-    #        write responses to stdout
-
-    # Resolve output specifier if provided
-#     if [[ -v _flagMap[output] ]]; then
-#         resolve-output-spec "${_flagMap[output]}" curlFlags || return
-#     fi
-
-#    local url="https://api.github.com/$urlPath"
-#    if [[ -v _flagMap[per-page] ]]; then
-#        url+="?per_page=${_flagMap[per-page]}"
-#    fi
-
-#    curl --fail-with-body --location --silent "${curlFlags[@]}" "$url"
 }
 
 
@@ -532,14 +548,17 @@ lookup-mediatype ()
 # lookup-http-status()
 #
 # Read a headers file from stdin and extract the HTTP status code from
-# the first line (e.g. HTTP/2 200, HTTP/1.1 415).
+# the last status line (e.g. HTTP/2 200, HTTP/1.1 415).
+# With curl --location --dump-header, the headers file contains ALL
+# responses from the redirect chain.  The last status line is the
+# final response after all redirects.
 #
 # Stdin:  headers file
 # Stdout: three-digit status code, or empty if not found
 #
 lookup-http-status ()
 {
-    head -1 | grep -oE '[0-9]{3}' | head -1 || true
+    grep '^HTTP/' | tail -1 | grep -oE '[0-9]{3}' | head -1 || true
 }
 
 
