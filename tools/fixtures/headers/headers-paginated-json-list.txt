@@ -1,11 +1,11 @@
 HTTP/2 200 
-date: Sun, 05 Jul 2026 04:28:51 GMT
+date: Tue, 14 Jul 2026 16:59:14 GMT
 content-type: application/json; charset=utf-8
 cache-control: public, max-age=60, s-maxage=60
 vary: Accept,Accept-Encoding, Accept, X-Requested-With
-etag: W/"9ad5b67938bedb3bc06ffa534e777f2855054b5f5754085a07160161fbf58292"
+etag: W/"c186983ff7b2e1bca28179e10644b3e630cb351fe33234ccdac5a7193aac1ced"
 x-github-media-type: github.v3; format=json
-link: <https://api.github.com/repositories/11225014/releases?per_page=1&page=2>; rel="next", <https://api.github.com/repositories/11225014/releases?per_page=1&page=288>; rel="last"
+link: <https://api.github.com/repositories/11225014/releases?per_page=1&page=2>; rel="next", <https://api.github.com/repositories/11225014/releases?per_page=1&page=289>; rel="last"
 x-github-api-version-selected: 2022-11-28
 access-control-expose-headers: ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning
 access-control-allow-origin: *
@@ -18,10 +18,10 @@ content-security-policy: default-src 'none'
 server: github.com
 accept-ranges: bytes
 x-ratelimit-limit: 60
-x-ratelimit-remaining: 53
-x-ratelimit-used: 7
+x-ratelimit-remaining: 59
+x-ratelimit-used: 1
 x-ratelimit-resource: core
-x-ratelimit-reset: 1783226955
-content-length: 20842
-x-github-request-id: D499:1EB777:3D432F3:DB256DA:6A49DD83
+x-ratelimit-reset: 1784051954
+content-length: 20775
+x-github-request-id: CBCB:3A3EE1:43F7C41:F094788:6A566AE2
 

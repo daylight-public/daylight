@@ -1,8 +1,8 @@
 HTTP/2 302 
-date: Sun, 05 Jul 2026 04:28:51 GMT
+date: Tue, 14 Jul 2026 16:59:15 GMT
 content-type: text/html;charset=utf-8
 content-length: 0
-location: https://release-assets.githubusercontent.com/github-production-release-asset/11225014/747afeeb-735e-4a60-9722-3bf33a9d7362?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-07-05T05%3A24%3A10Z&rscd=attachment%3B+filename%3Detcd-v3.6.13-darwin-amd64.zip&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-07-05T04%3A23%3A44Z&ske=2026-07-05T05%3A24%3A10Z&sks=b&skv=2018-11-09&sig=zsXni1GoExJduCqTQ%2FTaqYZ4IS1XTdzSjM0OVPoDrTI%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc4MzIyNzUzMSwibmJmIjoxNzgzMjI1NzMxLCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.KOwp-Zd0-9oXBX6XCLCaTJxedBa137Ttov6zY_xn54U&response-content-disposition=attachment%3B%20filename%3Detcd-v3.6.13-darwin-amd64.zip&response-content-type=application%2Foctet-stream
+location: https://release-assets.githubusercontent.com/github-production-release-asset/11225014/747afeeb-735e-4a60-9722-3bf33a9d7362?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-07-14T18%3A00%3A03Z&rscd=attachment%3B+filename%3Detcd-v3.6.13-darwin-amd64.zip&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-07-14T16%3A59%3A15Z&ske=2026-07-14T18%3A00%3A03Z&sks=b&skv=2018-11-09&sig=hOysp8jfQ%2BbzbY0mrACJEkQE2rTk6RW40UMtqWIQViE%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc4NDA1MDE1NSwibmJmIjoxNzg0MDQ4MzU1LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.2du0d580hmaUlQyCFzeWU9MdZtt5gUr-DTDNHEYG3bg&response-content-disposition=attachment%3B%20filename%3Detcd-v3.6.13-darwin-amd64.zip&response-content-type=application%2Foctet-stream
 x-github-api-version-selected: 2022-11-28
 access-control-expose-headers: ETag, Link, Location, Retry-After, X-GitHub-OTP, X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Used, X-RateLimit-Resource, X-RateLimit-Reset, X-OAuth-Scopes, X-Accepted-OAuth-Scopes, X-Poll-Interval, X-GitHub-Media-Type, X-GitHub-SSO, X-GitHub-Request-Id, Deprecation, Sunset, Warning
 access-control-allow-origin: *
@@ -15,17 +15,17 @@ content-security-policy: default-src 'none'
 vary: Accept-Encoding, Accept, X-Requested-With
 server: github.com
 x-ratelimit-limit: 60
-x-ratelimit-remaining: 52
-x-ratelimit-used: 8
+x-ratelimit-remaining: 58
+x-ratelimit-used: 2
 x-ratelimit-resource: core
-x-ratelimit-reset: 1783226955
-x-github-request-id: D49A:1676D4:4109363:E6D1651:6A49DD83
+x-ratelimit-reset: 1784051954
+x-github-request-id: CBCC:37A699:4313829:EE1FACA:6A566AE2
 
 HTTP/2 200 
 last-modified: Wed, 01 Jul 2026 20:38:56 GMT
 etag: "0x8DED7B0C5F1B42F"
 server: Windows-Azure-Blob/1.0 Microsoft-HTTPAPI/2.0
-x-ms-request-id: 37126283-801e-0046-039a-09d5d2000000
+x-ms-request-id: 08891d3b-501e-006a-23df-12397d000000
 x-ms-version: 2018-11-09
 x-ms-creation-time: Wed, 01 Jul 2026 20:38:56 GMT
 x-ms-lease-status: unlocked
@@ -36,12 +36,12 @@ x-ms-access-tier: Hot
 x-ms-access-tier-inferred: true
 via: 1.1 varnish, 1.1 varnish
 accept-ranges: bytes
-age: 2372
-date: Sun, 05 Jul 2026 04:28:51 GMT
-x-served-by: cache-iad-khef600048-IAD, cache-iah-kiah1900049-IAH
-x-cache: HIT, HIT
-x-cache-hits: 2, 0
-x-timer: S1783225732.983898,VS0,VE1
+age: 0
+date: Tue, 14 Jul 2026 16:59:15 GMT
+x-served-by: cache-iad-khef600048-IAD, cache-iah-kiah1900054-IAH
+x-cache: HIT, MISS
+x-cache-hits: 0, 0
+x-timer: S1784048356.597071,VS0,VE35
 content-disposition: attachment; filename=etcd-v3.6.13-darwin-amd64.zip
 content-type: application/octet-stream
 content-length: 25410992

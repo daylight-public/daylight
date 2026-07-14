@@ -502,6 +502,22 @@ lookup-mediatype ()
 
 #-------------------------------------------------------------------------------
 #
+# lookup-http-status()
+#
+# Read a headers file from stdin and extract the HTTP status code from
+# the first line (e.g. HTTP/2 200, HTTP/1.1 415).
+#
+# Stdin:  headers file
+# Stdout: three-digit status code, or empty if not found
+#
+lookup-http-status ()
+{
+    head -1 | grep -oE '[0-9]{3}' | head -1 || true
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # lookup-next-link()
 #
 # Read a headers file from stdin and extract the URL from the Link

@@ -94,24 +94,118 @@ headers-4 ()
 }
 
 
+# 200 JSON response from a release asset (no redirect)
+gen-headers-200 ()
+{
+    local headersPath="$PATH_HeadersFolder/headers-200-json.txt"
+    mkdir -p "$PATH_HeadersFolder"
+    local url="https://api.github.com/repos/dylt-dev/dylt/releases/assets/449914893"
+    curl \
+        -H "$GH_ContentType_json" \
+        --silent \
+        --dump-header "$headersPath" \
+        --create-dirs \
+        "$url" >/dev/null \
+        || return
+    printf "$headersPath"
+    [[ -t 1 ]] && printf '\n'
+    grep -q '^HTTP/.* 200' "$headersPath" || { printf '*** expected 200\n'; return 1; }
+}
+
+
+# 302 redirect from a release asset with octet-stream Accept (no --location)
+gen-headers-302 ()
+{
+    local headersPath="$PATH_HeadersFolder/headers-302-redirect.txt"
+    mkdir -p "$PATH_HeadersFolder"
+    local url="https://api.github.com/repos/dylt-dev/dylt/releases/assets/449914893"
+    curl \
+        -H "Accept: $GH_ContentType_binary" \
+        --silent \
+        --dump-header "$headersPath" \
+        --create-dirs \
+        "$url" >/dev/null \
+        || return
+    printf "$headersPath"
+    [[ -t 1 ]] && printf '\n'
+    grep -q '^HTTP/.* 302' "$headersPath" || { printf '*** expected 302\n'; return 1; }
+}
+
+
+# 415 from a release asset with invalid Accept
+gen-headers-415 ()
+{
+    local headersPath="$PATH_HeadersFolder/headers-415-invalid.txt"
+    mkdir -p "$PATH_HeadersFolder"
+    local url="https://api.github.com/repos/dylt-dev/dylt/releases/assets/449914893"
+    curl \
+        -H "Accept: application/xxxINVALIDxxx" \
+        --silent \
+        --dump-header "$headersPath" \
+        --create-dirs \
+        "$url" >/dev/null \
+        || return
+    printf "$headersPath"
+    [[ -t 1 ]] && printf '\n'
+    grep -q '^HTTP/.* 415' "$headersPath" || { printf '*** expected 415\n'; return 1; }
+}
+
+
+# 404 from a nonexistent URL
+gen-headers-404 ()
+{
+    local headersPath="$PATH_HeadersFolder/headers-404-notfound.txt"
+    mkdir -p "$PATH_HeadersFolder"
+    local url="https://api.github.com/nonexistent-resource-xyzzy"
+    curl \
+        -H "$GH_ContentType_json" \
+        --silent \
+        --dump-header "$headersPath" \
+        --create-dirs \
+        "$url" >/dev/null \
+        || return
+    printf "$headersPath"
+    [[ -t 1 ]] && printf '\n'
+    grep -q '^HTTP/.* 404' "$headersPath" || { printf '*** expected 404\n'; return 1; }
+}
+
+
 all ()
 {
 	headers-1
 	headers-2
 	headers-3
 	headers-4
+	gen-headers-200
+	gen-headers-302
+	gen-headers-415
+	gen-headers-404
+}
+
+
+all-status ()
+{
+	gen-headers-200
+	gen-headers-302
+	gen-headers-415
+	gen-headers-404
 }
 
 
 main()
 {
     case ${1:-all} in
-        headers-1) headers-1 "$@";;
-        headers-2) headers-2 "$@";;
-        headers-3) headers-3 "$@";;
-        headers-4) headers-4 "$@";;
-        all|"")    all ;;
-        *)         printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
+        headers-1)       headers-1 "$@";;
+        headers-2)       headers-2 "$@";;
+        headers-3)       headers-3 "$@";;
+        headers-4)       headers-4 "$@";;
+        gen-headers-200) gen-headers-200 "$@";;
+        gen-headers-302) gen-headers-302 "$@";;
+        gen-headers-415) gen-headers-415 "$@";;
+        gen-headers-404) gen-headers-404 "$@";;
+        all|"")          all ;;
+		all-status-status|"")   all-status ;;
+        *)               printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }
 

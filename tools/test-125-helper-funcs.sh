@@ -305,6 +305,56 @@ test-lookup-header-miss ()
 }
 
 
+test-lookup-http-status-200 ()
+{
+    local result
+    result=$(lookup-http-status < "$FIXTURES_DIR/headers-200-json.txt")
+    [[ "$result" == "200" ]] \
+        || { printf '  FAIL: expected 200, got %s\n' "$result"; return 1; }
+    printf '  PASS\n'
+}
+
+
+test-lookup-http-status-302 ()
+{
+    local result
+    result=$(lookup-http-status < "$FIXTURES_DIR/headers-302-redirect.txt")
+    [[ "$result" == "302" ]] \
+        || { printf '  FAIL: expected 302, got %s\n' "$result"; return 1; }
+    printf '  PASS\n'
+}
+
+
+test-lookup-http-status-415 ()
+{
+    local result
+    result=$(lookup-http-status < "$FIXTURES_DIR/headers-415-invalid.txt")
+    [[ "$result" == "415" ]] \
+        || { printf '  FAIL: expected 415, got %s\n' "$result"; return 1; }
+    printf '  PASS\n'
+}
+
+
+test-lookup-http-status-404 ()
+{
+    local result
+    result=$(lookup-http-status < "$FIXTURES_DIR/headers-404-notfound.txt")
+    [[ "$result" == "404" ]] \
+        || { printf '  FAIL: expected 404, got %s\n' "$result"; return 1; }
+    printf '  PASS\n'
+}
+
+
+test-lookup-http-status-empty ()
+{
+    local result
+    result=$(lookup-http-status < /dev/null)
+    [[ -z "$result" ]] \
+        || { printf '  FAIL: expected empty, got %s\n' "$result"; return 1; }
+    printf '  PASS\n'
+}
+
+
 all()
 {
     local tests=(
@@ -314,6 +364,11 @@ all()
         test-headers-single-json
         test-lookup-cds
         test-lookup-next-links
+        test-lookup-http-status-200
+        test-lookup-http-status-302
+        test-lookup-http-status-415
+        test-lookup-http-status-404
+        test-lookup-http-status-empty
     )
     local total=${#tests[@]}
     local passed=0
@@ -343,6 +398,11 @@ main()
         test-lookup-cd-miss|\
         test-lookup-cds|\
         test-lookup-next-links|\
+        test-lookup-http-status-200|\
+        test-lookup-http-status-302|\
+        test-lookup-http-status-415|\
+        test-lookup-http-status-404|\
+        test-lookup-http-status-empty|\
         lookup-next-link-hit|\
         lookup-next-link-miss)                 "$@" ;;
         *)                                    printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
