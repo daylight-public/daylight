@@ -71,10 +71,88 @@ test-ghapi-kf-accepts-none ()
     local outputPath="$tmpDir/my-download-target.tgz"
 
     local -A flagMap=()
-    flagMap[token]="$token"
     # No accept set — relies on default application/vnd.github+json.
     # gh-api_ should detect the file endpoint from the response,
+    flagMap[token]="$token"
     # look up the media type, and retry with the correct Accept.
+    flagMap[output]="$outputPath"
+
+    local urlPath="/repos/dylt-dev/dylt/releases/assets/449914893"
+
+    local output
+    output=$(download-file flagMap "$urlPath") || return 1
+
+    check-file "$outputPath" || return 1
+}
+
+
+# test an abspath dylt package download with accepts=json
+# function should download json initially, then
+# recover and lookup the proper Accepts mediatype and then successfuly download
+# expected results are the same as for any abspath download
+test-ghapi-kf-accepts-json ()
+{
+    local tmpDir
+    tmpDir=$(mktemp -d --tmpdir ghapi-kf-accepts-json.XXXXXX)
+
+    local token; token=$(get-token) || return
+
+    local outputPath="$tmpDir/my-download-target.tgz"
+
+    local -A flagMap=()
+    flagMap[accept]='application/json'
+    flagMap[token]="$token"
+    flagMap[output]="$outputPath"
+
+    local urlPath="/repos/dylt-dev/dylt/releases/assets/449914893"
+
+    local output
+    output=$(download-file flagMap "$urlPath") || return 1
+
+    check-file "$outputPath" || return 1
+}
+
+
+# test an abspath dylt package download with accepts=application/octet-stream
+# function should download application-octet/stream, and succeed
+# expected results are the same as for any abspath download
+test-ghapi-kf-accepts-octo ()
+{
+    local tmpDir
+    tmpDir=$(mktemp -d --tmpdir ghapi-kf-accepts-octo.XXXXXX)
+
+    local token; token=$(get-token) || return
+
+    local outputPath="$tmpDir/my-download-target.tgz"
+
+    local -A flagMap=()
+    flagMap[accept]='application/octet-stream'
+    flagMap[token]="$token"
+    flagMap[output]="$outputPath"
+
+    local urlPath="/repos/dylt-dev/dylt/releases/assets/449914893"
+
+    local output
+    output=$(download-file flagMap "$urlPath") || return 1
+
+    check-file "$outputPath" || return 1
+}
+
+# test an abspath dylt package download with accepts=xxxINVALIDxxx
+# not sure what should happen honestly
+# expected results are the same as for any abspath download
+test-ghapi-kf-accepts-xxx ()
+{
+    local tmpDir
+    tmpDir=$(mktemp -d --tmpdir ghapi-kf-accepts-xxx.XXXXXX)
+
+    local token; token=$(get-token) || return
+
+    local outputPath="$tmpDir/my-download-target.tgz"
+
+    local -A flagMap=()
+    flagMap[accept]='application/xxxINVALIDxxx'
+    flagMap[token]="$token"
     flagMap[output]="$outputPath"
 
     local urlPath="/repos/dylt-dev/dylt/releases/assets/449914893"
@@ -271,6 +349,9 @@ all()
         test-ghapi-kf-output-relfilename
         test-ghapi-kf-output-relfolder
         test-ghapi-kf-accepts-none
+        test-ghapi-kf-accepts-json
+        test-ghapi-kf-accepts-octo
+        test-ghapi-kf-accepts-xxx
     )
     local total=${#tests[@]} passed=0 failed=0
     for t in "${tests[@]}"; do
@@ -292,6 +373,9 @@ main()
         test-ghapi-kf-output-relfilename)        test-ghapi-kf-output-relfilename "$@";;
         test-ghapi-kf-output-relfolder)          test-ghapi-kf-output-relfolder "$@";;
         test-ghapi-kf-accepts-none)              test-ghapi-kf-accepts-none "$@";;
+        test-ghapi-kf-accepts-json)              test-ghapi-kf-accepts-json "$@";;
+        test-ghapi-kf-accepts-octo)              test-ghapi-kf-accepts-octo "$@";;
+        test-ghapi-kf-accepts-xxx)               test-ghapi-kf-accepts-xxx "$@";;
         *)                                 printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }
