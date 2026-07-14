@@ -57,13 +57,41 @@ download-file ()
 }
 
 
+# test an abspath dylt package download with accepts=None
+# function should download json initially, then
+# recover and lookup the proper Accepts mediatype and then successfuly download
+# expected results are the same as for any abspath download
+test-ghapi-kf-accepts-none ()
+{
+    local tmpDir
+    tmpDir=$(mktemp -d --tmpdir ghapi-kf-accepts-none.XXXXXX)
+
+    local token; token=$(get-token) || return
+
+    local outputPath="$tmpDir/my-download-target.tgz"
+
+    local -A flagMap=()
+    flagMap[token]="$token"
+    # No accept set — relies on default application/vnd.github+json.
+    # gh-api_ should detect the file endpoint from the response,
+    # look up the media type, and retry with the correct Accept.
+    flagMap[output]="$outputPath"
+
+    local urlPath="/repos/dylt-dev/dylt/releases/assets/449914893"
+
+    local output
+    output=$(download-file flagMap "$urlPath") || return 1
+
+    check-file "$outputPath" || return 1
+}
+
 
 # Walk the user through an end-to-end system test of gh-api_ with
 # a file download endpoint.  Uses the dylt release checksums file
 # (~900 bytes).  No --output specified — file lands in current dir
 # with Content-Disposition filename.
-# Invoke: bash test-125-gh-api.sh test-gh-api-kf-no-output
-test-gh-api-kf-output-none ()
+# Invoke: bash test-125-gh-api.sh test-ghapi-kf-no-output
+test-ghapi-kf-output-none ()
 {
     # Isolated temp directory — we pushd into it so the download
     # lands here by default (resolve-output-spec with empty output
@@ -104,8 +132,8 @@ test-gh-api-kf-output-none ()
 # Walk the user through gh-api_ download path with --output pointing
 # to a directory (trailing slash).  The file should land in that
 # directory with the Content-Disposition filename.
-# Invoke: bash test-125-gh-api.sh test-gh-api-kf-output-folder
-test-gh-api-kf-output-absfolder ()
+# Invoke: bash test-125-gh-api.sh test-ghapi-kf-output-folder
+test-ghapi-kf-output-absfolder ()
 {
     # Isolated temp directory for test artifacts (raw files, headers)
     local tmpDir
@@ -148,7 +176,7 @@ test-gh-api-kf-output-absfolder ()
 #	The filename will be my-download-target.tgz
 #	The expected path for the download will be "$tmpFolder/$filename"
 #
-test-gh-api-kf-output-absfilename ()
+test-ghapi-kf-output-absfilename ()
 {
     local tmpDir
     tmpDir=$(mktemp -d --tmpdir ghapi-kf-output-path.XXXXXX)
@@ -177,7 +205,7 @@ test-gh-api-kf-output-absfilename ()
 #	The filename will be my-download-target.tgz
 #	The expected path for the download will be "$dstFolder/$filename"
 #
-test-gh-api-kf-output-relfilename ()
+test-ghapi-kf-output-relfilename ()
 {
     local tmpDir
     tmpDir=$(mktemp -d --tmpdir ghapi-kf-output-filename.XXXXXX)
@@ -206,8 +234,8 @@ test-gh-api-kf-output-relfilename ()
 # Walk the user through gh-api_ download path with --output pointing
 # to a relative directory (trailing slash).  The file should land in that
 # directory with the Content-Disposition filename.
-# Invoke: bash test-125-gh-api.sh test-gh-api-kf-output-relfolder
-test-gh-api-kf-output-relfolder ()
+# Invoke: bash test-125-gh-api.sh test-ghapi-kf-output-relfolder
+test-ghapi-kf-output-relfolder ()
 {
     local tmpDir
     tmpDir=$(mktemp -d --tmpdir ghapi-kf-output-relfolder.XXXXXX)
@@ -237,11 +265,12 @@ test-gh-api-kf-output-relfolder ()
 all()
 {
     local tests=(
-        test-gh-api-kf-output-none
-        test-gh-api-kf-output-absfolder
-        test-gh-api-kf-output-absfilename
-        test-gh-api-kf-output-relfilename
-        test-gh-api-kf-output-relfolder
+        test-ghapi-kf-output-none
+        test-ghapi-kf-output-absfolder
+        test-ghapi-kf-output-absfilename
+        test-ghapi-kf-output-relfilename
+        test-ghapi-kf-output-relfolder
+        test-ghapi-kf-accepts-none
     )
     local total=${#tests[@]} passed=0 failed=0
     for t in "${tests[@]}"; do
@@ -257,11 +286,12 @@ main()
 {
     case ${1:-all} in
         all|"")                                   all;;
-        test-gh-api-kf-output-none)               test-gh-api-kf-output-none "$@";;
-        test-gh-api-kf-output-absfolder)          test-gh-api-kf-output-absfolder "$@";;
-        test-gh-api-kf-output-absfilename)        test-gh-api-kf-output-absfilename "$@";;
-        test-gh-api-kf-output-relfilename)        test-gh-api-kf-output-relfilename "$@";;
-        test-gh-api-kf-output-relfolder)          test-gh-api-kf-output-relfolder "$@";;
+        test-ghapi-kf-output-none)               test-ghapi-kf-output-none "$@";;
+        test-ghapi-kf-output-absfolder)          test-ghapi-kf-output-absfolder "$@";;
+        test-ghapi-kf-output-absfilename)        test-ghapi-kf-output-absfilename "$@";;
+        test-ghapi-kf-output-relfilename)        test-ghapi-kf-output-relfilename "$@";;
+        test-ghapi-kf-output-relfolder)          test-ghapi-kf-output-relfolder "$@";;
+        test-ghapi-kf-accepts-none)              test-ghapi-kf-accepts-none "$@";;
         *)                                 printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }
