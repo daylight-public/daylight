@@ -80,6 +80,33 @@ gh-api ()
 }
 
 
+#-------------------------------------------------------------------------------
+#
+# ghapi-save-file()
+#
+# Copy a downloaded response to its final destination path.
+# Validates no-clobber and dir-ambiguity before copying.
+#
+# Returns: 0 on success, 2 if file exists, 3 if path is a directory
+#          (and caller likely meant a file), or propagates cp error.
+#
+ghapi-save-file ()
+{
+    local responseFile=$1
+    local outputPath=$2
+
+    if [[ -f "$outputPath" ]]; then
+        printf 'ghapi-save-file: output path exists (%s)\n' "$outputPath" >&2
+        return 2
+    fi
+    if [[ -d "$outputPath" ]] && [[ "$outputPath" != */ ]]; then
+        printf 'ghapi-save-file: path is a folder (%s), trailing slash?\n' "$outputPath" >&2
+        return 3
+    fi
+
+    cp "$responseFile" "$outputPath" || return
+}
+
 
 #-------------------------------------------------------------------------------
 #

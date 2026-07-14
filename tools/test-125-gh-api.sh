@@ -57,6 +57,68 @@ download-file ()
 }
 
 
+test-ghapi-save-file-happy ()
+{
+    local tmpDir
+    tmpDir=$(mktemp -d --tmpdir test-ghapi-save-file.XXXXXX)
+    mkdir -p "$tmpDir/dst"
+    echo "hello" > "$tmpDir/src.txt"
+
+    ghapi-save-file "$tmpDir/src.txt" "$tmpDir/dst/saved.txt" || {
+        printf '  FAIL: save returned non-zero\n'
+        return 1
+    }
+
+    [[ -f "$tmpDir/dst/saved.txt" ]] || { printf '  FAIL: file not created\n'; return 1; }
+    printf '  PASS\n'
+}
+
+
+test-ghapi-save-file-collision ()
+{
+    local tmpDir
+    tmpDir=$(mktemp -d --tmpdir test-ghapi-save-file.XXXXXX)
+    mkdir -p "$tmpDir/dst"
+    echo "original" > "$tmpDir/dst/existing.txt"
+    echo "hello" > "$tmpDir/src.txt"
+
+    ghapi-save-file "$tmpDir/src.txt" "$tmpDir/dst/existing.txt" && {
+        printf '  FAIL: expected collision error\n'
+        return 1
+    }
+    printf '  PASS\n'
+}
+
+
+test-ghapi-save-file-nosuchdir ()
+{
+    local tmpDir
+    tmpDir=$(mktemp -d --tmpdir test-ghapi-save-file.XXXXXX)
+    echo "hello" > "$tmpDir/src.txt"
+
+    ghapi-save-file "$tmpDir/src.txt" "$tmpDir/missing/sub/file.txt" && {
+        printf '  FAIL: expected cp error\n'
+        return 1
+    }
+    printf '  PASS\n'
+}
+
+
+test-ghapi-save-file-dirambiguity ()
+{
+    local tmpDir
+    tmpDir=$(mktemp -d --tmpdir test-ghapi-save-file.XXXXXX)
+    mkdir -p "$tmpDir/dstdir"
+    echo "hello" > "$tmpDir/src.txt"
+
+    ghapi-save-file "$tmpDir/src.txt" "$tmpDir/dstdir" && {
+        printf '  FAIL: expected dir ambiguity error\n'
+        return 1
+    }
+    printf '  PASS\n'
+}
+
+
 # test an abspath dylt package download with accepts=None
 # function should download json initially, then
 # recover and lookup the proper Accepts mediatype and then successfuly download
@@ -343,6 +405,10 @@ test-ghapi-kf-output-relfolder ()
 all()
 {
     local tests=(
+        test-ghapi-save-file-happy
+        test-ghapi-save-file-collision
+        test-ghapi-save-file-nosuchdir
+        test-ghapi-save-file-dirambiguity
         test-ghapi-kf-output-none
         test-ghapi-kf-output-absfolder
         test-ghapi-kf-output-absfilename
@@ -376,6 +442,10 @@ main()
         test-ghapi-kf-accepts-json)              test-ghapi-kf-accepts-json "$@";;
         test-ghapi-kf-accepts-octo)              test-ghapi-kf-accepts-octo "$@";;
         test-ghapi-kf-accepts-xxx)               test-ghapi-kf-accepts-xxx "$@";;
+        test-ghapi-save-file-happy)              test-ghapi-save-file-happy "$@";;
+        test-ghapi-save-file-collision)          test-ghapi-save-file-collision "$@";;
+        test-ghapi-save-file-nosuchdir)          test-ghapi-save-file-nosuchdir "$@";;
+        test-ghapi-save-file-dirambiguity)       test-ghapi-save-file-dirambiguity "$@";;
         *)                                 printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }
