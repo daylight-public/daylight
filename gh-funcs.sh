@@ -76,7 +76,12 @@ ghapi-create-tmp-folder-prefix ()
 #
 gh-api ()
 {
-    :
+    local -A flagMap=()
+    local -a posargs=()
+    gh-parse-args flagMap posargs "$@" || return
+    local urlPath=${posargs[0]}
+    [[ -n "$urlPath" ]] || { printf 'gh-api: url required\n' >&2; return 1; }
+    gh-api_ flagMap "$urlPath"
 }
 
 
@@ -124,7 +129,7 @@ handle-file-endpoint ()
     local outputPath
     outputPath=$(resolve-output-spec "$outputSpec" "$contentDisp") || return
 
-    ghapi-save-file "$tmpFolder/response.txt" "$outputPath" || return
+    ghapi-save-file "$tmpFolder/response.000000.txt" "$outputPath" || return
 
     printf '%s' "$outputPath"
     if [[ -t 1 ]]; then printf '\n'; fi
@@ -135,13 +140,49 @@ handle-file-endpoint ()
 #
 # handle-data-endpoint()
 #
-# Called after a successful fetch where Content-Disposition is absent and
-# no media type recovery applies.  The response is data, not a download.
-# (currently a placeholder)
+# Called after a successful fetch where Content-Disposition is absent.
+# Outputs the response body to stdout.
 #
 handle-data-endpoint ()
 {
-    echo "this is data"
+    local tmpFolder=$1
+    local nextLink=$2
+    local -n _flagMap=$3
+    local page=$4
+
+    # Fetch remaining pages
+    while [[ -n "$nextLink" ]]; do
+        (( page++ ))
+        local f
+        printf -v f 'response.%06d.txt' "$page"
+        curl --location --silent \
+             --dump-header "$tmpFolder/headers.txt" \
+             --output "$tmpFolder/$f" \
+             --header "Authorization: Bearer ${_flagMap[token]}" \
+             "$nextLink"
+        nextLink=$(lookup-next-link < "$tmpFolder/headers.txt")
+    done
+
+    local jqPath=${_flagMap[jq-path]}
+
+    if [[ -n "$jqPath" ]]; then
+        ghapi-merge-pages --jq-path "$jqPath" "$tmpFolder"/response.*.txt \
+            > "$tmpFolder/data.json"
+    else
+        ghapi-merge-pages "$tmpFolder"/response.*.txt \
+            > "$tmpFolder/data.json"
+    fi
+
+    local outputSpec=${_flagMap[output]}
+    if [[ -n "$outputSpec" ]]; then
+        local outPath
+        outPath=$(resolve-output-spec "$outputSpec" "data.json")
+        cp "$tmpFolder/data.json" "$outPath"
+        printf '%s' "$outPath"
+        if [[ -t 1 ]]; then printf '\n'; fi
+    else
+        cat "$tmpFolder/data.json"
+    fi
 }
 
 
@@ -188,41 +229,58 @@ gh-api_ ()
 	fi
 
     local url="https://api.github.com/$urlPath"
-
-    local contentDisp=''
     local maxRetries=10
+    local page=0
 
     while (( maxRetries-- > 0 )); do
-        curl --location --silent \
+        local curlRc=0
+        local responseFile
+        printf -v responseFile 'response.%06d.txt' "$page"
+        curl --fail-with-body --location --silent \
              --dump-header "$tmpFolder/headers.txt" \
-             --output "$tmpFolder/response.txt" \
+             --output "$tmpFolder/$responseFile" \
              "${curlFlags[@]}" \
-             "$url"
+             "$url" || curlRc=$?
 
         local httpStatus
         httpStatus=$(lookup-http-status < "$tmpFolder/headers.txt")
 
-        # Terminal: HTTP error (non-recoverable)
-        if [[ "$httpStatus" -ge 400 ]]; then
-            printf '  gh-api_: HTTP %s\n' "$httpStatus" >&2
-            return 1
+        # Look up CD and browser_download_url once — drives all the branching below
+        local contentDisp
+        contentDisp=$(lookup-content-disposition < "$tmpFolder/headers.txt")
+        local bdu
+        bdu=$(lookup-browser-download-url < "$tmpFolder/$responseFile")
+        local nextLink
+        nextLink=$(lookup-next-link < "$tmpFolder/headers.txt")
+
+        # ── case: curl error that isn't a 415 ─────────────────────
+        if [[ "$curlRc" -ne 0 ]] && [[ "$httpStatus" -ne 415 ]]; then
+            printf '  gh-api_: curl error %d\n' "$curlRc" >&2
+            return "$curlRc"
         fi
 
-        # Terminal: 200 with CD → file; 200 with no mediaType → data
-        if [[ "$httpStatus" -eq 200 ]]; then
-            contentDisp=$(lookup-content-disposition < "$tmpFolder/headers.txt")
-            if [[ -n "$contentDisp" ]]; then break; fi
-
-            local mediaType
-            mediaType=$(lookup-mediatype < "$tmpFolder/response.txt")
-            if [[ -z "$mediaType" ]]; then break; fi
-
-            # 200, no CD, yes mediaType — file endpoint returned metadata
-            # (recovery cases will be added here)
+        # ── case: 200 with CD (file) or 200 with no mediaType (data) ──
+        if [[ "$httpStatus" -eq 200 ]] && ([[ -n "$contentDisp" ]] || [[ -z "$bdu" ]]); then
             break
         fi
 
-        # Unknown status — give up
+        # ── case: 415 — retry with JSON Accept ─────────────────────
+        if [[ "$httpStatus" -eq 415 ]]; then
+            local -a curlFlags=()
+            curlFlags+=(--header "Accept: application/vnd.github+json")
+            [[ -v _flagMap[token] ]] && curlFlags+=(--header "Authorization: Bearer ${_flagMap[token]}")
+            continue
+        fi
+
+        # ── case: 200 with bdu — retry with octet-stream ──
+        if [[ "$httpStatus" -eq 200 ]] && [[ -n "$bdu" ]]; then
+            local -a curlFlags=()
+            curlFlags+=(--header "Accept: application/octet-stream")
+            [[ -v _flagMap[token] ]] && curlFlags+=(--header "Authorization: Bearer ${_flagMap[token]}")
+            continue
+        fi
+
+        # ── case: unknown ────────────────────────────────────────────
         printf '  gh-api_: unexpected HTTP %s\n' "$httpStatus" >&2
         return 1
     done
@@ -231,7 +289,7 @@ gh-api_ ()
     if [[ -n "$contentDisp" ]]; then
         handle-file-endpoint "$tmpFolder" "$contentDisp"
     else
-        handle-data-endpoint
+        handle-data-endpoint "$tmpFolder" "$nextLink" "$1" "$page"
     fi
 }
 
@@ -278,8 +336,10 @@ gh-parse-args ()
     while (( $# > 0 )); do
         case $1 in
             --accept|\
+            --asset-name|\
             --data|\
             --extract|\
+            --jq-path|\
             --output|\
             --per-page|\
             --token|\
@@ -290,6 +350,10 @@ gh-parse-args ()
                 (( $# >= 2 )) || { printf '%s specified but no value provided.\n' "$1" >&2; return 1; }
                 _flagMap["${1##--}"]=$2
                 shift 2
+                ;;
+            --no-verify)
+                _flagMap["${1##--}"]="1"
+                shift
                 ;;
             --)
                 shift
@@ -545,6 +609,23 @@ lookup-mediatype ()
 
 #-------------------------------------------------------------------------------
 #
+# lookup-browser-download-url()
+#
+# Read a JSON response body from stdin and extract the browser_download_url
+# from the browser_download_url field.
+#
+# Stdin:  raw JSON response body
+# Stdout: value of browser_download_url, or empty if not present
+# Returns: always 0
+#
+lookup-browser-download-url ()
+{
+    jq -r '.browser_download_url // empty' 2>/dev/null || true
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # lookup-http-status()
 #
 # Read a headers file from stdin and extract the HTTP status code from
@@ -603,6 +684,168 @@ lookup-next-link ()
     fi
 
     return 2
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# ghapi-merge-pages()
+#
+# Merge multiple JSON response files from paginated API calls into a single
+# result.  For bare arrays (jqPath empty), concatenates all arrays.  For
+# envelope objects (jqPath set), grafts all data arrays onto the first
+# page's envelope, preserving fields like total_count.
+#
+# Usage:
+#   ghapi-merge-pages [--jq-path <field>] response.*.txt > merged.json
+#
+ghapi-merge-pages ()
+{
+    local jqPath=''
+    if [[ "$1" == --jq-path ]]; then
+        jqPath="$2"
+        shift 2
+    fi
+
+    if [[ -z "$jqPath" ]]; then
+        jq -s 'add' "$@"
+    else
+        jq -n --arg jqPath "$jqPath" '
+            [inputs] as $pages |
+            ($pages[0] | del(.[$jqPath])) as $env |
+            $env + {($jqPath): [$pages[] | .[$jqPath]] | add}
+        ' "$@"
+    fi
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# ghr-download()
+#
+# Download a release asset from a GitHub repository.  Latest release by
+# default; specify --version for a specific tag.
+#
+# Flags:
+#   --token <token>       GitHub API token
+#   --version <tag>       Release tag (default: latest)
+#   --asset-name <name>   Asset filename (default: auto-detect)
+#   --output <path>       Download destination (file or dir with trailing /)
+#   --extract <dir>       Extract archive to this directory
+#   --no-verify           Skip checksum verification (default: verify)
+#
+# Positional:
+#   org                   GitHub organization or user
+#   repo                  Repository name
+#
+ghr-download ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    gh-parse-args flagMap posargs "$@" || return
+
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || {
+        printf 'Usage: ghr-download [flags] <org> <repo>\n' >&2
+        return 1
+    }
+
+    # Build internal map for gh-api_ calls
+    local -A _map=()
+    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
+
+    # Step 1: Resolve release
+    local version=${flagMap[version]}
+    local releaseUrl
+    if [[ -n "$version" ]]; then
+        releaseUrl="/repos/$org/$repo/releases/tags/$version"
+    else
+        releaseUrl="/repos/$org/$repo/releases/latest"
+    fi
+
+    local releaseJson
+    releaseJson=$(gh-api_ _map "$releaseUrl" 2>/dev/null) || return
+
+    # Step 2: Find the asset
+    local assetName=${flagMap[asset-name]}
+    if [[ -z "$assetName" ]]; then
+        assetName=$(jq -r '
+            try ([.assets[] | select(.name | test("\\.tar\\.gz$")) | .name] | first) //
+            try ([.assets[] | select(.name | test("\\.zip$")) | .name] | first) //
+            try .assets[0].name // ""
+        ' <<< "$releaseJson")
+    fi
+
+    [[ -n "$assetName" ]] || { printf 'No asset found\n' >&2; return 1; }
+
+    local assetId
+    assetId=$(jq -r --arg name "$assetName" '.assets[] | select(.name == $name) | .id' <<< "$releaseJson") || {
+        printf 'Asset "%s" not found\n' "$assetName" >&2
+        return 1
+    }
+
+    local digest
+    digest=$(jq -r --arg name "$assetName" '.assets[] | select(.name == $name) | .digest // ""' <<< "$releaseJson")
+
+    # Step 3: Download
+    _map[accept]='application/octet-stream'
+    local outputSpec=${flagMap[output]}
+    if [[ -n "$outputSpec" ]]; then
+        _map[output]="$outputSpec"
+    fi
+
+    local downloadPath
+    downloadPath=$(gh-api_ _map "/repos/$org/$repo/releases/assets/$assetId") || return
+
+    # Step 4: Verify (default on)
+    if [[ -z "${flagMap[no-verify]:-}" && -n "$digest" ]]; then
+        local expectedHash="${digest#sha256:}"
+        local actualHash
+        actualHash=$(sha256sum "$downloadPath" | awk '{print $1}')
+        if [[ "$expectedHash" != "$actualHash" ]]; then
+            printf 'Checksum mismatch: %s\n' "$downloadPath" >&2
+            return 1
+        fi
+    fi
+
+    # Step 5: Extract
+    local extractDir=${flagMap[extract]}
+    if [[ -n "$extractDir" ]]; then
+        [[ -f "$downloadPath" ]] || { printf 'Archive not found: %s\n' "$downloadPath" >&2; return 1; }
+        local extractTmp
+        extractTmp=$(mktemp -d --tmpdir "$(basename "$downloadPath").XXXXXX") || return
+        case "$downloadPath" in
+            *.tar.gz|*.tgz)
+                tar -xzf "$downloadPath" -C "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
+                ;;
+            *.zip)
+                unzip -o "$downloadPath" -d "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
+                ;;
+            *)
+                printf 'Cannot extract: unknown format %s\n' "$downloadPath" >&2
+                rm -rf "$extractTmp"
+                return 1
+                ;;
+        esac
+        local -a entries
+        entries=("$extractTmp"/*)
+        mkdir -p "$extractDir"
+        if (( ${#entries[@]} == 1 )); then
+            mv "${entries[0]}" "$extractDir/$(basename "${entries[0]}")" || { rm -rf "$extractTmp"; return 1; }
+            printf '%s' "$extractDir/$(basename "${entries[0]}")"
+        else
+            local subdir="$extractDir/extracted"
+            mkdir -p "$subdir"
+            mv "$extractTmp"/* "$subdir"/ || { rm -rf "$extractTmp"; return 1; }
+            printf '%s' "$subdir"
+        fi
+        rm -rf "$extractTmp"
+        if [[ -t 1 ]]; then printf '\n'; fi
+    else
+        printf '%s' "$downloadPath"
+        if [[ -t 1 ]]; then printf '\n'; fi
+    fi
 }
 
 
