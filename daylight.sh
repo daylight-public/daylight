@@ -1069,49 +1069,49 @@ download-daylight-batch ()
     local org=daylight-public
     local repo=daylight
 
+    # Extract token from pass array
+    local token=""
+    for ((i=0; i<${#pass[@]}; i++)); do
+        if [[ "${pass[i]}" == "--token" ]] && (( i+1 < ${#pass[@]} )); then
+            token="${pass[i+1]}"
+            break
+        fi
+    done
+
     if [[ -n "$release" ]]; then
-        local tag json assetName tmpDir releasePath checksumFile
-        local checksumName=SHA256SUMS
+        local tag assetName releaseJson
 
         if [[ "$release" == "latest" ]]; then
-            tag=$(github-release-get-latest-tag "${pass[@]}" "$org" "$repo") || return
+            tag=$(github-release-get-latest-tag "$org" "$repo") || return
         else
             tag=$release
         fi
 
-        tmpDir=$(create-temp-folder) || return
+        local -A _map=()
+        [[ -n "$token" ]] && _map[token]="$token"
 
-        json=$(github-release-get-data --version "$tag" "${pass[@]}" "$org" "$repo") || return
-        assetName=$(printf '%s' "$json" | jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .name' | head -1) || {
+        releaseJson=$(gh-api_ _map "/repos/$org/$repo/releases/tags/$tag" 2>/dev/null) || return
+        assetName=$(printf '%s' "$releaseJson" | jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .name' | head -1) || {
             printf 'No tar.gz asset found in release %s\n' "$tag" >&2
-            rm -rf "$tmpDir"
             return 1
         }
 
-        releasePath=$(github-release-download --version "$tag" "${pass[@]}" --extract-dir "$extract_dir" --extract-name "${extract_name:-daylight.sh}" --asset-name "$assetName" --output-dir "$tmpDir" "$org" "$repo") || {
-            rm -rf "$tmpDir"
-            return 1
-        }
-
-        checksumFile=$(github-release-download --version "$tag" "${pass[@]}" --asset-name "$checksumName" --output-dir "$tmpDir" "$org" "$repo") || {
-            printf 'SHA256SUMS not found in release %s — cannot verify integrity\n' "$tag" >&2
-            rm -rf "$tmpDir"
-            return 1
-        }
-
-        if ! (cd "$tmpDir" && grep -F "$assetName" "$checksumName" | sha256sum -c -); then
-            printf 'Checksum verification failed for %s\n' "$assetName" >&2
-            rm -rf "$tmpDir"
-            return 1
+        local -a dl_flags=()
+        [[ -n "$token" ]] && dl_flags+=(--token "$token")
+        dl_flags+=(--version "$tag" --asset-name "$assetName")
+        if [[ -n "$extract_dir" ]]; then
+            dl_flags+=(--extract "$extract_dir")
         fi
-
-        # releasePath now points to the extracted file from github-release-download
-        rm -rf "$tmpDir"
+        dl_flags+=(--output "$dstFolder/")
+        ghr-download "${dl_flags[@]}" "$org" "$repo" || return
     else
-        local url="https://raw.githubusercontent.com/$org/$repo/$branch/daylight.sh"
+        # Branch mode: fetch raw file from GitHub
+        local -A _map=()
+        [[ -n "$token" ]] && _map[token]="$token"
+        _map[accept]='application/vnd.github.raw'
         local target="$extract_dir/${extract_name:-daylight.sh}"
         mkdir -p "$extract_dir"
-        curl --location --silent --fail --output "$target" "$url" || return
+        gh-api_ _map "/repos/$org/$repo/contents/daylight.sh?ref=$branch" > "$target" || return
     fi
 }
 
@@ -1142,37 +1142,25 @@ download-dist ()
 #
 download-dylt ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    local -a flags=()
-    github-create-flags argmap flags token
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 1 )) || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
-    local dstFolder=$1
-    local platform=$2
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local dstFolder=${posargs[0]}
+    [[ -n "$dstFolder" ]] || { printf 'Usage: download-dylt [--token <tok>] [--version <ver>] [--platform <arch>] <dstFolder>\n' >&2; return 1; }
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
+    local version=${flagMap[version]:-''}
+    [[ -n "$version" ]] || version=$(github-release-get-latest-tag dylt-dev dylt) || return
+
+    local platform=${flagMap[platform]:-''}
     if [[ -z "$platform" ]]; then
         platform=$(detect-platform) || return
     fi
 
-    local -a flags=()
-    [[ -n "${argmap[token]+exists}" ]] && flags+=(--token "${argmap[token]}") 
-
-    local version; version=$(github-release-get-latest-tag "${flags[@]}" dylt-dev dylt) || return
-
-    local releaseName="dylt_${platform}.tar.gz"
-    local legacyName="dylt_$(dylt-legacy-platform "$platform").tar.gz"
-    local url="https://github.com/dylt-dev/dylt/releases/download/$version/$releaseName"
-
-    if curl --fail --location --head "$url" >/dev/null 2>&1; then
-        github-release-download-latest "${flags[@]}" dylt-dev dylt "$releaseName" "$dstFolder" || return
-    else
-        github-release-download-latest "${flags[@]}" dylt-dev dylt "$legacyName" "$dstFolder" || return
-    fi
+    local -a dl_flags=()
+    [[ -v flagMap[token] ]] && dl_flags+=(--token "${flagMap[token]}")
+    dl_flags+=(--version "$version" --asset-name "dylt_${platform}.tar.gz" --output "$dstFolder/")
+    ghr-download "${dl_flags[@]}" dylt-dev dylt
 }
 
 
@@ -1444,26 +1432,23 @@ etcd-create-release-name ()
 # but losing the version might not be a good tradeoff.
 etcd-download ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: etcd-download $downloadFolder\n' >&2; return 1; }
-    local downloadFolder=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local downloadFolder=${posargs[0]:-${flagMap[output]:-.}}
 
-    local version=${argmap[version]:-''}
+    local version=${flagMap[version]:-''}
     [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
-    local platform=${argmap[platform]:-''}
+    local platform=${flagMap[platform]:-''}
     if [[ -z "$platform" ]]; then
         platform=$(detect-platform) || platform='linux-amd64'
     fi
     local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
-    local -a flags
-    github-create-flags argmap flags token
-    flags+=(--version "$version")
-    github-release-download "${flags[@]}" --asset-name "$releaseName" --output-dir "$downloadFolder" etcd-io etcd
+
+    local -a dl_flags=()
+    [[ -v flagMap[token] ]] && dl_flags+=(--token "${flagMap[token]}")
+    dl_flags+=(--version "$version" --asset-name "$releaseName" --output "$downloadFolder/")
+    ghr-download "${dl_flags[@]}" etcd-io etcd
 }
 
 
