@@ -1136,17 +1136,17 @@ download-dist ()
 
 #-------------------------------------------------------------------------------
 #
-# download-dylt()
+# dylt-download()
 #
 # Download latest dylt release
 #
-download-dylt ()
+dylt-download ()
 {
     local -A flagMap=()
     local -a posargs=()
     gh-api-parse-args flagMap posargs "$@" || return
     local dstFolder=${posargs[0]}
-    [[ -n "$dstFolder" ]] || { printf 'Usage: download-dylt [--token <tok>] [--version <ver>] [--platform <arch>] <dstFolder>\n' >&2; return 1; }
+    [[ -n "$dstFolder" ]] || { printf 'Usage: dylt-download [--token <tok>] [--version <ver>] [--platform <arch>] <dstFolder>\n' >&2; return 1; }
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
     local version=${flagMap[version]:-''}
@@ -7015,11 +7015,11 @@ install-dylt ()
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
     local tmpFolder; tmpFolder=$(mktemp --directory --tmpdir dylt-XXXXXX) || return
-    if [[ -n "$platform" ]]; then
-        download-dylt "$tmpFolder" "$platform" || return
-    else
-        download-dylt "$tmpFolder" || return
-    fi
+	if [[ -n "$platform" ]]; then
+		dylt-download --platform "$platform" "$tmpFolder" || return
+	else
+		dylt-download "$tmpFolder" || return
+	fi
 
     local tarball
     tarball=$(find "$tmpFolder" -name 'dylt_*.tar.gz' -type f | head -1) || return
@@ -9261,7 +9261,7 @@ main ()
             download-daylight)                                download-daylight "$@";;
             download-daylight-batch)                          download-daylight-batch "$@";;
             download-dist)                                    download-dist "$@";;
-            download-dylt)                                    download-dylt "$@";;
+            dylt-download)                                    dylt-download "$@";;
             download-flask-app)                               download-flask-app "$@";;
             download-flask-service)                           download-flask-service "$@";;
             download-public-key)                              download-public-key "$@";;
