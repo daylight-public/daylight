@@ -2920,6 +2920,7 @@ gh-api-parse-args ()
             --jq-path|\
             --output|\
             --per-page|\
+            --request|\
             --token|\
             --label|\
             --platform|\
@@ -3071,6 +3072,11 @@ gh-api-unparse-curl-args ()
     # POST data
     if [[ -v _flagMap[data] ]]; then
         _curlFlags+=(--data "${_flagMap[data]}")
+    fi
+
+    # HTTP method override (GET, POST, PUT, DELETE, etc.)
+    if [[ -v _flagMap[request] ]]; then
+        _curlFlags+=(--request "${_flagMap[request]}")
     fi
 }
 
@@ -5440,40 +5446,25 @@ github-shr-download-tarball ()
 {
     (( $# >= 1 )) || { printf 'Usage: github-shr-download-tarball $targetFolder' >&2; return 1; }
     local downloadFolder=$1
-    local urlLatestRelease="https://api.github.com/repos/actions/runner/releases/latest"
-    local platform;  platform=$(detect-runner-platform) || return
-    local fileExt="tar.gz"
+    local platform; platform=$(detect-runner-platform) || return
 
-    if [[ $platform == win-* ]]; then
-        fileExt="zip"
-    fi
-
-    local namePattern="^actions-runner-$platform-.*\\.$fileExt\$"
-    local tarballFileName tarballUrl
-    local args
-    read -r -a args < <(curl --silent "$urlLatestRelease" \
-        | jq -r --arg pat "$namePattern" '.assets[]? | select(.name | test($pat)) | [.name, .browser_download_url] | @tsv') \
-        || return
-
-    if [[ ${#args[@]} -eq 0 ]]; then
+    local tarballPath
+    tarballPath=$(ghr-download --platform "$platform" --output "$downloadFolder/" actions/runner) || {
         printf 'No runner asset found for platform: %s\n' "$platform" >&2
         return 1
-    fi
+    }
 
-    tarballFileName=${args[0]}
-    tarballUrl=${args[1]}
-    local tarballPath; tarballPath="$(create-temp-file "XXX.$tarballFileName")" || return
-    curl --location --silent --output "$tarballPath" "$tarballUrl"
-
-    if [[ "$fileExt" == "zip" ]]; then
-        unzip -t "$tarballPath" >/dev/null || return
-        unzip -o -d "$downloadFolder" "$tarballPath" >/dev/null || return
-    else
-        tar --list --gunzip --file "$tarballPath" >/dev/null
-        tar --directory "$downloadFolder" --extract --gunzip --file "$tarballPath" || return
-    fi
-
-    printf '%s' "$downloadFolder" 
+    case "$tarballPath" in
+        *.zip)
+            unzip -t "$tarballPath" >/dev/null || return
+            unzip -o -d "$downloadFolder" "$tarballPath" >/dev/null || return
+            ;;
+        *.tar.gz|*.tgz)
+            tar --list --gunzip --file "$tarballPath" >/dev/null
+            tar --directory "$downloadFolder" --extract --gunzip --file "$tarballPath" || return
+            ;;
+    esac
+    printf '%s' "$downloadFolder"
 }
 
 
@@ -5663,37 +5654,25 @@ github-shr-start ()
 #
 github-shr-swap-tokens ()
 {
-    # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: github-shr-swap-tokens $org $repo\n' >&2; return 1; }
     local org=$1 repo=$2
-
-    local shrFolder; shrFolder=$(github-shr-folder-name "$org" "$repo") || return
     local uat; uat=$(github-shr-load-uat "$org" "$repo") || return
 
-    local apiUrl="https://api.github.com/repos/$org/$repo/actions/runners/registration-token"
-    local tmpCurl; tmpCurl=$(create-temp-file curl.get.shr.token.json) || return
-    curl --fail-with-body --location --silent --request POST \
-        --header "Authorization: Bearer $uat" \
-        --header "Accept: application/json" \
-        --output "$tmpCurl" \
-        "$apiUrl" || {
-        local httpCode
-        httpCode=$(jq -r '.status // "unknown"' <"$tmpCurl")
-        local msg
-        msg=$(jq -r '.message // "unknown"' <"$tmpCurl")
-        printf 'github-shr-swap-tokens: %s — %s\n' "$httpCode" "$msg" >&2
-        if [[ "$httpCode" == "403" ]]; then
-            printf 'The GitHub App may not be installed on %s/%s.\n' "$org" "$repo" >&2
-            printf 'Run: github-is-gha-installed %s <app-slug>\n' "$org" >&2
-            printf 'Install at: https://github.com/apps/<app-slug>/installations/new\n' >&2
-        fi
+    local -A _map=()
+    _map[token]="$uat"
+    _map[accept]="application/json"
+    _map[data]=""
+
+    local response
+    response=$(gh-api_ _map "/repos/$org/$repo/actions/runners/registration-token") || {
+        printf 'github-shr-swap-tokens: API call failed\n' >&2
         return 1
     }
-    local shrToken
-    shrToken=$(jq -r '.token' <"$tmpCurl")
+
+    local shrToken; shrToken=$(jq -r '.token' <<< "$response") || return
     if [[ -z "$shrToken" || "$shrToken" == "null" ]]; then
         printf 'github-shr-swap-tokens: response did not contain a token\n' >&2
-        jq . <"$tmpCurl" >&2
+        printf '%s\n' "$response" >&2
         return 1
     fi
     printf '%s' "$shrToken"
@@ -5709,7 +5688,6 @@ github-shr-swap-tokens ()
 #
 github-shr-test ()
 {
-    # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: github-shr-test $org $repo' >&2; return 1; }
     local org=$1 repo=$2
 
@@ -5721,14 +5699,13 @@ github-shr-test ()
     local workflowName="test-shr"
 
     # Check if workflow exists via GitHub API
-    local exists
-    exists=$(curl --silent --request GET \
-        --header "Authorization: Bearer $uat" \
-        --header "Accept: application/vnd.github+json" \
-        "https://api.github.com/repos/$org/$repo/contents/$workflowPath" \
-        --write-out '%{http_code}' --output /dev/null)
+    local -A _map=()
+    _map[token]="$uat"
+    _map[accept]="application/vnd.github+json"
 
-    if [[ "$exists" != "200" ]]; then
+    if gh-api_ _map "/repos/$org/$repo/contents/$workflowPath" > /dev/null 2>&1; then
+        : # workflow exists
+    else
         printf 'Workflow %s does not exist in %s/%s.\n' "$workflowPath" "$org" "$repo" >&2
         printf 'Create it? (Y/n): ' >&2
         local response; read -r response
@@ -5741,12 +5718,9 @@ github-shr-test ()
             local payload
             payload=$(printf '{"message":"%s","content":"%s"}' "$commitMsg" "$encoded")
 
-            curl --silent --request PUT \
-                --header "Authorization: Bearer $uat" \
-                --header "Accept: application/vnd.github+json" \
-                --header "Content-Type: application/json" \
-                --data "$payload" \
-                "https://api.github.com/repos/$org/$repo/contents/$workflowPath" >/dev/null || {
+            _map[request]="PUT"
+            _map[data]="$payload"
+            gh-api_ _map "/repos/$org/$repo/contents/$workflowPath" > /dev/null || {
                 printf 'Failed to create workflow file.\n' >&2
                 return 1
             }
@@ -5758,12 +5732,9 @@ github-shr-test ()
 
     # Trigger the workflow
     printf 'Triggering workflow %s...\n' "$workflowName" >&2
-    curl --silent --request POST \
-        --header "Authorization: Bearer $uat" \
-        --header "Accept: application/vnd.github+json" \
-        --header "Content-Type: application/json" \
-        --data '{"ref":"main"}' \
-        "https://api.github.com/repos/$org/$repo/actions/workflows/$workflowName/dispatches" || {
+    _map[request]="POST"
+    _map[data]='{"ref":"main"}'
+    gh-api_ _map "/repos/$org/$repo/actions/workflows/$workflowName/dispatches" > /dev/null || {
         printf 'Failed to trigger workflow.\n' >&2
         return 1
     }
