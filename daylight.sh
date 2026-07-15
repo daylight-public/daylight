@@ -5137,12 +5137,10 @@ ghr-verify-checksum ()
     local -A flagMap=()
     local -a posargs=()
     gh-api-parse-args flagMap posargs "$@" || return
-    # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: github-release-verify-checksum [flags] $org $repo $assetName $downloadFolder\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local assetName=$3
-    local downloadFolder=$4
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    local assetName=${posargs[2]}
+    local downloadFolder=${posargs[3]}
 
     local -a flags
     github-create-flags argmap flags token version || return
