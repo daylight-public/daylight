@@ -4027,17 +4027,14 @@ ghr-version-path ()
 #
 github-app-get-client-id ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: github-app-get-id $appSlug\n' >&2; return 1; }
-    local appSlug=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local appSlug=${posargs[0]}
+    [[ -n "$appSlug" ]] || { printf 'Usage: github-app-get-client-id [--token <tok>] <appSlug>\n' >&2; return 1; }
 
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -v flagMap[token] ]] && flags+=(--token "${flagMap[token]}")
     local -A info
     github-app-get-info "${flags[@]}" info "$appSlug" || return
     local clientId=${info[client_id]}
@@ -4053,18 +4050,16 @@ github-app-get-client-id ()
 #
 github-app-get-data ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: github-app-get-data $appSlug\n' >&2; return 1; }
-    local appSlug=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local appSlug=${posargs[0]}
+    [[ -n "$appSlug" ]] || { printf 'Usage: github-app-get-data [--token <tok>] <appSlug>\n' >&2; return 1; }
 
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    github-curl "${flags[@]}" "/apps/$appSlug" || return
+    local -A _map=()
+    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
+
+    gh-api_ _map "/apps/$appSlug"
 }
 
 
@@ -4076,17 +4071,14 @@ github-app-get-data ()
 #
 github-app-get-id ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: github-app-get-id $appSlug\n' >&2; return 1; }
-    local appSlug=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local appSlug=${posargs[0]}
+    [[ -n "$appSlug" ]] || { printf 'Usage: github-app-get-id [--token <tok>] <appSlug>\n' >&2; return 1; }
 
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -v flagMap[token] ]] && flags+=(--token "${flagMap[token]}")
     local -A info
     github-app-get-info "${flags[@]}" info "$appSlug" || return
     local id=${info[id]}
@@ -4102,28 +4094,23 @@ github-app-get-id ()
 #
 github-app-get-info ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-app-get-data $infovar $appSlug\n' >&2; return 1; }
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
     local -n _info=$1
     local appSlug=$2
+    [[ -n "$appSlug" ]] || { printf 'Usage: github-app-get-info <infovar> <appSlug>\n' >&2; return 1; }
 
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.XXXXXX) || return
-    github-app-get-data "${flags[@]}" "$appSlug" >"$tmpCurl" || return
-    local tmpJq; tmpJq=$(mktemp --tmpdir jq.XXXXXX) || return
-    jq -r '[.id, .client_id, .slug] | @tsv' <"$tmpCurl" >"$tmpJq" || return
-    read -r -a args < "$tmpJq" || return
+    local data
+    data=$(gh-api_ _map "/apps/$appSlug") || return
 
-    _info[id]=${args[0]}
-    _info[client_id]=${args[1]}
-    # shellcheck disable=SC2154
-    _info[slug]=${args[2]}
+    local args
+    args=$(jq -r '[.id, .client_id, .slug] | @tsv' <<< "$data") || return
+    read -r -a arr <<< "$args"
+
+    _info[id]=${arr[0]}
+    _info[client_id]=${arr[1]}
+    _info[slug]=${arr[2]}
 }
 
 
@@ -4177,31 +4164,25 @@ github-create-flags ()
 #
 github-create-uat ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-create-uat tokenvar $appslug\n' >&2; return 1; }
-    # shellcheck disable=SC2178
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
     [[ $1 != tokenvar ]] && { local -n tokenvar; tokenvar=$1; }
     local appSlug=$2
+    [[ -n "$appSlug" ]] || { printf 'Usage: github-create-uat <tokenvar> <appslug>\n' >&2; return 1; }
 
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -v flagMap[token] ]] && flags+=(--token "${flagMap[token]}")
     
     # Get the clientId for the dylt-cli GitHub App CLI, which must be installed 
     local clientId; clientId=$(github-app-get-client-id "${flags[@]}" "$appSlug") || return
 
-    # Use client id to invoke device code flow
-    flags+=(--data '')
-    urlPath="/login/device/code?client_id=$clientId"
-    urlBase="https://github.com"
+    # Use client id to invoke device code flow — raw curl (non-API GitHub endpoint)
     local -a args
-    read -r -a args < <(github-curl "${flags[@]}" "$urlPath" "$urlBase" \
-                        | jq -r '[.device_code, .user_code, .verification_uri] | @tsv') \
-                        || { printf 'Call failed: github-curl()\n'; return; }
+    read -r -a args < <(curl --silent --data '' \
+        "https://github.com/login/device/code?client_id=$clientId" \
+        | jq -r '[.device_code, .user_code, .verification_uri] | @tsv') \
+        || { printf 'Call failed: device code flow\n' >&2; return; }
     local deviceCode=${args[0]}
     local userCode=${args[1]}
     local verificationUri=${args[2]}
@@ -4224,11 +4205,10 @@ github-create-uat ()
     local prompt; prompt=$(printf 'Go to %s and enter %s. Then return here and press <Enter> ...' "$verificationUri" "$userCode") || return
     read -r -p  "$prompt" _
     local grantType='urn:ietf:params:oauth:grant-type:device_code'
-    urlPath="$(printf '/login/oauth/access_token?client_id=%s&device_code=%s&grant_type=%s' "$clientId" "$deviceCode" "$grantType")"
-    urlBase="https://github.com"
-    read -r -a args < <(github-curl "${flags[@]}" "$urlPath" "$urlBase" \
-                        | jq -r '[.access_token] | @tsv') \
-                        || return
+    local tokenUrl="https://github.com/login/oauth/access_token?client_id=$clientId&device_code=$deviceCode&grant_type=$grantType"
+    read -r -a args < <(curl --silent --data '' "$tokenUrl" \
+        | jq -r '[.access_token] | @tsv') \
+        || return
     # return the access token
     # shellcheck disable=SC2034
     tokenvar=${args[0]}
