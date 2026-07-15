@@ -8856,20 +8856,18 @@ sys-start ()
 #
 trigger-nightly-release ()
 {
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: trigger-nightly-release [--workflow <name>] [--token <pat>] [--label <label>] $owner/$repo\n' >&2; return 1; }
-    local repo=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local repo=${posargs[0]}
+    [[ -n "$repo" ]] || { printf 'Usage: trigger-nightly-release [--workflow <name>] [--token <pat>] [--label <label>] $owner/$repo\n' >&2; return 1; }
 
-    local workflow=${argmap[workflow]:-nightly-release}
-    local label=${argmap[label]:-''}
+    local workflow=${flagMap[workflow]:-nightly-release}
+    local label=${flagMap[label]:-''}
 
     local token
-    if [[ -v argmap[token] ]]; then
-        token=${argmap[token]}
+    if [[ -v flagMap[token] ]]; then
+        token=${flagMap[token]}
     elif [[ -n "${GITHUB_TOKEN-}" ]]; then
         token=$GITHUB_TOKEN
     elif [[ -n "${GH_TOKEN-}" ]]; then
@@ -8894,39 +8892,39 @@ trigger-nightly-release ()
 #
 trigger-nightly-release-batch ()
 {
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: trigger-nightly-release-batch --workflow <name> [--token <pat>] [--label <label>] $owner/$repo\n' >&2; return 1; }
-    local repo=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local repo=${posargs[0]}
+    [[ -n "$repo" ]] || { printf 'Usage: trigger-nightly-release-batch --workflow <name> [--token <pat>] [--label <label>] $owner/$repo\n' >&2; return 1; }
 
-    local workflow=${argmap[workflow]}
+    local workflow=${flagMap[workflow]}
     [[ -n "$workflow" ]] || { printf 'error: --workflow is required\n' >&2; return 1; }
 
-    local token=${argmap[token]:-${GITHUB_TOKEN:?error: --token not given and GITHUB_TOKEN not set}}
+    local token=${flagMap[token]:-${GITHUB_TOKEN:?error: --token not given and GITHUB_TOKEN not set}}
 
     local wf_name=${workflow%.yml}
     wf_name=${wf_name%.yaml}
-    if ! curl -sf -o /dev/null \
-        "https://api.github.com/repos/$repo/actions/workflows/${wf_name}.yml"; then
+
+    local -A _map=()
+    [[ -n "$token" ]] && _map[token]="$token"
+
+    if ! gh-api_ _map "/repos/$repo/actions/workflows/${wf_name}.yml" > /dev/null 2>&1; then
         printf 'error: workflow "%s" not found in %s\n' "$workflow" "$repo" >&2
         return 1
     fi
 
-    local -a flags=(--token "$token")
     local data
-    if [[ -n "${argmap[label]}" ]]; then
+    if [[ -n "${flagMap[label]}" ]]; then
         local label
-        label=$(sanitize-label "${argmap[label]}") || return
+        label=$(sanitize-label "${flagMap[label]}") || return
         data=$(printf '{"ref":"main","inputs":{"label":"%s"}}' "$label")
     else
         data='{"ref":"main"}'
     fi
-    flags+=(--data "$data")
 
-    github-curl "${flags[@]}" "/repos/$repo/actions/workflows/${wf_name}.yml/dispatches" || return
+    _map[data]="$data"
+    gh-api_ _map "/repos/$repo/actions/workflows/${wf_name}.yml/dispatches" || return
 }
 
 
