@@ -2996,6 +2996,35 @@ gh-api-resolve-output-spec ()
 
 #-------------------------------------------------------------------------------
 #
+# gh-api-resolve-extract-spec()
+#
+# Resolve an --extract specifier to a target path.  Mirrors
+# gh-api-resolve-output-spec with an archive entry name as the
+# fallback filename instead of Content-Disposition.
+#
+# Usage:
+#   gh-api-resolve-extract-spec "extract-spec" "entry-name"
+#
+gh-api-resolve-extract-spec ()
+{
+    local extractSpec=$1
+    local entryName=$2
+
+    if [[ -z "$extractSpec" ]]; then
+        printf './%s' "$entryName"
+    elif [[ "$extractSpec" == */ ]]; then
+        printf '%s%s' "$extractSpec" "$entryName"
+    else
+        printf '%s' "$extractSpec"
+    fi
+    if [[ -t 1 ]]; then
+        printf '\n'
+    fi
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # gh-api-lookup-content-disposition()
 #
 # Read a headers file from stdin and extract the filename from the
@@ -3898,8 +3927,8 @@ ghr-download ()
     fi
 
     # Step 5: Extract
-    local extractDir=${flagMap[extract]}
-    if [[ -n "$extractDir" ]]; then
+    local extractSpec=${flagMap[extract]}
+    if [[ -v flagMap[extract] ]]; then
         [[ -f "$downloadPath" ]] || { printf 'Archive not found: %s\n' "$downloadPath" >&2; return 1; }
         local extractTmp
         extractTmp=$(mktemp -d --tmpdir "$(basename "$downloadPath").XXXXXX") || return
@@ -3918,17 +3947,25 @@ ghr-download ()
         esac
         local -a entries
         entries=("$extractTmp"/*)
-        mkdir -p "$extractDir"
+        local entryName
         if (( ${#entries[@]} == 1 )); then
-            mv "${entries[0]}" "$extractDir/$(basename "${entries[0]}")" || { rm -rf "$extractTmp"; return 1; }
-            printf '%s' "$extractDir/$(basename "${entries[0]}")"
+            entryName=$(basename "${entries[0]}")
         else
-            local subdir="$extractDir/extracted"
-            mkdir -p "$subdir"
-            mv "$extractTmp"/* "$subdir"/ || { rm -rf "$extractTmp"; return 1; }
-            printf '%s' "$subdir"
+            entryName="extracted"
+        fi
+        local targetPath
+        targetPath=$(gh-api-resolve-extract-spec "$extractSpec" "$entryName")
+        if (( ${#entries[@]} > 1 )) && [[ "$extractSpec" != */ ]]; then
+            targetPath=$(dirname "$targetPath")
+        fi
+        mkdir -p "$(dirname "$targetPath")"
+        if (( ${#entries[@]} == 1 )); then
+            mv "${entries[0]}" "$targetPath" || { rm -rf "$extractTmp"; return 1; }
+        else
+            mv "$extractTmp"/* "$targetPath"/ || { rm -rf "$extractTmp"; return 1; }
         fi
         rm -rf "$extractTmp"
+        printf '%s' "$targetPath"
         if [[ -t 1 ]]; then printf '\n'; fi
     else
         printf '%s' "$downloadPath"
