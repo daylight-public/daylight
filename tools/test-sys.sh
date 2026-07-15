@@ -3,7 +3,7 @@
 
 SCRIPT_DIR=$(dirname "$(readlink -f "$BASH_SOURCE")")
 source "$SCRIPT_DIR/test-utils.sh" || exit 1
-source "$SCRIPT_DIR/../gh-funcs.sh" || exit 1
+source "$SCRIPT_DIR/../daylight.sh" || exit 1
 
 
 
@@ -43,7 +43,7 @@ test-download-dylt ()
     echo
 
     local -a curlFlags=()
-    gh-unparse-curl-args flagMap curlFlags || { printf '  Aborted\n'; return 0; }
+    gh-api-unparse-curl-args flagMap curlFlags || { printf '  Aborted\n'; return 0; }
 
     printf '  Unparsed flags:\n'
     for f in "${curlFlags[@]}"; do
@@ -54,7 +54,7 @@ test-download-dylt ()
     echo
 
     local prefix
-    prefix=$(ghapi-create-tmp-folder-prefix "$urlPath") || { printf '  Aborted\n'; return 0; }
+    prefix=$(gh-api-create-tmp-folder-prefix "$urlPath") || { printf '  Aborted\n'; return 0; }
     local tmpFolder
     tmpFolder=$(mktemp -t --directory "$prefix") || { printf '  Aborted\n'; return 0; }
     printf '  Temp folder: %s\n' "$tmpFolder"
@@ -94,8 +94,8 @@ test-download-dylt ()
     prompt_yn "headers file. Looks OK?" || { printf '  FAIL: user rejected output\n'; return 1; }
     echo
 
-    hasCd=$(lookup-content-disposition < "$tmpFolder/headers.txt")
-    hasNext=$(lookup-next-link < "$tmpFolder/headers.txt")
+    hasCd=$(gh-api-lookup-content-disposition < "$tmpFolder/headers.txt")
+    hasNext=$(gh-api-lookup-next-link < "$tmpFolder/headers.txt")
     printf '%-32s %s\n' "Has CD Header" "$hasCd"
     printf '%-32s %s\n' "Has Next Link" "$hasNext"
     echo
@@ -131,7 +131,7 @@ test-list-orgs ()
 
     local -A flagMap=()
     local -a posargs=()
-    gh-parse-args flagMap posargs --token "$token"
+    gh-api-parse-args flagMap posargs --token "$token"
 
     # Confirm parsing results
     [[ -v flagMap[token] ]] || { printf '  FAIL: token not in flagMap\n'; return 1; }
@@ -148,7 +148,7 @@ test-list-orgs ()
 
     # Unparse and display for visual inspection
     local -a curlFlags=()
-    gh-unparse-curl-args flagMap curlFlags || { printf '  Aborted\n'; return 0; }
+    gh-api-unparse-curl-args flagMap curlFlags || { printf '  Aborted\n'; return 0; }
 
     printf '  Unparsed flags:\n'
     for f in "${curlFlags[@]}"; do
@@ -163,7 +163,7 @@ test-list-orgs ()
 
     # Create temp folder for header dumps
     local prefix
-    prefix=$(ghapi-create-tmp-folder-prefix "$url") || { printf '  Aborted\n'; return 0; }
+    prefix=$(gh-api-create-tmp-folder-prefix "$url") || { printf '  Aborted\n'; return 0; }
     local tmpFolder
     tmpFolder=$(mktemp -t --directory "$prefix") || { printf '  Aborted\n'; return 0; }
     printf '  Temp folder: %s\n' "$tmpFolder"
@@ -220,8 +220,8 @@ test-list-orgs ()
 	echo
 
 	# show status of download
-	hasCdHeader=$(lookup-content-disposition < "$tmpFolder/headers.txt")
-	hasNextLink=$(lookup-next-link < "$tmpFolder/headers.txt")
+	hasCdHeader=$(gh-api-lookup-content-disposition < "$tmpFolder/headers.txt")
+	hasNextLink=$(gh-api-lookup-next-link < "$tmpFolder/headers.txt")
 	printf '%-32s %s\n' "Has CD Header" "$hasCdHeader"
 	printf '%-32s %s\n' "Has Next Link" "$hasNextLink"
 	echo
@@ -233,10 +233,43 @@ test-list-orgs ()
 }
 
 
+test-download-release-version ()
+{
+    local orgRepo=$1
+    [[ -n "$orgRepo" ]] || { printf 'Usage: test-download-release-version <org/repo>\n' >&2; return 1; }
+
+    local token
+    token=$(gh auth token) || { printf '  FAIL: gh not available or not authenticated\n'; return 1; }
+
+    printf 'Step 1: Listing releases for %s\n' "$orgRepo"
+    prompt_yn 'Proceed?' || { printf '  Aborted\n'; return 0; }
+
+    local tags
+    tags=$(ghr-list --token "$token" "$orgRepo") || { printf '  FAIL: ghr-list failed\n'; return 1; }
+    local firstTag
+    firstTag=$(tail -1 <<< "$tags")
+    printf '  First release: %s\n' "$firstTag"
+
+    local org="${orgRepo%%/*}"
+    local repo="${orgRepo##*/}"
+
+    printf '\nStep 2: Downloading %s with ghr-download\n' "$firstTag"
+    prompt_yn 'Proceed?' || { printf '  Aborted\n'; return 0; }
+
+    local output
+    output=$(ghr-download --token "$token" --version "$firstTag" "$org" "$repo") || {
+        printf '  FAIL: ghr-download failed\n'; return 1
+    }
+    printf '  Downloaded: %s\n' "$output"
+    printf '  PASS\n'
+}
+
+
 usage()
 {
 	printf 'Usage\n'
 	printf '\t%s --flags posargs\n' test-list-orgs
+	printf '\t%s <org/repo>\n' test-download-release-version
 	printf '\n'
 }
 
@@ -246,6 +279,7 @@ main()
     case ${1:-} in
         test-download-dylt) shift; test-download-dylt "$@";;
         test-list-orgs) shift; test-list-orgs "$@";;
+        test-download-release-version) shift; test-download-release-version "$@";;
         "")             usage "$@";;
         *)              printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac

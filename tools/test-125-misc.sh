@@ -7,7 +7,7 @@
 # test writer's down in chasing granularity
 
 SCRIPT_DIR=$(dirname "$(readlink -f "$BASH_SOURCE")")
-source "$SCRIPT_DIR/../gh-funcs.sh" || exit 1
+source "$SCRIPT_DIR/../daylight.sh" || exit 1
 
 test-cp-error-codes ()
 {
@@ -67,8 +67,8 @@ test-cp-error-codes ()
 
 
 # Fetch a file endpoint with default Accept (JSON), pipe response through
-# lookup-mediatype, verify the output matches the expected content_type.
-test-lookup-mediatype ()
+# gh-api-lookup-mediatype, verify the output matches the expected content_type.
+test-gh-api-lookup-mediatype ()
 {
     local url="https://api.github.com/repos/dylt-dev/dylt/releases/assets/449914893"
     local response
@@ -78,7 +78,7 @@ test-lookup-mediatype ()
     }
 
     local mediaType
-    mediaType=$(printf '%s' "$response" | lookup-mediatype)
+    mediaType=$(printf '%s' "$response" | gh-api-lookup-mediatype)
 
     if [[ "$mediaType" == "text/plain; charset=utf-8" ]]; then
         printf '  PASS (mediatype: %s)\n' "$mediaType"
@@ -93,7 +93,7 @@ main()
 {
     case ${1:-} in
         test-cp-error-codes)  test-cp-error-codes "$@";;
-        test-lookup-mediatype) test-lookup-mediatype "$@";;
+        test-gh-api-lookup-mediatype) test-gh-api-lookup-mediatype "$@";;
         "")                  printf 'Usage: %s <test-name>\n' "$0" >&2; exit 1 ;;
         *)                   printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
