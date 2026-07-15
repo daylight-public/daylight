@@ -3925,13 +3925,8 @@ gh-curl-qwenmax_ ()
 # ghr-list()
 #
 # List release version tags for a GitHub repository.
-# Delegates to gh-curl which handles pagination, file naming, and
-# folder management automatically.
 #
-# Flags (passed through to gh-curl):
-#       [--output]         Response filename override
-#       [--output-dir]     Output folder override
-#       [--remote-name]    Derive filename from Content-Disposition
+# Flags:
 #       [--token]          Auth token for non-public repos
 #
 # Positional args: $org/$repo
@@ -3940,30 +3935,16 @@ gh-curl-qwenmax_ ()
 #
 ghr-list ()
 {
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 1 )) || { printf 'Usage: ghr-list $org/$repo\n' >&2; return 1; }
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local orgRepo=${posargs[0]}
+    [[ -n "$orgRepo" ]] || { printf 'Usage: ghr-list <org/repo>\n' >&2; return 1; }
 
-    # Use ghr-path to validate org/repo and get the list endpoint
-    local listPath
-    listPath=$(ghr-path "$1") || return
+    local -A _map=()
+    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
 
-    local -a flags=()
-    github-create-flags argmap flags output output-dir remote-name token
-    [[ -v argmap[output] ]] && flags+=(--output "${argmap[output]}")
-    [[ -v argmap[output-dir] ]] && flags+=(--output-dir "${argmap[output-dir]}")
-    [[ -v argmap[remote-name] ]] && flags+=(--remote-name)
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-
-    local folder
-    folder=$(gh-curl "${flags[@]}" "$listPath") || {
-        printf 'gh-curl failed for %s\n' "$1" >&2
-        return 1
-    }
-    jq -r '.[].tag_name' "$folder/data.json"
+    gh-api_ _map "/repos/${orgRepo}/releases" | jq -r '.[].tag_name'
 }
 
 
@@ -9344,6 +9325,7 @@ main ()
              gh-api)                                            gh-api "$@";;
              ghr-url-path)                                     ghr-url-path "$@";;
              ghr-download)                                     ghr-download "$@";;
+             ghr-list)                                         ghr-list "$@";;
             github-app-get-client-id)                         github-app-get-client-id "$@";;
             github-app-get-data)                              github-app-get-data "$@";;
             github-app-get-id)                                github-app-get-id "$@";;
