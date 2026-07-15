@@ -2,7 +2,7 @@
 
 SCRIPT_DIR=$(dirname "$(readlink -f "$BASH_SOURCE")")
 source "$SCRIPT_DIR/test-utils.sh" || exit 1
-source "$SCRIPT_DIR/../gh-funcs.sh" || exit 1
+source "$SCRIPT_DIR/../daylight.sh" || exit 1
 
 
 get-token ()

@@ -7,7 +7,7 @@
 # test writer's down in chasing granularity
 
 SCRIPT_DIR=$(dirname "$(readlink -f "$BASH_SOURCE")")
-source "$SCRIPT_DIR/../gh-funcs.sh" || exit 1
+source "$SCRIPT_DIR/../daylight.sh" || exit 1
 
 test-cp-error-codes ()
 {
