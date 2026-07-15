@@ -12,7 +12,7 @@ test-parse-basic()
 {
     local -A flagMap=()
     local -a posargs=()
-    gh-parse-args flagMap posargs --token abc --per-page 50 /repos/org/repo
+    gh-api-parse-args flagMap posargs --token abc --per-page 50 /repos/org/repo
 
     [[ "${flagMap[token]}" == "abc" ]] || { printf '  FAIL: token\n'; return 1; }
     [[ "${flagMap[per-page]}" == "50" ]] || { printf '  FAIL: per-page\n'; return 1; }
@@ -28,7 +28,7 @@ test-parse-interleaved()
 {
     local -A flagMap=()
     local -a posargs=()
-    gh-parse-args flagMap posargs --token abc /repos/org/repo --output foo.json
+    gh-api-parse-args flagMap posargs --token abc /repos/org/repo --output foo.json
 
     [[ "${flagMap[token]}" == "abc" ]] || { printf '  FAIL: token\n'; return 1; }
     [[ "${flagMap[output]}" == "foo.json" ]] || { printf '  FAIL: output\n'; return 1; }
@@ -44,7 +44,7 @@ test-parse-terminal()
 {
     local -A flagMap=()
     local -a posargs=()
-    gh-parse-args flagMap posargs --token abc -- /repos/org/repo --output foo
+    gh-api-parse-args flagMap posargs --token abc -- /repos/org/repo --output foo
 
     [[ "${flagMap[token]}" == "abc" ]] || { printf '  FAIL: token\n'; return 1; }
     [[ "${#posargs[@]}" -eq 3 ]] || { printf '  FAIL: posargs count (%d)\n' "${#posargs[@]}"; return 1; }
@@ -65,7 +65,7 @@ test-unparse-basic()
 
     local -a curlFlags=()
 
-    gh-unparse-curl-args flagMap curlFlags
+    gh-api-unparse-curl-args flagMap curlFlags
 
     local foundAuth=false
     for arg in "${curlFlags[@]}"; do
@@ -87,7 +87,7 @@ test-unparse-data()
 
     local -a curlFlags=()
 
-    gh-unparse-curl-args flagMap curlFlags
+    gh-api-unparse-curl-args flagMap curlFlags
 
     local foundData=false
     local i
@@ -108,7 +108,7 @@ test-unparse-default-accept()
 {
     local -A flagMap=()
     local -a curlFlags=()
-    gh-unparse-curl-args flagMap curlFlags
+    gh-api-unparse-curl-args flagMap curlFlags
 
     local found=false
     for arg in "${curlFlags[@]}"; do
@@ -189,7 +189,7 @@ test-parse-unknown-flag()
 {
     local -A flagMap=()
     local -a posargs=()
-    gh-parse-args flagMap posargs --nonexistent /repos/org/repo && {
+    gh-api-parse-args flagMap posargs --nonexistent /repos/org/repo && {
         printf '  FAIL: expected error for unknown flag\n'
         return 1
     }
@@ -203,7 +203,7 @@ test-parse-unknown-flag()
 test-resolve-output-empty()
 {
     local result
-    result=$(resolve-output-spec "" "etcd.tar.gz")
+    result=$(gh-api-resolve-output-spec "" "etcd.tar.gz")
     [[ "$result" == "./etcd.tar.gz" ]] \
         || { printf '  FAIL: expected "./etcd.tar.gz", got "%s"\n' "$result"; return 1; }
     printf '  PASS\n'
@@ -216,7 +216,7 @@ test-resolve-output-empty()
 test-resolve-output-trailing-slash()
 {
     local result
-    result=$(resolve-output-spec "/tmp/out/" "etcd.tar.gz")
+    result=$(gh-api-resolve-output-spec "/tmp/out/" "etcd.tar.gz")
     [[ "$result" == "/tmp/out/etcd.tar.gz" ]] \
         || { printf '  FAIL: expected "/tmp/out/etcd.tar.gz", got "%s"\n' "$result"; return 1; }
     printf '  PASS\n'
@@ -229,7 +229,7 @@ test-resolve-output-trailing-slash()
 test-resolve-output-explicit-file()
 {
     local result
-    result=$(resolve-output-spec "/tmp/pkg.tar.gz" "etcd.tar.gz")
+    result=$(gh-api-resolve-output-spec "/tmp/pkg.tar.gz" "etcd.tar.gz")
     [[ "$result" == "/tmp/pkg.tar.gz" ]] \
         || { printf '  FAIL: expected "/tmp/pkg.tar.gz", got "%s"\n' "$result"; return 1; }
     printf '  PASS\n'

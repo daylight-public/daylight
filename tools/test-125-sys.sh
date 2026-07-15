@@ -43,7 +43,7 @@ test-download-dylt ()
     echo
 
     local -a curlFlags=()
-    gh-unparse-curl-args flagMap curlFlags || { printf '  Aborted\n'; return 0; }
+    gh-api-unparse-curl-args flagMap curlFlags || { printf '  Aborted\n'; return 0; }
 
     printf '  Unparsed flags:\n'
     for f in "${curlFlags[@]}"; do
@@ -54,7 +54,7 @@ test-download-dylt ()
     echo
 
     local prefix
-    prefix=$(ghapi-create-tmp-folder-prefix "$urlPath") || { printf '  Aborted\n'; return 0; }
+    prefix=$(gh-api-create-tmp-folder-prefix "$urlPath") || { printf '  Aborted\n'; return 0; }
     local tmpFolder
     tmpFolder=$(mktemp -t --directory "$prefix") || { printf '  Aborted\n'; return 0; }
     printf '  Temp folder: %s\n' "$tmpFolder"
@@ -94,8 +94,8 @@ test-download-dylt ()
     prompt_yn "headers file. Looks OK?" || { printf '  FAIL: user rejected output\n'; return 1; }
     echo
 
-    hasCd=$(lookup-content-disposition < "$tmpFolder/headers.txt")
-    hasNext=$(lookup-next-link < "$tmpFolder/headers.txt")
+    hasCd=$(gh-api-lookup-content-disposition < "$tmpFolder/headers.txt")
+    hasNext=$(gh-api-lookup-next-link < "$tmpFolder/headers.txt")
     printf '%-32s %s\n' "Has CD Header" "$hasCd"
     printf '%-32s %s\n' "Has Next Link" "$hasNext"
     echo
@@ -131,7 +131,7 @@ test-list-orgs ()
 
     local -A flagMap=()
     local -a posargs=()
-    gh-parse-args flagMap posargs --token "$token"
+    gh-api-parse-args flagMap posargs --token "$token"
 
     # Confirm parsing results
     [[ -v flagMap[token] ]] || { printf '  FAIL: token not in flagMap\n'; return 1; }
@@ -148,7 +148,7 @@ test-list-orgs ()
 
     # Unparse and display for visual inspection
     local -a curlFlags=()
-    gh-unparse-curl-args flagMap curlFlags || { printf '  Aborted\n'; return 0; }
+    gh-api-unparse-curl-args flagMap curlFlags || { printf '  Aborted\n'; return 0; }
 
     printf '  Unparsed flags:\n'
     for f in "${curlFlags[@]}"; do
@@ -163,7 +163,7 @@ test-list-orgs ()
 
     # Create temp folder for header dumps
     local prefix
-    prefix=$(ghapi-create-tmp-folder-prefix "$url") || { printf '  Aborted\n'; return 0; }
+    prefix=$(gh-api-create-tmp-folder-prefix "$url") || { printf '  Aborted\n'; return 0; }
     local tmpFolder
     tmpFolder=$(mktemp -t --directory "$prefix") || { printf '  Aborted\n'; return 0; }
     printf '  Temp folder: %s\n' "$tmpFolder"
@@ -220,8 +220,8 @@ test-list-orgs ()
 	echo
 
 	# show status of download
-	hasCdHeader=$(lookup-content-disposition < "$tmpFolder/headers.txt")
-	hasNextLink=$(lookup-next-link < "$tmpFolder/headers.txt")
+	hasCdHeader=$(gh-api-lookup-content-disposition < "$tmpFolder/headers.txt")
+	hasNextLink=$(gh-api-lookup-next-link < "$tmpFolder/headers.txt")
 	printf '%-32s %s\n' "Has CD Header" "$hasCdHeader"
 	printf '%-32s %s\n' "Has Next Link" "$hasNextLink"
 	echo

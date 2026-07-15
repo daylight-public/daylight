@@ -114,14 +114,14 @@ download-file ()
 }
 
 
-test-ghapi-save-file-happy ()
+test-gh-api-save-file-happy ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir test-ghapi-save-file.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir test-gh-api-save-file.XXXXXX)
     mkdir -p "$tmpDir/dst"
     echo "hello" > "$tmpDir/src.txt"
 
-    ghapi-save-file "$tmpDir/src.txt" "$tmpDir/dst/saved.txt" || {
+    gh-api-save-file "$tmpDir/src.txt" "$tmpDir/dst/saved.txt" || {
         printf '  FAIL: save returned non-zero\n'
         return 1
     }
@@ -131,15 +131,15 @@ test-ghapi-save-file-happy ()
 }
 
 
-test-ghapi-save-file-collision ()
+test-gh-api-save-file-collision ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir test-ghapi-save-file.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir test-gh-api-save-file.XXXXXX)
     mkdir -p "$tmpDir/dst"
     echo "original" > "$tmpDir/dst/existing.txt"
     echo "hello" > "$tmpDir/src.txt"
 
-    ghapi-save-file "$tmpDir/src.txt" "$tmpDir/dst/existing.txt" && {
+    gh-api-save-file "$tmpDir/src.txt" "$tmpDir/dst/existing.txt" && {
         printf '  FAIL: expected collision error\n'
         return 1
     }
@@ -147,13 +147,13 @@ test-ghapi-save-file-collision ()
 }
 
 
-test-ghapi-save-file-nosuchdir ()
+test-gh-api-save-file-nosuchdir ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir test-ghapi-save-file.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir test-gh-api-save-file.XXXXXX)
     echo "hello" > "$tmpDir/src.txt"
 
-    ghapi-save-file "$tmpDir/src.txt" "$tmpDir/missing/sub/file.txt" && {
+    gh-api-save-file "$tmpDir/src.txt" "$tmpDir/missing/sub/file.txt" && {
         printf '  FAIL: expected cp error\n'
         return 1
     }
@@ -161,14 +161,14 @@ test-ghapi-save-file-nosuchdir ()
 }
 
 
-test-ghapi-save-file-dirambiguity ()
+test-gh-api-save-file-dirambiguity ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir test-ghapi-save-file.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir test-gh-api-save-file.XXXXXX)
     mkdir -p "$tmpDir/dstdir"
     echo "hello" > "$tmpDir/src.txt"
 
-    ghapi-save-file "$tmpDir/src.txt" "$tmpDir/dstdir" && {
+    gh-api-save-file "$tmpDir/src.txt" "$tmpDir/dstdir" && {
         printf '  FAIL: expected dir ambiguity error\n'
         return 1
     }
@@ -180,10 +180,10 @@ test-ghapi-save-file-dirambiguity ()
 # function should download json initially, then
 # recover and lookup the proper Accepts mediatype and then successfuly download
 # expected results are the same as for any abspath download
-test-ghapi-kf-file-accepts-none ()
+test-gh-api-kf-file-accepts-none ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir ghapi-kf-file-accepts-none.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir gh-api-kf-file-accepts-none.XXXXXX)
 
     local token; token=$(get-token) || return
 
@@ -209,10 +209,10 @@ test-ghapi-kf-file-accepts-none ()
 # function should download json initially, then
 # recover and lookup the proper Accepts mediatype and then successfuly download
 # expected results are the same as for any abspath download
-test-ghapi-kf-file-accepts-json ()
+test-gh-api-kf-file-accepts-json ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir ghapi-kf-file-accepts-json.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir gh-api-kf-file-accepts-json.XXXXXX)
 
     local token; token=$(get-token) || return
 
@@ -235,10 +235,10 @@ test-ghapi-kf-file-accepts-json ()
 # test an abspath dylt package download with accepts=application/octet-stream
 # function should download application-octet/stream, and succeed
 # expected results are the same as for any abspath download
-test-ghapi-kf-file-accepts-octo ()
+test-gh-api-kf-file-accepts-octo ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir ghapi-kf-file-accepts-octo.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir gh-api-kf-file-accepts-octo.XXXXXX)
 
     local token; token=$(get-token) || return
 
@@ -260,10 +260,10 @@ test-ghapi-kf-file-accepts-octo ()
 # test an abspath dylt package download with accepts=xxxINVALIDxxx
 # not sure what should happen honestly
 # expected results are the same as for any abspath download
-test-ghapi-kf-file-accepts-xxx ()
+test-gh-api-kf-file-accepts-xxx ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir ghapi-kf-file-accepts-xxx.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir gh-api-kf-file-accepts-xxx.XXXXXX)
 
     local token; token=$(get-token) || return
 
@@ -285,7 +285,7 @@ test-ghapi-kf-file-accepts-xxx ()
 
 # test a JSON data endpoint with default Accept (no explicit accept set)
 # gh-api_ should return JSON data via stdout, not a file download
-test-ghapi-kf-data-accepts-none ()
+test-gh-api-kf-data-accepts-none ()
 {
     local -A flagMap=()
     local token; token=$(get-token) || return
@@ -305,7 +305,7 @@ test-ghapi-kf-data-accepts-none ()
 
 # test a JSON data endpoint with explicit JSON Accept
 # should return JSON data via stdout
-test-ghapi-kf-data-accepts-json ()
+test-gh-api-kf-data-accepts-json ()
 {
     local -A flagMap=()
     local token; token=$(get-token) || return
@@ -326,7 +326,7 @@ test-ghapi-kf-data-accepts-json ()
 
 # test a JSON data endpoint with invalid Accept
 # 415 → retry with JSON → stdout JSON data
-test-ghapi-kf-data-accepts-xxx ()
+test-gh-api-kf-data-accepts-xxx ()
 {
     local -A flagMap=()
     local token; token=$(get-token) || return
@@ -346,7 +346,7 @@ test-ghapi-kf-data-accepts-xxx ()
 
 
 # fetch /organizations and verify we get more than one page of results
-test-ghapi-kf-data-paging ()
+test-gh-api-kf-data-paging ()
 {
     local token; token=$(get-token) || return
 
@@ -373,7 +373,7 @@ test-ghapi-kf-data-paging ()
 
 
 # data output: no --output → stdout JSON
-test-ghapi-kf-data-output-none ()
+test-gh-api-kf-data-output-none ()
 {
     local -A flagMap=()
     local token; token=$(get-token) || return
@@ -396,10 +396,10 @@ test-ghapi-kf-data-output-none ()
 
 
 # data output: --output /abs/path/file.json → file saved
-test-ghapi-kf-data-output-absfilename ()
+test-gh-api-kf-data-output-absfilename ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir ghapi-kf-data-output-absfilename.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir gh-api-kf-data-output-absfilename.XXXXXX)
 
     local -A flagMap=()
     local token; token=$(get-token) || return
@@ -420,10 +420,10 @@ test-ghapi-kf-data-output-absfilename ()
 
 
 # data output: --output sub/file.json → relative file saved
-test-ghapi-kf-data-output-relfilename ()
+test-gh-api-kf-data-output-relfilename ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir ghapi-kf-data-output-relfilename.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir gh-api-kf-data-output-relfilename.XXXXXX)
 
     local -A flagMap=()
     local token; token=$(get-token) || return
@@ -448,10 +448,10 @@ test-ghapi-kf-data-output-relfilename ()
 
 
 # data output: --output /abs/path/dir/ → /abs/path/dir/data.json
-test-ghapi-kf-data-output-absfolder ()
+test-gh-api-kf-data-output-absfolder ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir ghapi-kf-data-output-absfolder.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir gh-api-kf-data-output-absfolder.XXXXXX)
     local outputDir="${tmpDir%/}/outdir/"
     mkdir -p "${outputDir%/}"
 
@@ -475,10 +475,10 @@ test-ghapi-kf-data-output-absfolder ()
 
 
 # data output: --output sub/ → sub/data.json
-test-ghapi-kf-data-output-relfolder ()
+test-gh-api-kf-data-output-relfolder ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir ghapi-kf-data-output-relfolder.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir gh-api-kf-data-output-relfolder.XXXXXX)
 
     local -A flagMap=()
     local token; token=$(get-token) || return
@@ -506,14 +506,14 @@ test-ghapi-kf-data-output-relfolder ()
 # a file download endpoint.  Uses the dylt release checksums file
 # (~900 bytes).  No --output specified — file lands in current dir
 # with Content-Disposition filename.
-# Invoke: bash test-125-gh-api.sh test-ghapi-kf-no-output
-test-ghapi-kf-file-output-none ()
+# Invoke: bash test-125-gh-api.sh test-gh-api-kf-no-output
+test-gh-api-kf-file-output-none ()
 {
     # Isolated temp directory — we pushd into it so the download
-    # lands here by default (resolve-output-spec with empty output
+    # lands here by default (gh-api-resolve-output-spec with empty output
     # produces ./{cdFilename}).
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir ghapi-kf-no-output.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir gh-api-kf-no-output.XXXXXX)
 
 	# set --token
 	local token; token=$(get-token) || return
@@ -536,7 +536,7 @@ test-ghapi-kf-file-output-none ()
     popd >/dev/null
 
     # The CD filename from the release asset — hardcoded so we can
-    # assert it was correctly extracted and used by resolve-output-spec.
+    # assert it was correctly extracted and used by gh-api-resolve-output-spec.
     local expectedFile="dylt_0.0.11-nightly.20260617-test_checksums.txt"
     local expectedPath="$tmpDir/$expectedFile"
 
@@ -548,19 +548,19 @@ test-ghapi-kf-file-output-none ()
 # Walk the user through gh-api_ download path with --output pointing
 # to a directory (trailing slash).  The file should land in that
 # directory with the Content-Disposition filename.
-# Invoke: bash test-125-gh-api.sh test-ghapi-kf-file-output-folder
-test-ghapi-kf-file-output-absfolder ()
+# Invoke: bash test-125-gh-api.sh test-gh-api-kf-file-output-folder
+test-gh-api-kf-file-output-absfolder ()
 {
     # Isolated temp directory for test artifacts (raw files, headers)
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir ghapi-kf-file-output-folder.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir gh-api-kf-file-output-folder.XXXXXX)
 
     # Separate output directory — where the downloaded file should
     # land when --output points to a folder.
     local outputDir
-    outputDir=$(mktemp -d --tmpdir ghapi-kf-file-output-folder-dest.XXXXXX)
+    outputDir=$(mktemp -d --tmpdir gh-api-kf-file-output-folder-dest.XXXXXX)
 
-    # Ensure trailing slash so resolve-output-spec treats it as a
+    # Ensure trailing slash so gh-api-resolve-output-spec treats it as a
     # directory, not a file path, appending the CD filename.
     outputDir="${outputDir%/}/"
 
@@ -592,10 +592,10 @@ test-ghapi-kf-file-output-absfolder ()
 #	The filename will be my-download-target.tgz
 #	The expected path for the download will be "$tmpFolder/$filename"
 #
-test-ghapi-kf-file-output-absfilename ()
+test-gh-api-kf-file-output-absfilename ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir ghapi-kf-file-output-path.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir gh-api-kf-file-output-path.XXXXXX)
 
     local token; token=$(get-token) || return
 
@@ -621,10 +621,10 @@ test-ghapi-kf-file-output-absfilename ()
 #	The filename will be my-download-target.tgz
 #	The expected path for the download will be "$dstFolder/$filename"
 #
-test-ghapi-kf-file-output-relfilename ()
+test-gh-api-kf-file-output-relfilename ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir ghapi-kf-file-output-filename.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir gh-api-kf-file-output-filename.XXXXXX)
 
     local dstDir="$tmpDir/dst"
     mkdir -p "$dstDir"
@@ -650,11 +650,11 @@ test-ghapi-kf-file-output-relfilename ()
 # Walk the user through gh-api_ download path with --output pointing
 # to a relative directory (trailing slash).  The file should land in that
 # directory with the Content-Disposition filename.
-# Invoke: bash test-125-gh-api.sh test-ghapi-kf-file-output-relfolder
-test-ghapi-kf-file-output-relfolder ()
+# Invoke: bash test-125-gh-api.sh test-gh-api-kf-file-output-relfolder
+test-gh-api-kf-file-output-relfolder ()
 {
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir ghapi-kf-file-output-relfolder.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir gh-api-kf-file-output-relfolder.XXXXXX)
 
     # Relative subdirectory — pushd into tmpDir so sub/ resolves correctly
     mkdir -p "$tmpDir/sub"
@@ -692,13 +692,13 @@ generate-bbolt-fixtures ()
         curl --silent --dump-header "$fixtureDir/headers.txt" \
              --header "Authorization: Bearer $token" \
              --output "$file" "$url"
-        url=$(lookup-next-link < "$fixtureDir/headers.txt")
+        url=$(gh-api-lookup-next-link < "$fixtureDir/headers.txt")
         (( page++ ))
     done
 }
 
 
-test-ghapi-merge-pages ()
+test-gh-api-merge-pages ()
 {
     local fixtureDir="$SCRIPT_DIR/fixtures/bbolt"
     mkdir -p "$fixtureDir"
@@ -709,10 +709,10 @@ test-ghapi-merge-pages ()
 
     local files=( "$fixtureDir"/page-*.json )
     local tmpDir
-    tmpDir=$(mktemp -d --tmpdir test-ghapi-merge.XXXXXX)
+    tmpDir=$(mktemp -d --tmpdir test-gh-api-merge.XXXXXX)
     local mergedFile="$tmpDir/merged.json"
 
-    ghapi-merge-pages --jq-path items "${files[@]}" > "$mergedFile" \
+    gh-api-merge-pages --jq-path items "${files[@]}" > "$mergedFile" \
         || { printf '  FAIL\n'; return 1; }
 
     local total
@@ -900,29 +900,29 @@ test-ghr-download-version-previous ()
 all()
 {
     local tests=(
-        test-ghapi-save-file-happy
-        test-ghapi-save-file-collision
-        test-ghapi-save-file-nosuchdir
-        test-ghapi-save-file-dirambiguity
-        test-ghapi-kf-file-output-none
-        test-ghapi-kf-file-output-absfolder
-        test-ghapi-kf-file-output-absfilename
-        test-ghapi-kf-file-output-relfilename
-        test-ghapi-kf-file-output-relfolder
-        test-ghapi-kf-file-accepts-none
-        test-ghapi-kf-file-accepts-json
-        test-ghapi-kf-file-accepts-octo
-        test-ghapi-kf-file-accepts-xxx
-        test-ghapi-kf-data-accepts-none
-        test-ghapi-kf-data-accepts-json
-        test-ghapi-kf-data-accepts-xxx
-        #test-ghapi-kf-data-paging
-        test-ghapi-kf-data-output-none
-        test-ghapi-kf-data-output-absfilename
-        test-ghapi-kf-data-output-relfilename
-        test-ghapi-kf-data-output-absfolder
-        test-ghapi-kf-data-output-relfolder
-        test-ghapi-merge-pages
+        test-gh-api-save-file-happy
+        test-gh-api-save-file-collision
+        test-gh-api-save-file-nosuchdir
+        test-gh-api-save-file-dirambiguity
+        test-gh-api-kf-file-output-none
+        test-gh-api-kf-file-output-absfolder
+        test-gh-api-kf-file-output-absfilename
+        test-gh-api-kf-file-output-relfilename
+        test-gh-api-kf-file-output-relfolder
+        test-gh-api-kf-file-accepts-none
+        test-gh-api-kf-file-accepts-json
+        test-gh-api-kf-file-accepts-octo
+        test-gh-api-kf-file-accepts-xxx
+        test-gh-api-kf-data-accepts-none
+        test-gh-api-kf-data-accepts-json
+        test-gh-api-kf-data-accepts-xxx
+        #test-gh-api-kf-data-paging
+        test-gh-api-kf-data-output-none
+        test-gh-api-kf-data-output-absfilename
+        test-gh-api-kf-data-output-relfilename
+        test-gh-api-kf-data-output-absfolder
+        test-gh-api-kf-data-output-relfolder
+        test-gh-api-merge-pages
         test-gh-api-file-recover
         test-gh-api-data-paginated
         test-ghr-download-output-none
@@ -946,25 +946,25 @@ main()
 {
     case ${1:-all} in
         all|"")                                   all;;
-        test-ghapi-kf-file-output-none)               test-ghapi-kf-file-output-none "$@";;
-        test-ghapi-kf-file-output-absfolder)          test-ghapi-kf-file-output-absfolder "$@";;
-        test-ghapi-kf-file-output-absfilename)        test-ghapi-kf-file-output-absfilename "$@";;
-        test-ghapi-kf-file-output-relfilename)        test-ghapi-kf-file-output-relfilename "$@";;
-        test-ghapi-kf-file-output-relfolder)          test-ghapi-kf-file-output-relfolder "$@";;
-        test-ghapi-kf-file-accepts-none)              test-ghapi-kf-file-accepts-none "$@";;
-        test-ghapi-kf-file-accepts-json)              test-ghapi-kf-file-accepts-json "$@";;
-        test-ghapi-kf-file-accepts-octo)              test-ghapi-kf-file-accepts-octo "$@";;
-        test-ghapi-kf-file-accepts-xxx)               test-ghapi-kf-file-accepts-xxx "$@";;
-        test-ghapi-kf-data-accepts-none)               test-ghapi-kf-data-accepts-none "$@";;
-        test-ghapi-kf-data-accepts-json)               test-ghapi-kf-data-accepts-json "$@";;
-        test-ghapi-kf-data-accepts-xxx)                test-ghapi-kf-data-accepts-xxx "$@";;
-        test-ghapi-kf-data-paging)                     test-ghapi-kf-data-paging "$@";;
-        test-ghapi-kf-data-output-none)                test-ghapi-kf-data-output-none "$@";;
-        test-ghapi-kf-data-output-absfilename)          test-ghapi-kf-data-output-absfilename "$@";;
-        test-ghapi-kf-data-output-relfilename)          test-ghapi-kf-data-output-relfilename "$@";;
-        test-ghapi-kf-data-output-absfolder)            test-ghapi-kf-data-output-absfolder "$@";;
-        test-ghapi-kf-data-output-relfolder)            test-ghapi-kf-data-output-relfolder "$@";;
-        test-ghapi-merge-pages)                        test-ghapi-merge-pages "$@";;
+        test-gh-api-kf-file-output-none)               test-gh-api-kf-file-output-none "$@";;
+        test-gh-api-kf-file-output-absfolder)          test-gh-api-kf-file-output-absfolder "$@";;
+        test-gh-api-kf-file-output-absfilename)        test-gh-api-kf-file-output-absfilename "$@";;
+        test-gh-api-kf-file-output-relfilename)        test-gh-api-kf-file-output-relfilename "$@";;
+        test-gh-api-kf-file-output-relfolder)          test-gh-api-kf-file-output-relfolder "$@";;
+        test-gh-api-kf-file-accepts-none)              test-gh-api-kf-file-accepts-none "$@";;
+        test-gh-api-kf-file-accepts-json)              test-gh-api-kf-file-accepts-json "$@";;
+        test-gh-api-kf-file-accepts-octo)              test-gh-api-kf-file-accepts-octo "$@";;
+        test-gh-api-kf-file-accepts-xxx)               test-gh-api-kf-file-accepts-xxx "$@";;
+        test-gh-api-kf-data-accepts-none)               test-gh-api-kf-data-accepts-none "$@";;
+        test-gh-api-kf-data-accepts-json)               test-gh-api-kf-data-accepts-json "$@";;
+        test-gh-api-kf-data-accepts-xxx)                test-gh-api-kf-data-accepts-xxx "$@";;
+        test-gh-api-kf-data-paging)                     test-gh-api-kf-data-paging "$@";;
+        test-gh-api-kf-data-output-none)                test-gh-api-kf-data-output-none "$@";;
+        test-gh-api-kf-data-output-absfilename)          test-gh-api-kf-data-output-absfilename "$@";;
+        test-gh-api-kf-data-output-relfilename)          test-gh-api-kf-data-output-relfilename "$@";;
+        test-gh-api-kf-data-output-absfolder)            test-gh-api-kf-data-output-absfolder "$@";;
+        test-gh-api-kf-data-output-relfolder)            test-gh-api-kf-data-output-relfolder "$@";;
+        test-gh-api-merge-pages)                        test-gh-api-merge-pages "$@";;
         test-gh-api-file-recover)                      test-gh-api-file-recover "$@";;
         test-gh-api-data-paginated)                    test-gh-api-data-paginated "$@";;
         test-ghr-download)                             test-ghr-download "$@";;
@@ -974,10 +974,10 @@ main()
         test-ghr-download-version)                     test-ghr-download-version "$@";;
         test-ghr-download-version-nonexist)            test-ghr-download-version-nonexist "$@";;
         test-ghr-download-version-previous)            test-ghr-download-version-previous "$@";;
-        test-ghapi-save-file-happy)              test-ghapi-save-file-happy "$@";;
-        test-ghapi-save-file-collision)          test-ghapi-save-file-collision "$@";;
-        test-ghapi-save-file-nosuchdir)          test-ghapi-save-file-nosuchdir "$@";;
-        test-ghapi-save-file-dirambiguity)       test-ghapi-save-file-dirambiguity "$@";;
+        test-gh-api-save-file-happy)              test-gh-api-save-file-happy "$@";;
+        test-gh-api-save-file-collision)          test-gh-api-save-file-collision "$@";;
+        test-gh-api-save-file-nosuchdir)          test-gh-api-save-file-nosuchdir "$@";;
+        test-gh-api-save-file-dirambiguity)       test-gh-api-save-file-dirambiguity "$@";;
         *)                                 printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }

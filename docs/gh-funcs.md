@@ -76,21 +76,21 @@ To avoid turning this into a flag-parsing effort rather than a delivering-featur
 #### gh-api_
 
 Receives a flagMap (associative array) and a urlPath.  All HTTP calls go
-through this function.  Constructs curl flags via gh-unparse-curl-args,
-resolves the --output specifier via resolve-output-spec, adds standard
+through this function.  Constructs curl flags via gh-api-unparse-curl-args,
+resolves the --output specifier via gh-api-resolve-output-spec, adds standard
 curl infrastructure flags (--fail-with-body --location --silent), and
 executes the curl call against https://api.github.com/$urlPath.
 
 flagMap keys:
   [accept]       Accept header value (omitted if not set — curl default)
   [data]         POST data
-  [output]       Output specifier — resolved by resolve-output-spec
+  [output]       Output specifier — resolved by gh-api-resolve-output-spec
   [per-page]     Appended as ?per_page=N to the URL
   [token]        Authorization: Bearer header
 
 #### gh-api
 
-User function.  Parses CLI flags via gh-parse-args, enriches the flagMap,
+User function.  Parses CLI flags via gh-api-parse-args, enriches the flagMap,
 then calls gh-api_ with the flagMap and a urlPath.
 
 flags:
@@ -104,7 +104,7 @@ flags:
 
 ### Helper functions
 
-#### gh-parse-args
+#### gh-api-parse-args
 
 Parses CLI flags and positional args into a flagMap (associative array)
 and a posargs (indexed array).  Flags and positional args can be
@@ -124,9 +124,9 @@ Output:
   flagMap     flag values indexed by flag name (without leading --)
   posargs     positional arguments in order
 
-#### gh-unparse-curl-args
+#### gh-api-unparse-curl-args
 
-Translates a flagMap (from gh-parse-args) into an array of curl flags.
+Translates a flagMap (from gh-api-parse-args) into an array of curl flags.
 Does not construct the URL — the caller provides it separately.
 
 flagMap keys:
@@ -137,7 +137,7 @@ flagMap keys:
 Output:
   curlFlags   array of curl flags and their values
 
-#### resolve-output-spec
+#### gh-api-resolve-output-spec
 
 Translates the --output flagMap value into the corresponding curl output
 flags.  See the ### --output section above for semantics.

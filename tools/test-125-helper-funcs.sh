@@ -2,7 +2,7 @@
 #
 # test-125-helper-funcs
 #
-# This function will test lookup-header() using the files in fixtures/headers.
+# This function will test gh-api-lookup-header() using the files in fixtures/headers.
 # Each file is a curl --dump-header of a different GitHub API endpoint, and each
 # has different headers.
 #
@@ -38,7 +38,7 @@ FIXTURES_DIR="$SCRIPT_DIR/fixtures/headers"
 #
 # grep-content-disposition()
 #
-# Same purpose as lookup-content-disposition, but implemented with grep
+# Same purpose as gh-api-lookup-content-disposition, but implemented with grep
 # for cross-checking in tests.  Both functions should produce the same
 # output for the same input.
 #
@@ -67,7 +67,7 @@ grep-content-disposition ()
 #
 # grep-next-link()
 #
-# Same as lookup-next-link but implemented with grep for cross-checking
+# Same as gh-api-lookup-next-link but implemented with grep for cross-checking
 # in tests.  Both functions should produce the same output for the same
 # input.
 #
@@ -93,16 +93,16 @@ grep-next-link ()
 
 
 #
-# test-lookup-next-link-hit
+# test-gh-api-lookup-next-link-hit
 #
-# Confirm lookup-next-link succeeds and its result matches grep-next-link
+# Confirm gh-api-lookup-next-link succeeds and its result matches grep-next-link
 #
-lookup-next-link-hit ()
+gh-api-lookup-next-link-hit ()
 {
     local fixture=$1
     local lookup url_grep
 
-    lookup=$(lookup-next-link < "$fixture") || { printf '  FAIL: lookup failed\n'; return 1; }
+    lookup=$(gh-api-lookup-next-link < "$fixture") || { printf '  FAIL: lookup failed\n'; return 1; }
     url_grep=$(grep-next-link < "$fixture") || { printf '  FAIL: grep failed\n'; return 1; }
 
     if [[ "$lookup" != "$url_grep" ]]; then
@@ -116,15 +116,15 @@ lookup-next-link-hit ()
 
 
 #
-# test-lookup-next-link-miss
+# test-gh-api-lookup-next-link-miss
 #
-# Confirm lookup-next-link returns non-zero (no next link)
+# Confirm gh-api-lookup-next-link returns non-zero (no next link)
 #
-lookup-next-link-miss ()
+gh-api-lookup-next-link-miss ()
 {
     local fixture=$1
 
-    lookup-next-link < "$fixture" >/dev/null && {
+    gh-api-lookup-next-link < "$fixture" >/dev/null && {
         printf '  FAIL: unexpected next link found\n'
         return 1
     }
@@ -139,10 +139,10 @@ test-headers-content-disposition ()
     local fixture="$FIXTURES_DIR/headers-content-disposition.txt"
     local failed=0
 
-    test-lookup-header-hit "$HN_ct" < "$fixture" || ((failed++))
-    test-lookup-header-hit "$HN_cd" < "$fixture" || ((failed++))
-    test-lookup-header-miss "$HN_lh" < "$fixture" || ((failed++))
-    test-lookup-header-miss "$HN_xxx" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-hit "$HN_ct" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-hit "$HN_cd" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-miss "$HN_lh" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-miss "$HN_xxx" < "$fixture" || ((failed++))
 
     return "$failed"
 }
@@ -153,10 +153,10 @@ test-headers-paginated-json ()
     local fixture="$FIXTURES_DIR/headers-paginated-json-list.txt"
     local failed=0
 
-    test-lookup-header-hit "$HN_ct" < "$fixture" || ((failed++))
-    test-lookup-header-miss "$HN_cd" < "$fixture" || ((failed++))
-    test-lookup-header-hit "$HN_lh" < "$fixture" || ((failed++))
-    test-lookup-header-miss "$HN_xxx" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-hit "$HN_ct" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-miss "$HN_cd" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-hit "$HN_lh" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-miss "$HN_xxx" < "$fixture" || ((failed++))
 
     return "$failed"
 }
@@ -167,10 +167,10 @@ test-headers-paginated-object ()
     local fixture="$FIXTURES_DIR/headers-paginated-object-list.txt"
     local failed=0
 
-    test-lookup-header-hit "$HN_ct" < "$fixture" || ((failed++))
-    test-lookup-header-miss "$HN_cd" < "$fixture" || ((failed++))
-    test-lookup-header-hit "$HN_lh" < "$fixture" || ((failed++))
-    test-lookup-header-miss "$HN_xxx" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-hit "$HN_ct" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-miss "$HN_cd" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-hit "$HN_lh" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-miss "$HN_xxx" < "$fixture" || ((failed++))
 
     return "$failed"
 }
@@ -181,10 +181,10 @@ test-headers-single-json ()
     local fixture="$FIXTURES_DIR/headers-single-json.txt"
     local failed=0
 
-    test-lookup-header-hit "$HN_ct" < "$fixture" || ((failed++))
-    test-lookup-header-miss "$HN_cd" < "$fixture" || ((failed++))
-    test-lookup-header-miss "$HN_lh" < "$fixture" || ((failed++))
-    test-lookup-header-miss "$HN_xxx" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-hit "$HN_ct" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-miss "$HN_cd" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-miss "$HN_lh" < "$fixture" || ((failed++))
+    test-gh-api-lookup-header-miss "$HN_xxx" < "$fixture" || ((failed++))
 
     return "$failed"
 }
@@ -204,14 +204,14 @@ test-lookup-cds ()
 }
 
 
-test-lookup-next-links ()
+test-gh-api-lookup-next-links ()
 {
     local failed=0
 
-    lookup-next-link-miss "$FIXTURES_DIR/headers-content-disposition.txt" || ((failed++))
-    lookup-next-link-hit  "$FIXTURES_DIR/headers-paginated-json-list.txt" || ((failed++))
-    lookup-next-link-hit  "$FIXTURES_DIR/headers-paginated-object-list.txt" || ((failed++))
-    lookup-next-link-miss "$FIXTURES_DIR/headers-single-json.txt" || ((failed++))
+    gh-api-lookup-next-link-miss "$FIXTURES_DIR/headers-content-disposition.txt" || ((failed++))
+    gh-api-lookup-next-link-hit  "$FIXTURES_DIR/headers-paginated-json-list.txt" || ((failed++))
+    gh-api-lookup-next-link-hit  "$FIXTURES_DIR/headers-paginated-object-list.txt" || ((failed++))
+    gh-api-lookup-next-link-miss "$FIXTURES_DIR/headers-single-json.txt" || ((failed++))
 
     return "$failed"
 }
@@ -220,7 +220,7 @@ test-lookup-next-links ()
 #
 # test-lookup-cd-hit
 #
-# Confirm lookup-content-disposition succeeds and its result
+# Confirm gh-api-lookup-content-disposition succeeds and its result
 # matches what grep-content-disposition produces.
 #
 test-lookup-cd-hit ()
@@ -228,7 +228,7 @@ test-lookup-cd-hit ()
     local fixture=$1
     local lookup lookup_rc
 
-    lookup=$(lookup-content-disposition < "$fixture") || true
+    lookup=$(gh-api-lookup-content-disposition < "$fixture") || true
     lookup_rc=$?
 
     local grep grep_rc
@@ -253,13 +253,13 @@ test-lookup-cd-hit ()
 #
 # test-lookup-cd-miss
 #
-# Confirm lookup-content-disposition returns non-zero (no CD header).
+# Confirm gh-api-lookup-content-disposition returns non-zero (no CD header).
 #
 test-lookup-cd-miss ()
 {
     local fixture=$1
 
-    lookup-content-disposition < "$fixture" >/dev/null && {
+    gh-api-lookup-content-disposition < "$fixture" >/dev/null && {
         printf '  FAIL: unexpected CD found\n'
         return 1
     }
@@ -270,14 +270,14 @@ test-lookup-cd-miss ()
 
 
 #
-# test-lookup-header $headerName
+# test-gh-api-lookup-header $headerName
 #
-# call lookup-header on a header-name; fail if missing
+# call gh-api-lookup-header on a header-name; fail if missing
 #
-test-lookup-header-hit ()
+test-gh-api-lookup-header-hit ()
 {
     local headerName=$1
-    if lookup-header "$headerName" >/dev/null; then
+    if gh-api-lookup-header "$headerName" >/dev/null; then
         printf '  PASS (%s found)\n' "$headerName"
         return 0
     else
@@ -288,14 +288,14 @@ test-lookup-header-hit ()
 
 
 #
-# test-lookup-header $headerName
+# test-gh-api-lookup-header $headerName
 #
-# call lookup-header on a header-name; fail if found
+# call gh-api-lookup-header on a header-name; fail if found
 #
-test-lookup-header-miss ()
+test-gh-api-lookup-header-miss ()
 {
     local headerName=$1
-    if lookup-header "$headerName" >/dev/null; then
+    if gh-api-lookup-header "$headerName" >/dev/null; then
         printf '  FAIL (%s unexpectedly found)\n' "$headerName"
         return 1
     else
@@ -305,50 +305,50 @@ test-lookup-header-miss ()
 }
 
 
-test-lookup-http-status-200 ()
+test-gh-api-lookup-http-status-200 ()
 {
     local result
-    result=$(lookup-http-status < "$FIXTURES_DIR/headers-200-json.txt")
+    result=$(gh-api-lookup-http-status < "$FIXTURES_DIR/headers-200-json.txt")
     [[ "$result" == "200" ]] \
         || { printf '  FAIL: expected 200, got %s\n' "$result"; return 1; }
     printf '  PASS\n'
 }
 
 
-test-lookup-http-status-302 ()
+test-gh-api-lookup-http-status-302 ()
 {
     local result
-    result=$(lookup-http-status < "$FIXTURES_DIR/headers-302-redirect.txt")
+    result=$(gh-api-lookup-http-status < "$FIXTURES_DIR/headers-302-redirect.txt")
     [[ "$result" == "302" ]] \
         || { printf '  FAIL: expected 302, got %s\n' "$result"; return 1; }
     printf '  PASS\n'
 }
 
 
-test-lookup-http-status-415 ()
+test-gh-api-lookup-http-status-415 ()
 {
     local result
-    result=$(lookup-http-status < "$FIXTURES_DIR/headers-415-invalid.txt")
+    result=$(gh-api-lookup-http-status < "$FIXTURES_DIR/headers-415-invalid.txt")
     [[ "$result" == "415" ]] \
         || { printf '  FAIL: expected 415, got %s\n' "$result"; return 1; }
     printf '  PASS\n'
 }
 
 
-test-lookup-http-status-404 ()
+test-gh-api-lookup-http-status-404 ()
 {
     local result
-    result=$(lookup-http-status < "$FIXTURES_DIR/headers-404-notfound.txt")
+    result=$(gh-api-lookup-http-status < "$FIXTURES_DIR/headers-404-notfound.txt")
     [[ "$result" == "404" ]] \
         || { printf '  FAIL: expected 404, got %s\n' "$result"; return 1; }
     printf '  PASS\n'
 }
 
 
-test-lookup-http-status-empty ()
+test-gh-api-lookup-http-status-empty ()
 {
     local result
-    result=$(lookup-http-status < /dev/null)
+    result=$(gh-api-lookup-http-status < /dev/null)
     [[ -z "$result" ]] \
         || { printf '  FAIL: expected empty, got %s\n' "$result"; return 1; }
     printf '  PASS\n'
@@ -363,12 +363,12 @@ all()
         test-headers-paginated-object
         test-headers-single-json
         test-lookup-cds
-        test-lookup-next-links
-        test-lookup-http-status-200
-        test-lookup-http-status-302
-        test-lookup-http-status-415
-        test-lookup-http-status-404
-        test-lookup-http-status-empty
+        test-gh-api-lookup-next-links
+        test-gh-api-lookup-http-status-200
+        test-gh-api-lookup-http-status-302
+        test-gh-api-lookup-http-status-415
+        test-gh-api-lookup-http-status-404
+        test-gh-api-lookup-http-status-empty
     )
     local total=${#tests[@]}
     local passed=0
@@ -397,14 +397,14 @@ main()
         test-lookup-cd-hit|\
         test-lookup-cd-miss|\
         test-lookup-cds|\
-        test-lookup-next-links|\
-        test-lookup-http-status-200|\
-        test-lookup-http-status-302|\
-        test-lookup-http-status-415|\
-        test-lookup-http-status-404|\
-        test-lookup-http-status-empty|\
-        lookup-next-link-hit|\
-        lookup-next-link-miss)                 "$@" ;;
+        test-gh-api-lookup-next-links|\
+        test-gh-api-lookup-http-status-200|\
+        test-gh-api-lookup-http-status-302|\
+        test-gh-api-lookup-http-status-415|\
+        test-gh-api-lookup-http-status-404|\
+        test-gh-api-lookup-http-status-empty|\
+        gh-api-lookup-next-link-hit|\
+        gh-api-lookup-next-link-miss)                 "$@" ;;
         *)                                    printf 'Unknown test: %s\n' "$1" >&2; exit 1 ;;
     esac
 }
