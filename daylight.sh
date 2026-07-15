@@ -3221,115 +3221,6 @@ gh-api_ ()
 #   $1  nameref to an associative array (flagMap)
 #   $2  nameref to an indexed array (posargs)
 #
-ghr-download ()
-{
-    local -A flagMap=()
-    local -a posargs=()
-    gh-api-parse-args flagMap posargs "$@" || return
-
-    local org=${posargs[0]}
-    local repo=${posargs[1]}
-    [[ -n "$org" && -n "$repo" ]] || {
-        printf 'Usage: ghr-download [flags] <org> <repo>\n' >&2
-        return 1
-    }
-
-    # Build internal map for gh-api_ calls
-    local -A _map=()
-    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
-
-    # Step 1: Resolve release
-    local version=${flagMap[version]}
-    local releaseUrl
-    if [[ -n "$version" ]]; then
-        releaseUrl="/repos/$org/$repo/releases/tags/$version"
-    else
-        releaseUrl="/repos/$org/$repo/releases/latest"
-    fi
-
-    local releaseJson
-    releaseJson=$(gh-api_ _map "$releaseUrl" 2>/dev/null) || return
-
-    # Step 2: Find the asset
-    local assetName=${flagMap[asset-name]}
-    if [[ -z "$assetName" ]]; then
-        assetName=$(jq -r '
-            try ([.assets[] | select(.name | test("\\.tar\\.gz$")) | .name] | first) //
-            try ([.assets[] | select(.name | test("\\.zip$")) | .name] | first) //
-            try .assets[0].name // ""
-        ' <<< "$releaseJson")
-    fi
-
-    [[ -n "$assetName" ]] || { printf 'No asset found\n' >&2; return 1; }
-
-    local assetId
-    assetId=$(jq -r --arg name "$assetName" '.assets[] | select(.name == $name) | .id' <<< "$releaseJson") || {
-        printf 'Asset "%s" not found\n' "$assetName" >&2
-        return 1
-    }
-
-    local digest
-    digest=$(jq -r --arg name "$assetName" '.assets[] | select(.name == $name) | .digest // ""' <<< "$releaseJson")
-
-    # Step 3: Download
-    _map[accept]='application/octet-stream'
-    local outputSpec=${flagMap[output]}
-    if [[ -n "$outputSpec" ]]; then
-        _map[output]="$outputSpec"
-    fi
-
-    local downloadPath
-    downloadPath=$(gh-api_ _map "/repos/$org/$repo/releases/assets/$assetId") || return
-
-    # Step 4: Verify (default on)
-    if [[ -z "${flagMap[no-verify]:-}" && -n "$digest" ]]; then
-        local expectedHash="${digest#sha256:}"
-        local actualHash
-        actualHash=$(sha256sum "$downloadPath" | awk '{print $1}')
-        if [[ "$expectedHash" != "$actualHash" ]]; then
-            printf 'Checksum mismatch: %s\n' "$downloadPath" >&2
-            return 1
-        fi
-    fi
-
-    # Step 5: Extract
-    local extractDir=${flagMap[extract]}
-    if [[ -n "$extractDir" ]]; then
-        [[ -f "$downloadPath" ]] || { printf 'Archive not found: %s\n' "$downloadPath" >&2; return 1; }
-        local extractTmp
-        extractTmp=$(mktemp -d --tmpdir "$(basename "$downloadPath").XXXXXX") || return
-        case "$downloadPath" in
-            *.tar.gz|*.tgz)
-                tar -xzf "$downloadPath" -C "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
-                ;;
-            *.zip)
-                unzip -o "$downloadPath" -d "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
-                ;;
-            *)
-                printf 'Cannot extract: unknown format %s\n' "$downloadPath" >&2
-                rm -rf "$extractTmp"
-                return 1
-                ;;
-        esac
-        local -a entries
-        entries=("$extractTmp"/*)
-        mkdir -p "$extractDir"
-        if (( ${#entries[@]} == 1 )); then
-            mv "${entries[0]}" "$extractDir/$(basename "${entries[0]}")" || { rm -rf "$extractTmp"; return 1; }
-            printf '%s' "$extractDir/$(basename "${entries[0]}")"
-        else
-            local subdir="$extractDir/extracted"
-            mkdir -p "$subdir"
-            mv "$extractTmp"/* "$subdir"/ || { rm -rf "$extractTmp"; return 1; }
-            printf '%s' "$subdir"
-        fi
-        rm -rf "$extractTmp"
-        if [[ -t 1 ]]; then printf '\n'; fi
-    else
-        printf '%s' "$downloadPath"
-        if [[ -t 1 ]]; then printf '\n'; fi
-    fi
-}
 
 
 #-------------------------------------------------------------------------------
@@ -3933,6 +3824,115 @@ gh-curl-qwenmax_ ()
 #
 # Output: one tag_name per line
 #
+ghr-download ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || {
+        printf 'Usage: ghr-download [flags] <org> <repo>\n' >&2
+        return 1
+    }
+
+    # Build internal map for gh-api_ calls
+    local -A _map=()
+    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
+
+    # Step 1: Resolve release
+    local version=${flagMap[version]}
+    local releaseUrl
+    if [[ -n "$version" ]]; then
+        releaseUrl="/repos/$org/$repo/releases/tags/$version"
+    else
+        releaseUrl="/repos/$org/$repo/releases/latest"
+    fi
+
+    local releaseJson
+    releaseJson=$(gh-api_ _map "$releaseUrl" 2>/dev/null) || return
+
+    # Step 2: Find the asset
+    local assetName=${flagMap[asset-name]}
+    if [[ -z "$assetName" ]]; then
+        assetName=$(jq -r '
+            try ([.assets[] | select(.name | test("\\.tar\\.gz$")) | .name] | first) //
+            try ([.assets[] | select(.name | test("\\.zip$")) | .name] | first) //
+            try .assets[0].name // ""
+        ' <<< "$releaseJson")
+    fi
+
+    [[ -n "$assetName" ]] || { printf 'No asset found\n' >&2; return 1; }
+
+    local assetId
+    assetId=$(jq -r --arg name "$assetName" '.assets[] | select(.name == $name) | .id' <<< "$releaseJson") || {
+        printf 'Asset "%s" not found\n' "$assetName" >&2
+        return 1
+    }
+
+    local digest
+    digest=$(jq -r --arg name "$assetName" '.assets[] | select(.name == $name) | .digest // ""' <<< "$releaseJson")
+
+    # Step 3: Download
+    _map[accept]='application/octet-stream'
+    local outputSpec=${flagMap[output]}
+    if [[ -n "$outputSpec" ]]; then
+        _map[output]="$outputSpec"
+    fi
+
+    local downloadPath
+    downloadPath=$(gh-api_ _map "/repos/$org/$repo/releases/assets/$assetId") || return
+
+    # Step 4: Verify (default on)
+    if [[ -z "${flagMap[no-verify]:-}" && -n "$digest" ]]; then
+        local expectedHash="${digest#sha256:}"
+        local actualHash
+        actualHash=$(sha256sum "$downloadPath" | awk '{print $1}')
+        if [[ "$expectedHash" != "$actualHash" ]]; then
+            printf 'Checksum mismatch: %s\n' "$downloadPath" >&2
+            return 1
+        fi
+    fi
+
+    # Step 5: Extract
+    local extractDir=${flagMap[extract]}
+    if [[ -n "$extractDir" ]]; then
+        [[ -f "$downloadPath" ]] || { printf 'Archive not found: %s\n' "$downloadPath" >&2; return 1; }
+        local extractTmp
+        extractTmp=$(mktemp -d --tmpdir "$(basename "$downloadPath").XXXXXX") || return
+        case "$downloadPath" in
+            *.tar.gz|*.tgz)
+                tar -xzf "$downloadPath" -C "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
+                ;;
+            *.zip)
+                unzip -o "$downloadPath" -d "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
+                ;;
+            *)
+                printf 'Cannot extract: unknown format %s\n' "$downloadPath" >&2
+                rm -rf "$extractTmp"
+                return 1
+                ;;
+        esac
+        local -a entries
+        entries=("$extractTmp"/*)
+        mkdir -p "$extractDir"
+        if (( ${#entries[@]} == 1 )); then
+            mv "${entries[0]}" "$extractDir/$(basename "${entries[0]}")" || { rm -rf "$extractTmp"; return 1; }
+            printf '%s' "$extractDir/$(basename "${entries[0]}")"
+        else
+            local subdir="$extractDir/extracted"
+            mkdir -p "$subdir"
+            mv "$extractTmp"/* "$subdir"/ || { rm -rf "$extractTmp"; return 1; }
+            printf '%s' "$subdir"
+        fi
+        rm -rf "$extractTmp"
+        if [[ -t 1 ]]; then printf '\n'; fi
+    else
+        printf '%s' "$downloadPath"
+        if [[ -t 1 ]]; then printf '\n'; fi
+    fi
+}
 ghr-list ()
 {
     local -A flagMap=()
@@ -9322,10 +9322,28 @@ main ()
             get-service-file-value)                           get-service-file-value "$@";;
             get-service-working-directory)                    get-service-working-directory "$@";;
  	    get-vm-name)                                      get-vm-name "$@";;
-             gh-api)                                            gh-api "$@";;
-             ghr-url-path)                                     ghr-url-path "$@";;
-             ghr-download)                                     ghr-download "$@";;
-             ghr-list)                                         ghr-list "$@";;
+              gh-api)                                            gh-api "$@";;
+              gh-api-create-tmp-folder-prefix)                   gh-api-create-tmp-folder-prefix "$@";;
+              gh-api-handle-data-endpoint)                       gh-api-handle-data-endpoint "$@";;
+              gh-api-handle-file-endpoint)                       gh-api-handle-file-endpoint "$@";;
+              gh-api-lookup-browser-download-url)                gh-api-lookup-browser-download-url "$@";;
+              gh-api-lookup-content-disposition)                 gh-api-lookup-content-disposition "$@";;
+              gh-api-lookup-header)                              gh-api-lookup-header "$@";;
+              gh-api-lookup-http-status)                         gh-api-lookup-http-status "$@";;
+              gh-api-lookup-mediatype)                           gh-api-lookup-mediatype "$@";;
+              gh-api-lookup-next-link)                           gh-api-lookup-next-link "$@";;
+              gh-api-merge-pages)                                gh-api-merge-pages "$@";;
+              gh-api-parse-args)                                 gh-api-parse-args "$@";;
+              gh-api-resolve-output-spec)                        gh-api-resolve-output-spec "$@";;
+              gh-api-save-file)                                  gh-api-save-file "$@";;
+              gh-api-unparse-curl-args)                          gh-api-unparse-curl-args "$@";;
+              gh-api_)                                           gh-api_ "$@";;
+              gh-curl-qwenmax)                                   gh-curl-qwenmax "$@";;
+              gh-curl-qwenmax_)                                  gh-curl-qwenmax_ "$@";;
+              ghr-download)                                      ghr-download "$@";;
+              ghr-list)                                          ghr-list "$@";;
+              ghr-path)                                          ghr-path "$@";;
+              ghr-version-path)                                  ghr-version-path "$@";;
             github-app-get-client-id)                         github-app-get-client-id "$@";;
             github-app-get-data)                              github-app-get-data "$@";;
             github-app-get-id)                                github-app-get-id "$@";;
