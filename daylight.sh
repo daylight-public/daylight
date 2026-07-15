@@ -1159,7 +1159,8 @@ dylt-download ()
 
     local -a dl_flags=()
     [[ -v flagMap[token] ]] && dl_flags+=(--token "${flagMap[token]}")
-    dl_flags+=(--version "$version" --asset-name "dylt_${platform}.tar.gz" --output "$dstFolder/")
+    dl_flags+=(--version "$version" --output "$dstFolder/")
+    [[ -n "$platform" ]] && dl_flags+=(--platform "$platform")
     ghr-download "${dl_flags[@]}" dylt-dev dylt
 }
 
@@ -1447,7 +1448,8 @@ etcd-download ()
 
     local -a dl_flags=()
     [[ -v flagMap[token] ]] && dl_flags+=(--token "${flagMap[token]}")
-    dl_flags+=(--version "$version" --asset-name "$releaseName" --output "$downloadFolder/")
+    dl_flags+=(--version "$version" --output "$downloadFolder/")
+    [[ -n "$platform" ]] && dl_flags+=(--platform "$platform")
     ghr-download "${dl_flags[@]}" etcd-io etcd
 }
 
@@ -3840,12 +3842,23 @@ ghr-download ()
 
     # Step 2: Find the asset
     local assetName=${flagMap[asset-name]}
+    local platform=${flagMap[platform]}
     if [[ -z "$assetName" ]]; then
-        assetName=$(jq -r '
-            try ([.assets[] | select(.name | test("\\.tar\\.gz$")) | .name] | first) //
-            try ([.assets[] | select(.name | test("\\.zip$")) | .name] | first) //
-            try .assets[0].name // ""
-        ' <<< "$releaseJson")
+        if [[ -n "$platform" ]]; then
+            assetName=$(jq -r --arg plat "$platform" '
+                try ([.assets[] | select(.name | test("\\.tar\\.gz$") and test($plat)) | .name] | first) //
+                try ([.assets[] | select(.name | test("\\.zip$") and test($plat)) | .name] | first) //
+                try ([.assets[] | select(.name | test("\\.tar\\.gz$")) | .name] | first) //
+                try ([.assets[] | select(.name | test("\\.zip$")) | .name] | first) //
+                try .assets[0].name // ""
+            ' <<< "$releaseJson")
+        else
+            assetName=$(jq -r '
+                try ([.assets[] | select(.name | test("\\.tar\\.gz$")) | .name] | first) //
+                try ([.assets[] | select(.name | test("\\.zip$")) | .name] | first) //
+                try .assets[0].name // ""
+            ' <<< "$releaseJson")
+        fi
     fi
 
     [[ -n "$assetName" ]] || { printf 'No asset found\n' >&2; return 1; }
