@@ -247,7 +247,7 @@ test-download-release-version ()
     local tags
     tags=$(ghr-list --token "$token" "$orgRepo") || { printf '  FAIL: ghr-list failed\n'; return 1; }
     local firstTag
-    firstTag=$(head -1 <<< "$tags")
+    firstTag=$(tail -1 <<< "$tags")
     printf '  First release: %s\n' "$firstTag"
 
     local org="${orgRepo%%/*}"
