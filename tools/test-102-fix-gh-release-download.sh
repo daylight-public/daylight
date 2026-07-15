@@ -528,7 +528,7 @@ test-download-extract-multi()
 
 test-download-latest-extract-flags()
 {
-    github-release-get-latest-tag()
+    ghr-latest-version-tag()
     {
         printf 'v1.0.0'
     }
@@ -735,7 +735,7 @@ test-verify-checksum-mismatch()
 
 test-verify-flag-forwarded()
 {
-    github-release-get-latest-tag()
+    ghr-latest-version-tag()
     {
         printf 'v1.0.0'
     }

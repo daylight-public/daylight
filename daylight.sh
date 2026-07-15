@@ -1082,7 +1082,7 @@ download-daylight-batch ()
         local tag assetName releaseJson
 
         if [[ "$release" == "latest" ]]; then
-            tag=$(github-release-get-latest-tag "$org" "$repo") || return
+            tag=$(ghr-latest-version-tag "$org" "$repo") || return
         else
             tag=$release
         fi
@@ -1150,7 +1150,7 @@ dylt-download ()
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
     local version=${flagMap[version]:-''}
-    [[ -n "$version" ]] || version=$(github-release-get-latest-tag dylt-dev dylt) || return
+    [[ -n "$version" ]] || version=$(ghr-latest-version-tag dylt-dev dylt) || return
 
     local platform=${flagMap[platform]:-''}
     if [[ -z "$platform" ]]; then
@@ -1384,7 +1384,7 @@ etcd-create-download-url ()
     
     # get arg values from flags, if present (if not fall back to defaults
     local version=${argmap[version]:-''}
-    [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
+    [[ -n "$version" ]] || version=$(ghr-latest-version-tag etcd-io etcd) || return
     local platform=${argmap[platform]:-''}
     if [[ -z "$platform" ]]; then
         platform=$(detect-platform) || platform='linux-amd64'
@@ -1439,7 +1439,7 @@ etcd-download ()
     local downloadFolder=${posargs[0]:-${flagMap[output]:-.}}
 
     local version=${flagMap[version]:-''}
-    [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
+    [[ -n "$version" ]] || version=$(ghr-latest-version-tag etcd-io etcd) || return
     local platform=${flagMap[platform]:-''}
     if [[ -z "$platform" ]]; then
         platform=$(detect-platform) || platform='linux-amd64'
@@ -1602,7 +1602,7 @@ etcd-gen-unit-file ()
 #
 etcd-get-latest-version ()
 {
-	local tag; tag=$(github-release-get-latest-tag etcd-io etcd) || return
+	local tag; tag=$(ghr-latest-version-tag etcd-io etcd) || return
 	if [[ -t 0 ]]; then
 		printf '%s\n' "$tag"
 	else
@@ -1743,7 +1743,7 @@ fresh-daylight-gen-run-script ()
 	#
 	# get-latest-release-tag()
 	#
-	#from daylight.sh/github-release-get-latest-tag
+	#from daylight.sh/ghr-latest-version-tag
 	#
 	get-latest-release-tag ()
 	{
@@ -4933,7 +4933,7 @@ github-release-download-latest ()
 
     local -a flags
     github-create-flags argmap flags token || return
-    local version; version=$(github-release-get-latest-tag "${flags[@]}" "$org" "$repo") || return
+    local version; version=$(ghr-latest-version-tag "${flags[@]}" "$org" "$repo") || return
     flags+=(--version "$version")
     local -a dl_flags=()
     [[ -n "$name" ]] && dl_flags+=(--asset-name "$name")
@@ -5019,36 +5019,27 @@ github-release-get-data ()
 
 #-------------------------------------------------------------------------------
 #
-# github-release-get-latest-tag()
+# ghr-latest-version-tag()
 #
 # Get the latest release tag from a GitHub repo
 #
-github-release-get-latest-tag ()
+ghr-latest-version-tag ()
 {
-    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq" >&2; return 1; }
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-release-get-latest-tag [flags] $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    
-    releasesUrlPath=$(github-release-create-url-path "$org" "$repo")
-    # build flags for github-curl
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    # local VER; VER=$(github-curl "${flags[@]}" "$releasesUrlPath" \
-                    #  | jq -r .tag_name)
-    local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.latest.tag.XXXXXX) || return
-    github-curl "${flags[@]}" "$releasesUrlPath" >"$tmpCurl" || return
-    local tmpJq; tmpJq=$(mktemp --tmpdir jq.latest.tag.XXXXXX) || return
-    jq -r '.tag_name' <"$tmpCurl" >"$tmpJq" || return
-    read -r tag < "$tmpJq" || return    
-    
-    printf '%s' "$tag"
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || {
+        printf 'Usage: ghr-latest-version-tag [--token <tok>] <org> <repo>\n' >&2
+        return 1
+    }
+
+    local -A _map=()
+    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
+    _map[per-page]="1"
+
+    gh-api_ _map "/repos/$org/$repo/releases" | jq -r '.[0].tag_name'
 }
 
 
@@ -5192,7 +5183,7 @@ github-release-install-latest ()
 
     local -a flags
     github-create-flags argmap flags token
-    local version; version=$(github-release-get-latest-tag "${flags[@]}" "$org" "$repo") || return    
+    local version; version=$(ghr-latest-version-tag "${flags[@]}" "$org" "$repo") || return    
     flags+=(--version "$version")
     github-release-install "${flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" "$downloadFolder"
 }
@@ -9364,7 +9355,7 @@ main ()
             github-release-download-latest)                   github-release-download-latest "$@";;
             github-release-get-asset-name)                    github-release-get-asset-name "$@";;
             github-release-get-data)                          github-release-get-data "$@";;
-            github-release-get-latest-tag)                    github-release-get-latest-tag "$@";;
+            ghr-latest-version-tag)                    ghr-latest-version-tag "$@";;
             github-release-get-package-data)                  github-release-get-package-data "$@";;
             github-release-get-package-info)                  github-release-get-package-info "$@";;
             github-release-install)                           github-release-install "$@";;
