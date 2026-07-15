@@ -4685,141 +4685,48 @@ github-release-create-url-path ()
 #
 github-release-download ()
 {
-    # Pre-parse extract, verify, and asset-name flags (not handled by github-curl-parse-args)
-    local extract_flag=""
     local extract_dir=""
-    local extract_dir_set=""
     local extract_name=""
     local asset_name_flag=""
-    local verify_flag=""
     local -a rest=()
     while (( $# > 0 )); do
         case $1 in
-            --extract)
-                extract_flag=1
-                shift
-                ;;
-            --extract-dir)
-                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
-                extract_dir=$2
-                extract_dir_set=1
-                shift 2
-                ;;
-            --extract-name)
-                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
-                extract_name=$2
-                shift 2
-                ;;
-            --asset-name)
-                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
-                asset_name_flag=$2
-                shift 2
-                ;;
-            --verify)
-                verify_flag=1
-                shift
-                ;;
-            *)
-                rest+=("$1")
-                shift
-                ;;
+            --extract)        extract_dir="$2"; shift 2 ;;
+            --extract-dir)    extract_dir="$2"; shift 2 ;;
+            --extract-name)   extract_name="$2"; shift 2 ;;
+            --asset-name)     asset_name_flag="$2"; shift 2 ;;
+            --verify)         shift ;;  # no-op — ghr-download verifies by default
+            *)                rest+=("$1"); shift ;;
         esac
     done
     set -- "${rest[@]}"
 
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 2 )) || { printf 'Usage: github-release-download [flags] $org $repo [$name] [$downloadFolder]\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local name=""
-    local downloadFolder=""
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || {
+        printf 'Usage: github-release-download [flags] <org> <repo> [<name>] [<downloadFolder>]\n' >&2
+        return 1
+    }
 
-    # Determine name: --asset-name flag > positional $3 > auto-detect
-    if [[ -n "$asset_name_flag" ]]; then
-        name=$asset_name_flag
-    elif (( $# >= 3 )) && [[ -n "$3" ]]; then
-        name=$3
+    local name=${asset_name_flag:-${posargs[2]:-''}}
+    local outputSpec=${flagMap[output]:-${posargs[3]:-${flagMap[output-dir]:-''}}}
+
+    local -a dl_flags=()
+    [[ -v flagMap[token] ]]   && dl_flags+=(--token "${flagMap[token]}")
+    [[ -v flagMap[version] ]] && dl_flags+=(--version "${flagMap[version]}")
+    [[ -n "$name" ]]          && dl_flags+=(--asset-name "$name")
+    [[ -n "$outputSpec" ]]    && dl_flags+=(--output "$outputSpec")
+
+    if [[ -n "$extract_name" && -n "$extract_dir" ]]; then
+        dl_flags+=(--extract "$extract_dir/$extract_name")
+    elif [[ -n "$extract_dir" ]]; then
+        dl_flags+=(--extract "$extract_dir")
     fi
 
-    # Determine download folder: --output-dir flag > positional $4 > temp dir
-    if [[ -n "${argmap[output-dir]:-}" ]]; then
-        downloadFolder=${argmap[output-dir]%%/}
-    elif (( $# >= 4 )) && [[ -n "$4" ]]; then
-        downloadFolder=${4%%/}
-    else
-        downloadFolder=$(create-temp-folder "${repo}.release") || return
-    fi
-
-    # Auto-detect name if not provided
-    if [[ -z "$name" ]]; then
-        local -a detect_flags=()
-        [[ -v argmap[token] ]] && detect_flags+=(--token "${argmap[token]}")
-        [[ -v argmap[version] ]] && detect_flags+=(--version "${argmap[version]}")
-        name=$(github-release-get-asset-name "${detect_flags[@]}" "$org" "$repo") || return
-    fi
-
-    # Get release info
-    local -a flags=()
-    github-create-flags argmap flags token version
-    local -A releaseInfo
-    github-release-get-package-info "${flags[@]}" releaseInfo "$org" "$repo" "$name" || return
-    # download release file using releaseInfo data
-    local urlPath=${releaseInfo[urlPath]}
-    local filename=${releaseInfo[filename]}
-    local accept='Accept: application/octet-stream'
-    local output="$downloadFolder/$filename"
-    flags+=(--accept "$accept" --output "$output")
-    github-curl "${flags[@]}" "$urlPath" || return
-
-    if [[ -n "$verify_flag" ]]; then
-        github-release-verify-checksum "${flags[@]}" "$org" "$repo" "$name" "$downloadFolder" || return
-    fi
-
-    if [[ -n "$extract_flag" || -n "$extract_dir_set" || -n "$extract_name" ]]; then
-        [[ -z "$extract_dir" ]] && extract_dir=$downloadFolder
-        [[ -f "$output" ]] || { printf 'Archive not found: %s\n' "$output" >&2; return 1; }
-        local extractTmp; extractTmp=$(mktemp -d) || return
-        case "$filename" in
-            *.tar.gz|*.tgz)
-                tar -xzf "$output" -C "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
-                ;;
-            *.zip)
-                unzip -o "$output" -d "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
-                ;;
-            *)
-                printf 'Cannot extract: unknown format %s\n' "$filename" >&2
-                rm -rf "$extractTmp"
-                return 1
-                ;;
-        esac
-        local -a extractedEntries
-        extractedEntries=($(find "$extractTmp" -mindepth 1 -maxdepth 1))
-        if (( ${#extractedEntries[@]} == 1 )); then
-            local targetPath="${extract_dir}/${extract_name:-$(basename "${extractedEntries[0]}")}"
-            mkdir -p "$extract_dir"
-            mv "${extractedEntries[0]}" "$targetPath" || { rm -rf "$extractTmp"; return 1; }
-            printf '%s' "$targetPath"
-        elif (( ${#extractedEntries[@]} > 1 )); then
-            mkdir -p "$extract_dir"
-            local subdir="${extract_dir}/${extract_name:-extracted}"
-            mkdir -p "$subdir"
-            mv "$extractTmp"/* "$subdir"/ || { rm -rf "$extractTmp"; return 1; }
-            rmdir "$extractTmp" 2>/dev/null || true
-            printf '%s' "$subdir"
-        else
-            printf 'Nothing found inside archive\n' >&2
-            rm -rf "$extractTmp"
-            return 1
-        fi
-        rm -rf "$extractTmp"
-    else
-        printf '%s' "$output"
-    fi
+    ghr-download "${dl_flags[@]}" "$org" "$repo"
 }
 
 
@@ -4847,82 +4754,50 @@ github-release-download ()
 #
 github-release-download-latest ()
 {
-    # Pre-parse extract, verify, and asset-name flags (not handled by github-curl-parse-args)
-    local extract_flag=""
     local extract_dir=""
     local extract_name=""
     local asset_name_flag=""
-    local verify_flag=""
     local -a rest=()
     while (( $# > 0 )); do
         case $1 in
-            --extract)
-                extract_flag=1
-                shift
-                ;;
-            --extract-dir)
-                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
-                extract_dir=$2
-                shift 2
-                ;;
-            --extract-name)
-                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
-                extract_name=$2
-                shift 2
-                ;;
-            --asset-name)
-                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
-                asset_name_flag=$2
-                shift 2
-                ;;
-            --verify)
-                verify_flag=1
-                shift
-                ;;
-            *)
-                rest+=("$1")
-                shift
-                ;;
+            --extract)        extract_dir="$2"; shift 2 ;;
+            --extract-dir)    extract_dir="$2"; shift 2 ;;
+            --extract-name)   extract_name="$2"; shift 2 ;;
+            --asset-name)     asset_name_flag="$2"; shift 2 ;;
+            --verify)         shift ;;  # no-op
+            *)                rest+=("$1"); shift ;;
         esac
     done
     set -- "${rest[@]}"
 
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 2 )) || { printf 'Usage: github-release-download-latest [flags] $org $repo [$name] [$downloadFolder]\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local name=""
-    local downloadFolder=""
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || {
+        printf 'Usage: github-release-download-latest [flags] <org> <repo> [<name>] [<downloadFolder>]\n' >&2
+        return 1
+    }
 
-    if [[ -n "$asset_name_flag" ]]; then
-        name=$asset_name_flag
-    elif (( $# >= 3 )) && [[ -n "$3" ]]; then
-        name=$3
-    fi
+    local name=${asset_name_flag:-${posargs[2]:-''}}
+    local outputSpec=${flagMap[output]:-${posargs[3]:-${flagMap[output-dir]:-''}}}
+    local version
+    version=$(ghr-latest-version-tag --token "${flagMap[token]}" "$org" "$repo") || return
 
-    if [[ -n "${argmap[output-dir]:-}" ]]; then
-        downloadFolder=${argmap[output-dir]%%/}
-    elif (( $# >= 4 )) && [[ -n "$4" ]]; then
-        downloadFolder=${4%%/}
-    fi
-
-    local -a flags
-    github-create-flags argmap flags token || return
-    local version; version=$(ghr-latest-version-tag "${flags[@]}" "$org" "$repo") || return
-    flags+=(--version "$version")
     local -a dl_flags=()
-    [[ -n "$name" ]] && dl_flags+=(--asset-name "$name")
-    [[ -n "$downloadFolder" ]] && dl_flags+=(--output-dir "$downloadFolder")
-    [[ -n "$extract_flag" ]] && dl_flags+=(--extract)
-    [[ -n "$extract_dir" ]] && dl_flags+=(--extract-dir "$extract_dir")
-    [[ -n "$extract_name" ]] && dl_flags+=(--extract-name "$extract_name")
-    [[ -n "$verify_flag" ]] && dl_flags+=(--verify)
-    github-release-download "${flags[@]}" "${dl_flags[@]}" "$org" "$repo" || return
+    [[ -v flagMap[token] ]]   && dl_flags+=(--token "${flagMap[token]}")
+    dl_flags+=(--version "$version")
+    [[ -n "$name" ]]          && dl_flags+=(--asset-name "$name")
+    [[ -n "$outputSpec" ]]    && dl_flags+=(--output "$outputSpec")
+
+    if [[ -n "$extract_name" && -n "$extract_dir" ]]; then
+        dl_flags+=(--extract "$extract_dir/$extract_name")
+    elif [[ -n "$extract_dir" ]]; then
+        dl_flags+=(--extract "$extract_dir")
+    fi
+
+    github-release-download "${dl_flags[@]}" "$org" "$repo"
 }
 
 
