@@ -1619,26 +1619,27 @@ etcd-get-latest-version ()
 #
 etcd-install-latest ()
 {
-	# parse github args
-	local -A argmap=()
-	local nargs=0
-	github-curl-parse-args argmap nargs "$@" || return
-	shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: etcd-install-latest $installFolder\n' >&2; return 1; }
-	[[ -d "$1" ]] || { echo "Non-existent folder: $1" >&2; return 1; }
-    local installFolder=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local installFolder=${posargs[0]}
+    [[ -d "$installFolder" ]] || { echo "Non-existent folder: $installFolder" >&2; return 1; }
+    [[ -n "$installFolder" ]] || { printf 'Usage: etcd-install-latest [--platform <arch>] <installFolder>\n' >&2; return 1; }
+
     local org=etcd-io
     local repo=etcd
-    local platform=${argmap[platform]:-''}
+    local platform=${flagMap[platform]:-''}
     if [[ -z "$platform" ]]; then
         platform=$(detect-platform) || platform='linux-amd64'
     fi
 
-	local version; version=$(etcd-get-latest-version) || return
-	local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
-	local -a flags=(--version "$version")
-    github-release-install "${flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" || return
+    local version; version=$(etcd-get-latest-version) || return
+    local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
+
+    local -a dl_flags=()
+    [[ -v flagMap[token] ]] && dl_flags+=(--token "${flagMap[token]}")
+    dl_flags+=(--version "$version")
+    github-release-install "${dl_flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" || return
     chown -R rayray:rayray "$installFolder" || return
 }
 
@@ -4634,30 +4635,24 @@ github-is-gha-installed ()
 #
 github-release-create-url-path ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 2 )) || { printf 'Usage: github-release-create-url-path $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || {
+        printf 'Usage: github-release-create-url-path [--version <ver>] <org> <repo>\n' >&2
+        return 1
+    }
 
-    local tag=${argmap[version]:-''}
-    local urlPath
+    local tag=${flagMap[version]:-''}
     if [[ -n "$tag" ]]; then
-        local urlPath="/repos/$org/$repo/releases/tags/$tag"
+        printf '/repos/%s/%s/releases/tags/%s' "$org" "$repo" "$tag"
     else
-        local urlPath="/repos/$org/$repo/releases/latest"
+        printf '/repos/%s/%s/releases/latest' "$org" "$repo"
     fi
-
-    # printf with \n if interactive
-    if [[ -t 0 ]]; then
-        printf '%s\n' "$urlPath"
-    else
-        printf '%s' "$urlPath"
-    fi
+    [[ -t 0 ]] && printf '\n'
+    return 0
 }
 
 
@@ -4986,22 +4981,28 @@ github-release-get-package-info ()
 #
 github-release-install ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-install-latest-release $org $repo $releaseName $installFolder [$downloadFolder]\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local name=$3
-    local installFolder=$4
-	local downloadFolder=${5:-$(create-temp-folder)}
-	[[ -d "$downloadFolder" ]] || { echo "Non-existent folder: $downloadFolder" >&2; return 1; }
-    local -a flags=()
-    github-create-flags argmap flags token version
-    local releasePath; releasePath=$(github-release-download "${flags[@]}" --asset-name "$name" --output-dir "$downloadFolder" "$org" "$repo") || return
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    local name=${posargs[2]}
+    local installFolder=${posargs[3]}
+    [[ -n "$org" && -n "$repo" && -n "$name" && -n "$installFolder" ]] || {
+        printf 'Usage: github-release-install [--token <tok>] [--version <ver>] <org> <repo> <name> <installFolder> [<downloadFolder>]\n' >&2
+        return 1
+    }
+    local downloadFolder=${posargs[4]:-$(create-temp-folder)}
+    [[ -d "$downloadFolder" ]] || { echo "Non-existent folder: $downloadFolder" >&2; return 1; }
+
+    local -a dl_flags=()
+    [[ -v flagMap[token] ]]   && dl_flags+=(--token "${flagMap[token]}")
+    [[ -v flagMap[version] ]] && dl_flags+=(--version "${flagMap[version]}")
+    dl_flags+=(--asset-name "$name" --output "$downloadFolder/")
+
+    local releasePath
+    releasePath=$(github-release-download "${dl_flags[@]}" "$org" "$repo") || return
+
     case "$releasePath" in
         *.tgz|*.tar.gz)
             tar --strip-components=1 -C "$installFolder" -xzf "$releasePath";;
@@ -5009,7 +5010,7 @@ github-release-install ()
             printf "Unsupported file type - can't install (%s)\n" "$releasePath" >&2
             return 1;;
     esac
-	printf '%s' "$installFolder"
+    printf '%s' "$installFolder"
 }
 
 
@@ -5023,24 +5024,28 @@ github-release-install ()
 #
 github-release-install-latest ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-release-install-latest $org $repo $releaseName $installFolder [$downloadFolder]\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local name=$3
-    local installFolder=$4
-	local downloadFolder=${5:-''}
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    local name=${posargs[2]}
+    local installFolder=${posargs[3]}
+    [[ -n "$org" && -n "$repo" && -n "$name" && -n "$installFolder" ]] || {
+        printf 'Usage: github-release-install-latest [--token <tok>] <org> <repo> <name> <installFolder> [<downloadFolder>]\n' >&2
+        return 1
+    }
+    local downloadFolder=${posargs[4]:-''}
 
-    local -a flags
-    github-create-flags argmap flags token
-    local version; version=$(ghr-latest-version-tag "${flags[@]}" "$org" "$repo") || return    
-    flags+=(--version "$version")
-    github-release-install "${flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" "$downloadFolder"
+    local version
+    version=$(ghr-latest-version-tag --token "${flagMap[token]}" "$org" "$repo") || return
+
+    local -a dl_flags=()
+    [[ -v flagMap[token] ]] && dl_flags+=(--token "${flagMap[token]}")
+    dl_flags+=(--version "$version")
+    [[ -n "$downloadFolder" ]] && dl_flags+=(--output "$downloadFolder/")
+
+    github-release-install "${dl_flags[@]}" "$org" "$repo" "$name" "$installFolder"
 }
 
 
