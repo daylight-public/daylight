@@ -1636,7 +1636,7 @@ etcd-install-latest ()
     local -a dl_flags=()
     [[ -v flagMap[token] ]] && dl_flags+=(--token "${flagMap[token]}")
     dl_flags+=(--version "$version")
-    github-release-install "${dl_flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" || return
+    ghr-install "${dl_flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" || return
     chown -R rayray:rayray "$installFolder" || return
 }
 
@@ -4733,7 +4733,7 @@ github-release-download ()
 # github-curl-parse-args flags also accepted:
 #   --token, --version, --output, --output-dir, --remote-name
 #
-github-release-download-latest ()
+ghr-download-latest ()
 {
     local extract_dir=""
     local extract_name=""
@@ -4792,7 +4792,7 @@ github-release-download-latest ()
 # Usage: github-release-get-asset-name [flags] $org $repo
 # Output: prints the best asset name, exits 1 if no assets found
 #
-github-release-get-asset-name ()
+ghr-get-asset-name ()
 {
     local -A flagMap=()
     local -a posargs=()
@@ -4829,7 +4829,7 @@ github-release-get-asset-name ()
 #
 # Get release data from a GitHub repository
 #
-github-release-get-data ()
+ghr-get-data ()
 {
     local -A flagMap=()
     local -a posargs=()
@@ -4958,7 +4958,7 @@ github-release-get-package-info ()
 #
 # Download and install a GitHub release asset
 #
-github-release-install ()
+ghr-install ()
 {
     local -A flagMap=()
     local -a posargs=()
@@ -5001,7 +5001,7 @@ github-release-install ()
 #
 # @note - github-release-install will install the latest by default, if you don't specify a version
 #
-github-release-install-latest ()
+ghr-install-latest ()
 {
     local -A flagMap=()
     local -a posargs=()
@@ -5024,7 +5024,7 @@ github-release-install-latest ()
     dl_flags+=(--version "$version")
     [[ -n "$downloadFolder" ]] && dl_flags+=(--output "$downloadFolder/")
 
-    github-release-install "${dl_flags[@]}" "$org" "$repo" "$name" "$installFolder"
+    ghr-install "${dl_flags[@]}" "$org" "$repo" "$name" "$installFolder"
 }
 
 
@@ -5033,7 +5033,7 @@ github-release-install-latest ()
 # github-release-list()
 #
 # List releases for a GitHub repository
-github-release-list ()
+ghr-list-assets ()
 {
     local -A flagMap=()
     local -a posargs=()
@@ -5043,7 +5043,7 @@ github-release-list ()
     [[ -n "$org" && -n "$repo" ]] || { printf 'Usage: github-release-list [flags] <org> <repo>
 ' >&2; return 1; }
 
-    github-release-get-data "$org" "$repo"     | jq -r '[.assets[].name] | sort | @tsv'     || return
+    ghr-get-data "$org" "$repo"     | jq -r '[.assets[].name] | sort | @tsv'     || return
 }
 
 
@@ -5130,7 +5130,7 @@ github-release-select-platform ()
 # The checksum file is downloaded alongside the asset and left in place
 # after verification (pass or fail).
 #
-github-release-verify-checksum ()
+ghr-verify-checksum ()
 {
     command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq" >&2; return 1; }
     command -v "sha256sum" >/dev/null || { printf '%s is required, but was not found.\n' "sha256sum" >&2; return 1; }
@@ -5202,6 +5202,16 @@ github-release-verify-checksum ()
 
 #-------------------------------------------------------------------------------
 #
+# Backward-compat wrappers for renamed ghr-* functions
+github-release-get-data () { ghr-get-data "$@"; }
+github-release-get-asset-name () { ghr-get-asset-name "$@"; }
+github-release-verify-checksum () { ghr-verify-checksum "$@"; }
+github-release-download-latest () { ghr-download-latest "$@"; }
+github-release-install () { ghr-install "$@"; }
+github-release-install-latest () { ghr-install-latest "$@"; }
+github-release-list () { ghr-list-assets "$@"; }
+github-release-download () { ghr-download "$@"; }
+
 # github-shr-clean()
 #
 # Remove a self-hosted runner: stop/uninstall svc, deregister from GitHub,
@@ -6926,7 +6936,7 @@ install-mssql-tools ()
 install-pubbo ()
 {
     [[ -d "/opt/bin/" ]] || { echo "Non-existent folder: /opt/bin/" >&2; return 1; }
-    github-release-install dylt-dev pubbo linux_amd64 /opt/bin/
+    ghr-install dylt-dev pubbo linux_amd64 /opt/bin/
 }
 
 
@@ -9111,10 +9121,18 @@ main ()
               gh-api_)                                           gh-api_ "$@";;
               gh-curl-qwenmax)                                   gh-curl-qwenmax "$@";;
               gh-curl-qwenmax_)                                  gh-curl-qwenmax_ "$@";;
-              ghr-download)                                      ghr-download "$@";;
-              ghr-list)                                          ghr-list "$@";;
-              ghr-path)                                          ghr-path "$@";;
-              ghr-version-path)                                  ghr-version-path "$@";;
+               ghr-download)                                      ghr-download "$@";;
+               ghr-download-latest)                               ghr-download-latest "$@";;
+               ghr-get-asset-name)                                ghr-get-asset-name "$@";;
+               ghr-get-data)                                      ghr-get-data "$@";;
+               ghr-install)                                       ghr-install "$@";;
+               ghr-install-latest)                                ghr-install-latest "$@";;
+               ghr-list)                                          ghr-list "$@";;
+               ghr-list-assets)                                   ghr-list-assets "$@";;
+               ghr-path)                                          ghr-path "$@";;
+               ghr-version-path)                                  ghr-version-path "$@";;
+               ghr-verify-checksum)                               ghr-verify-checksum "$@";;
+               ghr-latest-version-tag)                            ghr-latest-version-tag "$@";;
             github-app-get-client-id)                         github-app-get-client-id "$@";;
             github-app-get-data)                              github-app-get-data "$@";;
             github-app-get-id)                                github-app-get-id "$@";;
@@ -9137,7 +9155,6 @@ main ()
             github-release-download-latest)                   github-release-download-latest "$@";;
             github-release-get-asset-name)                    github-release-get-asset-name "$@";;
             github-release-get-data)                          github-release-get-data "$@";;
-            ghr-latest-version-tag)                    ghr-latest-version-tag "$@";;
             github-release-get-package-data)                  github-release-get-package-data "$@";;
             github-release-get-package-info)                  github-release-get-package-info "$@";;
             github-release-install)                           github-release-install "$@";;
