@@ -3992,30 +3992,24 @@ ghr-path ()
 #
 ghr-version-path ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 1 )) || { printf 'Usage: ghr-version-path $org/$repo\n' >&2; return 1; }
-    local orgRepo=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local orgRepo=${posargs[0]}
+    [[ -n "$orgRepo" ]] || { printf 'Usage: ghr-version-path $org/$repo\n' >&2; return 1; }
     local rx="(^[a-zA-Z0-9._-]+)/([a-zA-Z0-9._-]+$)"
-    [[ "$orgRepo" =~ $rx ]] || { printf 'expecting org/repo (%s)\n' "$orgRepo"; return 1; }
+    [[ "$orgRepo" =~ $rx ]] || { printf 'expecting org/repo (%s)\n' "$orgRepo" >&2; return 1; }
     local org=${BASH_REMATCH[1]}
     local repo=${BASH_REMATCH[2]}
 
-    local tag=${argmap[version]:-''}
-    local urlPath
+    local tag=${flagMap[version]:-''}
     if [[ -n "$tag" ]]; then
-        local urlPath="/repos/$org/$repo/releases/tags/$tag"
+        printf '/repos/%s/%s/releases/tags/%s' "$org" "$repo" "$tag"
     else
-        local urlPath="/repos/$org/$repo/releases/latest"
+        printf '/repos/%s/%s/releases/latest' "$org" "$repo"
     fi
-
-    # printf with \n if interactive
-    printf '%s' "$urlPath"
     [[ -t 0 ]] && printf '\n'
+    return 0
 }
 
 
