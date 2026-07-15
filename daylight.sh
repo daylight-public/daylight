@@ -1069,49 +1069,49 @@ download-daylight-batch ()
     local org=daylight-public
     local repo=daylight
 
+    # Extract token from pass array
+    local token=""
+    for ((i=0; i<${#pass[@]}; i++)); do
+        if [[ "${pass[i]}" == "--token" ]] && (( i+1 < ${#pass[@]} )); then
+            token="${pass[i+1]}"
+            break
+        fi
+    done
+
     if [[ -n "$release" ]]; then
-        local tag json assetName tmpDir releasePath checksumFile
-        local checksumName=SHA256SUMS
+        local tag assetName releaseJson
 
         if [[ "$release" == "latest" ]]; then
-            tag=$(github-release-get-latest-tag "${pass[@]}" "$org" "$repo") || return
+            tag=$(ghr-latest-version-tag "$org" "$repo") || return
         else
             tag=$release
         fi
 
-        tmpDir=$(create-temp-folder) || return
+        local -A _map=()
+        [[ -n "$token" ]] && _map[token]="$token"
 
-        json=$(github-release-get-data --version "$tag" "${pass[@]}" "$org" "$repo") || return
-        assetName=$(printf '%s' "$json" | jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .name' | head -1) || {
+        releaseJson=$(gh-api_ _map "/repos/$org/$repo/releases/tags/$tag" 2>/dev/null) || return
+        assetName=$(printf '%s' "$releaseJson" | jq -r '.assets[] | select(.name | endswith(".tar.gz")) | .name' | head -1) || {
             printf 'No tar.gz asset found in release %s\n' "$tag" >&2
-            rm -rf "$tmpDir"
             return 1
         }
 
-        releasePath=$(github-release-download --version "$tag" "${pass[@]}" --extract-dir "$extract_dir" --extract-name "${extract_name:-daylight.sh}" --asset-name "$assetName" --output-dir "$tmpDir" "$org" "$repo") || {
-            rm -rf "$tmpDir"
-            return 1
-        }
-
-        checksumFile=$(github-release-download --version "$tag" "${pass[@]}" --asset-name "$checksumName" --output-dir "$tmpDir" "$org" "$repo") || {
-            printf 'SHA256SUMS not found in release %s — cannot verify integrity\n' "$tag" >&2
-            rm -rf "$tmpDir"
-            return 1
-        }
-
-        if ! (cd "$tmpDir" && grep -F "$assetName" "$checksumName" | sha256sum -c -); then
-            printf 'Checksum verification failed for %s\n' "$assetName" >&2
-            rm -rf "$tmpDir"
-            return 1
+        local -a dl_flags=()
+        [[ -n "$token" ]] && dl_flags+=(--token "$token")
+        dl_flags+=(--version "$tag" --asset-name "$assetName")
+        if [[ -n "$extract_dir" ]]; then
+            dl_flags+=(--extract "$extract_dir")
         fi
-
-        # releasePath now points to the extracted file from github-release-download
-        rm -rf "$tmpDir"
+        dl_flags+=(--output "$dstFolder/")
+        ghr-download "${dl_flags[@]}" "$org" "$repo" || return
     else
-        local url="https://raw.githubusercontent.com/$org/$repo/$branch/daylight.sh"
+        # Branch mode: fetch raw file from GitHub
+        local -A _map=()
+        [[ -n "$token" ]] && _map[token]="$token"
+        _map[accept]='application/vnd.github.raw'
         local target="$extract_dir/${extract_name:-daylight.sh}"
         mkdir -p "$extract_dir"
-        curl --location --silent --fail --output "$target" "$url" || return
+        gh-api_ _map "/repos/$org/$repo/contents/daylight.sh?ref=$branch" > "$target" || return
     fi
 }
 
@@ -1136,43 +1136,32 @@ download-dist ()
 
 #-------------------------------------------------------------------------------
 #
-# download-dylt()
+# dylt-download()
 #
 # Download latest dylt release
 #
-download-dylt ()
+dylt-download ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    local -a flags=()
-    github-create-flags argmap flags token
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 1 )) || { printf 'Usage: download-dylt $dstFolder [$platform]\n' >&2; return 1; }
-    local dstFolder=$1
-    local platform=$2
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local dstFolder=${posargs[0]}
+    [[ -n "$dstFolder" ]] || { printf 'Usage: dylt-download [--token <tok>] [--version <ver>] [--platform <arch>] <dstFolder>\n' >&2; return 1; }
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
+    local version=${flagMap[version]:-''}
+    [[ -n "$version" ]] || version=$(ghr-latest-version-tag dylt-dev dylt) || return
+
+    local platform=${flagMap[platform]:-''}
     if [[ -z "$platform" ]]; then
         platform=$(detect-platform) || return
     fi
 
-    local -a flags=()
-    [[ -n "${argmap[token]+exists}" ]] && flags+=(--token "${argmap[token]}") 
-
-    local version; version=$(github-release-get-latest-tag "${flags[@]}" dylt-dev dylt) || return
-
-    local releaseName="dylt_${platform}.tar.gz"
-    local legacyName="dylt_$(dylt-legacy-platform "$platform").tar.gz"
-    local url="https://github.com/dylt-dev/dylt/releases/download/$version/$releaseName"
-
-    if curl --fail --location --head "$url" >/dev/null 2>&1; then
-        github-release-download-latest "${flags[@]}" dylt-dev dylt "$releaseName" "$dstFolder" || return
-    else
-        github-release-download-latest "${flags[@]}" dylt-dev dylt "$legacyName" "$dstFolder" || return
-    fi
+    local -a dl_flags=()
+    [[ -v flagMap[token] ]] && dl_flags+=(--token "${flagMap[token]}")
+    dl_flags+=(--version "$version" --output "$dstFolder/")
+    [[ -n "$platform" ]] && dl_flags+=(--platform "$platform")
+    ghr-download "${dl_flags[@]}" dylt-dev dylt
 }
 
 
@@ -1387,16 +1376,13 @@ emit-vars ()
 #
 etcd-create-download-url ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    
-    # get arg values from flags, if present (if not fall back to defaults
-    local version=${argmap[version]:-''}
-    [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
-    local platform=${argmap[platform]:-''}
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+
+    local version=${flagMap[version]:-''}
+    [[ -n "$version" ]] || version=$(ghr-latest-version-tag etcd-io etcd) || return
+    local platform=${flagMap[platform]:-''}
     if [[ -z "$platform" ]]; then
         platform=$(detect-platform) || platform='linux-amd64'
     fi
@@ -1444,26 +1430,24 @@ etcd-create-release-name ()
 # but losing the version might not be a good tradeoff.
 etcd-download ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: etcd-download $downloadFolder\n' >&2; return 1; }
-    local downloadFolder=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local downloadFolder=${posargs[0]:-${flagMap[output]:-.}}
 
-    local version=${argmap[version]:-''}
-    [[ -n "$version" ]] || version=$(github-release-get-latest-tag etcd-io etcd) || return
-    local platform=${argmap[platform]:-''}
+    local version=${flagMap[version]:-''}
+    [[ -n "$version" ]] || version=$(ghr-latest-version-tag etcd-io etcd) || return
+    local platform=${flagMap[platform]:-''}
     if [[ -z "$platform" ]]; then
         platform=$(detect-platform) || platform='linux-amd64'
     fi
     local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
-    local -a flags
-    github-create-flags argmap flags token
-    flags+=(--version "$version")
-    github-release-download "${flags[@]}" --asset-name "$releaseName" --output-dir "$downloadFolder" etcd-io etcd
+
+    local -a dl_flags=()
+    [[ -v flagMap[token] ]] && dl_flags+=(--token "${flagMap[token]}")
+    dl_flags+=(--version "$version" --output "$downloadFolder/")
+    [[ -n "$platform" ]] && dl_flags+=(--platform "$platform")
+    ghr-download "${dl_flags[@]}" etcd-io etcd
 }
 
 
@@ -1615,7 +1599,7 @@ etcd-gen-unit-file ()
 #
 etcd-get-latest-version ()
 {
-	local tag; tag=$(github-release-get-latest-tag etcd-io etcd) || return
+	local tag; tag=$(ghr-latest-version-tag etcd-io etcd) || return
 	if [[ -t 0 ]]; then
 		printf '%s\n' "$tag"
 	else
@@ -1632,26 +1616,27 @@ etcd-get-latest-version ()
 #
 etcd-install-latest ()
 {
-	# parse github args
-	local -A argmap=()
-	local nargs=0
-	github-curl-parse-args argmap nargs "$@" || return
-	shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: etcd-install-latest $installFolder\n' >&2; return 1; }
-	[[ -d "$1" ]] || { echo "Non-existent folder: $1" >&2; return 1; }
-    local installFolder=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local installFolder=${posargs[0]}
+    [[ -d "$installFolder" ]] || { echo "Non-existent folder: $installFolder" >&2; return 1; }
+    [[ -n "$installFolder" ]] || { printf 'Usage: etcd-install-latest [--platform <arch>] <installFolder>\n' >&2; return 1; }
+
     local org=etcd-io
     local repo=etcd
-    local platform=${argmap[platform]:-''}
+    local platform=${flagMap[platform]:-''}
     if [[ -z "$platform" ]]; then
         platform=$(detect-platform) || platform='linux-amd64'
     fi
 
-	local version; version=$(etcd-get-latest-version) || return
-	local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
-	local -a flags=(--version "$version")
-    github-release-install "${flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" || return
+    local version; version=$(etcd-get-latest-version) || return
+    local releaseName; releaseName=$(etcd-create-release-name "$version" "$platform") || return
+
+    local -a dl_flags=()
+    [[ -v flagMap[token] ]] && dl_flags+=(--token "${flagMap[token]}")
+    dl_flags+=(--version "$version")
+    ghr-install "${dl_flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" || return
     chown -R rayray:rayray "$installFolder" || return
 }
 
@@ -1756,7 +1741,7 @@ fresh-daylight-gen-run-script ()
 	#
 	# get-latest-release-tag()
 	#
-	#from daylight.sh/github-release-get-latest-tag
+	#from daylight.sh/ghr-latest-version-tag
 	#
 	get-latest-release-tag ()
 	{
@@ -2933,6 +2918,7 @@ gh-api-parse-args ()
             --jq-path|\
             --output|\
             --per-page|\
+            --request|\
             --token|\
             --label|\
             --platform|\
@@ -3084,6 +3070,11 @@ gh-api-unparse-curl-args ()
     # POST data
     if [[ -v _flagMap[data] ]]; then
         _curlFlags+=(--data "${_flagMap[data]}")
+    fi
+
+    # HTTP method override (GET, POST, PUT, DELETE, etc.)
+    if [[ -v _flagMap[request] ]]; then
+        _curlFlags+=(--request "${_flagMap[request]}")
     fi
 }
 
@@ -3855,12 +3846,23 @@ ghr-download ()
 
     # Step 2: Find the asset
     local assetName=${flagMap[asset-name]}
+    local platform=${flagMap[platform]}
     if [[ -z "$assetName" ]]; then
-        assetName=$(jq -r '
-            try ([.assets[] | select(.name | test("\\.tar\\.gz$")) | .name] | first) //
-            try ([.assets[] | select(.name | test("\\.zip$")) | .name] | first) //
-            try .assets[0].name // ""
-        ' <<< "$releaseJson")
+        if [[ -n "$platform" ]]; then
+            assetName=$(jq -r --arg plat "$platform" '
+                try ([.assets[] | select(.name | test("\\.tar\\.gz$") and test($plat)) | .name] | first) //
+                try ([.assets[] | select(.name | test("\\.zip$") and test($plat)) | .name] | first) //
+                try ([.assets[] | select(.name | test("\\.tar\\.gz$")) | .name] | first) //
+                try ([.assets[] | select(.name | test("\\.zip$")) | .name] | first) //
+                try .assets[0].name // ""
+            ' <<< "$releaseJson")
+        else
+            assetName=$(jq -r '
+                try ([.assets[] | select(.name | test("\\.tar\\.gz$")) | .name] | first) //
+                try ([.assets[] | select(.name | test("\\.zip$")) | .name] | first) //
+                try .assets[0].name // ""
+            ' <<< "$releaseJson")
+        fi
     fi
 
     [[ -n "$assetName" ]] || { printf 'No asset found\n' >&2; return 1; }
@@ -3994,30 +3996,24 @@ ghr-path ()
 #
 ghr-version-path ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 1 )) || { printf 'Usage: ghr-version-path $org/$repo\n' >&2; return 1; }
-    local orgRepo=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local orgRepo=${posargs[0]}
+    [[ -n "$orgRepo" ]] || { printf 'Usage: ghr-version-path $org/$repo\n' >&2; return 1; }
     local rx="(^[a-zA-Z0-9._-]+)/([a-zA-Z0-9._-]+$)"
-    [[ "$orgRepo" =~ $rx ]] || { printf 'expecting org/repo (%s)\n' "$orgRepo"; return 1; }
+    [[ "$orgRepo" =~ $rx ]] || { printf 'expecting org/repo (%s)\n' "$orgRepo" >&2; return 1; }
     local org=${BASH_REMATCH[1]}
     local repo=${BASH_REMATCH[2]}
 
-    local tag=${argmap[version]:-''}
-    local urlPath
+    local tag=${flagMap[version]:-''}
     if [[ -n "$tag" ]]; then
-        local urlPath="/repos/$org/$repo/releases/tags/$tag"
+        printf '/repos/%s/%s/releases/tags/%s' "$org" "$repo" "$tag"
     else
-        local urlPath="/repos/$org/$repo/releases/latest"
+        printf '/repos/%s/%s/releases/latest' "$org" "$repo"
     fi
-
-    # printf with \n if interactive
-    printf '%s' "$urlPath"
     [[ -t 0 ]] && printf '\n'
+    return 0
 }
 
 
@@ -4029,17 +4025,14 @@ ghr-version-path ()
 #
 github-app-get-client-id ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: github-app-get-id $appSlug\n' >&2; return 1; }
-    local appSlug=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local appSlug=${posargs[0]}
+    [[ -n "$appSlug" ]] || { printf 'Usage: github-app-get-client-id [--token <tok>] <appSlug>\n' >&2; return 1; }
 
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -v flagMap[token] ]] && flags+=(--token "${flagMap[token]}")
     local -A info
     github-app-get-info "${flags[@]}" info "$appSlug" || return
     local clientId=${info[client_id]}
@@ -4055,18 +4048,16 @@ github-app-get-client-id ()
 #
 github-app-get-data ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: github-app-get-data $appSlug\n' >&2; return 1; }
-    local appSlug=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local appSlug=${posargs[0]}
+    [[ -n "$appSlug" ]] || { printf 'Usage: github-app-get-data [--token <tok>] <appSlug>\n' >&2; return 1; }
 
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    github-curl "${flags[@]}" "/apps/$appSlug" || return
+    local -A _map=()
+    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
+
+    gh-api_ _map "/apps/$appSlug"
 }
 
 
@@ -4078,17 +4069,14 @@ github-app-get-data ()
 #
 github-app-get-id ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: github-app-get-id $appSlug\n' >&2; return 1; }
-    local appSlug=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local appSlug=${posargs[0]}
+    [[ -n "$appSlug" ]] || { printf 'Usage: github-app-get-id [--token <tok>] <appSlug>\n' >&2; return 1; }
 
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -v flagMap[token] ]] && flags+=(--token "${flagMap[token]}")
     local -A info
     github-app-get-info "${flags[@]}" info "$appSlug" || return
     local id=${info[id]}
@@ -4104,28 +4092,23 @@ github-app-get-id ()
 #
 github-app-get-info ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-app-get-data $infovar $appSlug\n' >&2; return 1; }
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
     local -n _info=$1
     local appSlug=$2
+    [[ -n "$appSlug" ]] || { printf 'Usage: github-app-get-info <infovar> <appSlug>\n' >&2; return 1; }
 
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.XXXXXX) || return
-    github-app-get-data "${flags[@]}" "$appSlug" >"$tmpCurl" || return
-    local tmpJq; tmpJq=$(mktemp --tmpdir jq.XXXXXX) || return
-    jq -r '[.id, .client_id, .slug] | @tsv' <"$tmpCurl" >"$tmpJq" || return
-    read -r -a args < "$tmpJq" || return
+    local data
+    data=$(gh-api_ _map "/apps/$appSlug") || return
 
-    _info[id]=${args[0]}
-    _info[client_id]=${args[1]}
-    # shellcheck disable=SC2154
-    _info[slug]=${args[2]}
+    local args
+    args=$(jq -r '[.id, .client_id, .slug] | @tsv' <<< "$data") || return
+    read -r -a arr <<< "$args"
+
+    _info[id]=${arr[0]}
+    _info[client_id]=${arr[1]}
+    _info[slug]=${arr[2]}
 }
 
 
@@ -4179,31 +4162,25 @@ github-create-flags ()
 #
 github-create-uat ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-create-uat tokenvar $appslug\n' >&2; return 1; }
-    # shellcheck disable=SC2178
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
     [[ $1 != tokenvar ]] && { local -n tokenvar; tokenvar=$1; }
     local appSlug=$2
+    [[ -n "$appSlug" ]] || { printf 'Usage: github-create-uat <tokenvar> <appslug>\n' >&2; return 1; }
 
     local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
+    [[ -v flagMap[token] ]] && flags+=(--token "${flagMap[token]}")
     
     # Get the clientId for the dylt-cli GitHub App CLI, which must be installed 
     local clientId; clientId=$(github-app-get-client-id "${flags[@]}" "$appSlug") || return
 
-    # Use client id to invoke device code flow
-    flags+=(--data '')
-    urlPath="/login/device/code?client_id=$clientId"
-    urlBase="https://github.com"
+    # Use client id to invoke device code flow — raw curl (non-API GitHub endpoint)
     local -a args
-    read -r -a args < <(github-curl "${flags[@]}" "$urlPath" "$urlBase" \
-                        | jq -r '[.device_code, .user_code, .verification_uri] | @tsv') \
-                        || { printf 'Call failed: github-curl()\n'; return; }
+    read -r -a args < <(curl --silent --data '' \
+        "https://github.com/login/device/code?client_id=$clientId" \
+        | jq -r '[.device_code, .user_code, .verification_uri] | @tsv') \
+        || { printf 'Call failed: device code flow\n' >&2; return; }
     local deviceCode=${args[0]}
     local userCode=${args[1]}
     local verificationUri=${args[2]}
@@ -4226,11 +4203,10 @@ github-create-uat ()
     local prompt; prompt=$(printf 'Go to %s and enter %s. Then return here and press <Enter> ...' "$verificationUri" "$userCode") || return
     read -r -p  "$prompt" _
     local grantType='urn:ietf:params:oauth:grant-type:device_code'
-    urlPath="$(printf '/login/oauth/access_token?client_id=%s&device_code=%s&grant_type=%s' "$clientId" "$deviceCode" "$grantType")"
-    urlBase="https://github.com"
-    read -r -a args < <(github-curl "${flags[@]}" "$urlPath" "$urlBase" \
-                        | jq -r '[.access_token] | @tsv') \
-                        || return
+    local tokenUrl="https://github.com/login/oauth/access_token?client_id=$clientId&device_code=$deviceCode&grant_type=$grantType"
+    read -r -a args < <(curl --silent --data '' "$tokenUrl" \
+        | jq -r '[.access_token] | @tsv') \
+        || return
     # return the access token
     # shellcheck disable=SC2034
     tokenvar=${args[0]}
@@ -4461,31 +4437,29 @@ github-detect-platform ()
 #
 github-download-latest-release ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@"
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: download-latest-release $org $repo $name $downloadFolder\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local name=$3
-    local downloadFolder=$4
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@"
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    local name=${posargs[2]}
+    local downloadFolder=${posargs[3]}
+    [[ -n "$org" && -n "$repo" && -n "$name" && -n "$downloadFolder" ]] || {
+        printf 'Usage: download-latest-release $org $repo $name $downloadFolder\n' >&2; return 1
+    }
 
-    # Get release package data as assoc array
     local -A releaseInfo
     github-get-release-package-info releaseInfo "$org" "$repo" "$name" || return
     local url=${releaseInfo[url]}
     local accept='Accept: application/octet-stream'
     local output="$downloadFolder/$name"
-    local token=${argmap[token]}
+    local token=${flagMap[token]}
     if [[ -n $token ]]; then
         github-curl --token "$token" --accept "$accept" --output "$output"
     else
         github-curl --accept "$accept" --output "$output"
     fi
-    printf '%s' "$releasePath"
+    printf '%s' "$output"
 }
 
 
@@ -4495,28 +4469,24 @@ github-download-latest-release ()
 #
 # @deprecated
 # Use github-release-get-data
-#
 github-get-release-data ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@"
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    { (( $# >= 2 )) && (( $# <= 4 )); } || { printf 'Usage: github-get-release-data [flags] $org $repo [$releaseTag [$platform]]\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local tag=${3:-""}
-    
-    local urlPath; urlPath="$(github-get-releases-url-path "$org" "$repo" "$tag")" || return
-	local tmpCurl; tmpCurl=$(create-temp-file github.get.release.data.json) || return
-    # build argstring for github-curl
-    local argstring=''
-    [[ -n ${argmap[token]} ]] && argstring+="--token ${argmap[token]}"
-    # github-curl -- note $argstring is unquoted
-    github-curl "$argstring" "$urlPath" >"$tmpCurl" || return
-	printf '%s' "$tmpCurl"
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@"
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    local tag=${posargs[2]:-''}
+    [[ -n "$org" && -n "$repo" ]] || { printf 'Usage: github-get-release-data [--token <tok>] <org> <repo> [<releaseTag>]\n' >&2; return 1; }
+
+    local -A _map=()
+    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
+
+    if [[ -n "$tag" ]]; then
+        gh-api_ _map "/repos/$org/$repo/releases/tags/$tag"
+    else
+        gh-api_ _map "/repos/$org/$repo/releases"
+    fi
 }
 
 
@@ -4552,25 +4522,20 @@ github-get-release-name-list ()
 #
 # @deprecated
 # Use github-release-get-package-data
-#
 github-get-release-package-data ()
 {
-    # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: github-release-package-data $org $repo $name\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local name=$3
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    local name=${posargs[2]}
+    [[ -n "$org" && -n "$repo" && -n "$name" ]] || { printf 'Usage: github-get-release-package-data [--token <tok>] <org> <repo> <name>\n' >&2; return 1; }
 
-    local urlPath; urlPath="$(github-get-releases-url-path "$org" "$repo")" || return
-    local tmpCurl; tmpCurl="$(create-temp-file 'curl.release')" || return
-    github-curl "$urlPath" >"$tmpCurl" || return
-    local tmpJq; tmpJq="$(create-temp-file 'jq.release')" || return
-    jq -r --arg name "$name" \
-       '.assets[]
-        | select(.name == $name)' \
-      </"$tmpCurl" >/"$tmpJq" \
-      || return 
-    printf '%s' "$tmpJq"
+    local -A _map=()
+    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
+
+    gh-api_ _map "/repos/$org/$repo/releases" | jq -r --arg name "$name" '.assets[] | select(.name == $name)' || return
 }
 
 
@@ -4656,30 +4621,24 @@ github-is-gha-installed ()
 #
 github-release-create-url-path ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 2 )) || { printf 'Usage: github-release-create-url-path $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || {
+        printf 'Usage: github-release-create-url-path [--version <ver>] <org> <repo>\n' >&2
+        return 1
+    }
 
-    local tag=${argmap[version]:-''}
-    local urlPath
+    local tag=${flagMap[version]:-''}
     if [[ -n "$tag" ]]; then
-        local urlPath="/repos/$org/$repo/releases/tags/$tag"
+        printf '/repos/%s/%s/releases/tags/%s' "$org" "$repo" "$tag"
     else
-        local urlPath="/repos/$org/$repo/releases/latest"
+        printf '/repos/%s/%s/releases/latest' "$org" "$repo"
     fi
-
-    # printf with \n if interactive
-    if [[ -t 0 ]]; then
-        printf '%s\n' "$urlPath"
-    else
-        printf '%s' "$urlPath"
-    fi
+    [[ -t 0 ]] && printf '\n'
+    return 0
 }
 
 
@@ -4707,141 +4666,48 @@ github-release-create-url-path ()
 #
 github-release-download ()
 {
-    # Pre-parse extract, verify, and asset-name flags (not handled by github-curl-parse-args)
-    local extract_flag=""
     local extract_dir=""
-    local extract_dir_set=""
     local extract_name=""
     local asset_name_flag=""
-    local verify_flag=""
     local -a rest=()
     while (( $# > 0 )); do
         case $1 in
-            --extract)
-                extract_flag=1
-                shift
-                ;;
-            --extract-dir)
-                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
-                extract_dir=$2
-                extract_dir_set=1
-                shift 2
-                ;;
-            --extract-name)
-                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
-                extract_name=$2
-                shift 2
-                ;;
-            --asset-name)
-                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
-                asset_name_flag=$2
-                shift 2
-                ;;
-            --verify)
-                verify_flag=1
-                shift
-                ;;
-            *)
-                rest+=("$1")
-                shift
-                ;;
+            --extract)        extract_dir="$2"; shift 2 ;;
+            --extract-dir)    extract_dir="$2"; shift 2 ;;
+            --extract-name)   extract_name="$2"; shift 2 ;;
+            --asset-name)     asset_name_flag="$2"; shift 2 ;;
+            --verify)         shift ;;  # no-op — ghr-download verifies by default
+            *)                rest+=("$1"); shift ;;
         esac
     done
     set -- "${rest[@]}"
 
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 2 )) || { printf 'Usage: github-release-download [flags] $org $repo [$name] [$downloadFolder]\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local name=""
-    local downloadFolder=""
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || {
+        printf 'Usage: github-release-download [flags] <org> <repo> [<name>] [<downloadFolder>]\n' >&2
+        return 1
+    }
 
-    # Determine name: --asset-name flag > positional $3 > auto-detect
-    if [[ -n "$asset_name_flag" ]]; then
-        name=$asset_name_flag
-    elif (( $# >= 3 )) && [[ -n "$3" ]]; then
-        name=$3
+    local name=${asset_name_flag:-${posargs[2]:-''}}
+    local outputSpec=${flagMap[output]:-${posargs[3]:-${flagMap[output-dir]:-''}}}
+
+    local -a dl_flags=()
+    [[ -v flagMap[token] ]]   && dl_flags+=(--token "${flagMap[token]}")
+    [[ -v flagMap[version] ]] && dl_flags+=(--version "${flagMap[version]}")
+    [[ -n "$name" ]]          && dl_flags+=(--asset-name "$name")
+    [[ -n "$outputSpec" ]]    && dl_flags+=(--output "$outputSpec")
+
+    if [[ -n "$extract_name" && -n "$extract_dir" ]]; then
+        dl_flags+=(--extract "$extract_dir/$extract_name")
+    elif [[ -n "$extract_dir" ]]; then
+        dl_flags+=(--extract "$extract_dir")
     fi
 
-    # Determine download folder: --output-dir flag > positional $4 > temp dir
-    if [[ -n "${argmap[output-dir]:-}" ]]; then
-        downloadFolder=${argmap[output-dir]%%/}
-    elif (( $# >= 4 )) && [[ -n "$4" ]]; then
-        downloadFolder=${4%%/}
-    else
-        downloadFolder=$(create-temp-folder "${repo}.release") || return
-    fi
-
-    # Auto-detect name if not provided
-    if [[ -z "$name" ]]; then
-        local -a detect_flags=()
-        [[ -v argmap[token] ]] && detect_flags+=(--token "${argmap[token]}")
-        [[ -v argmap[version] ]] && detect_flags+=(--version "${argmap[version]}")
-        name=$(github-release-get-asset-name "${detect_flags[@]}" "$org" "$repo") || return
-    fi
-
-    # Get release info
-    local -a flags=()
-    github-create-flags argmap flags token version
-    local -A releaseInfo
-    github-release-get-package-info "${flags[@]}" releaseInfo "$org" "$repo" "$name" || return
-    # download release file using releaseInfo data
-    local urlPath=${releaseInfo[urlPath]}
-    local filename=${releaseInfo[filename]}
-    local accept='Accept: application/octet-stream'
-    local output="$downloadFolder/$filename"
-    flags+=(--accept "$accept" --output "$output")
-    github-curl "${flags[@]}" "$urlPath" || return
-
-    if [[ -n "$verify_flag" ]]; then
-        github-release-verify-checksum "${flags[@]}" "$org" "$repo" "$name" "$downloadFolder" || return
-    fi
-
-    if [[ -n "$extract_flag" || -n "$extract_dir_set" || -n "$extract_name" ]]; then
-        [[ -z "$extract_dir" ]] && extract_dir=$downloadFolder
-        [[ -f "$output" ]] || { printf 'Archive not found: %s\n' "$output" >&2; return 1; }
-        local extractTmp; extractTmp=$(mktemp -d) || return
-        case "$filename" in
-            *.tar.gz|*.tgz)
-                tar -xzf "$output" -C "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
-                ;;
-            *.zip)
-                unzip -o "$output" -d "$extractTmp" || { rm -rf "$extractTmp"; return 1; }
-                ;;
-            *)
-                printf 'Cannot extract: unknown format %s\n' "$filename" >&2
-                rm -rf "$extractTmp"
-                return 1
-                ;;
-        esac
-        local -a extractedEntries
-        extractedEntries=($(find "$extractTmp" -mindepth 1 -maxdepth 1))
-        if (( ${#extractedEntries[@]} == 1 )); then
-            local targetPath="${extract_dir}/${extract_name:-$(basename "${extractedEntries[0]}")}"
-            mkdir -p "$extract_dir"
-            mv "${extractedEntries[0]}" "$targetPath" || { rm -rf "$extractTmp"; return 1; }
-            printf '%s' "$targetPath"
-        elif (( ${#extractedEntries[@]} > 1 )); then
-            mkdir -p "$extract_dir"
-            local subdir="${extract_dir}/${extract_name:-extracted}"
-            mkdir -p "$subdir"
-            mv "$extractTmp"/* "$subdir"/ || { rm -rf "$extractTmp"; return 1; }
-            rmdir "$extractTmp" 2>/dev/null || true
-            printf '%s' "$subdir"
-        else
-            printf 'Nothing found inside archive\n' >&2
-            rm -rf "$extractTmp"
-            return 1
-        fi
-        rm -rf "$extractTmp"
-    else
-        printf '%s' "$output"
-    fi
+    ghr-download "${dl_flags[@]}" "$org" "$repo"
 }
 
 
@@ -4867,84 +4733,52 @@ github-release-download ()
 # github-curl-parse-args flags also accepted:
 #   --token, --version, --output, --output-dir, --remote-name
 #
-github-release-download-latest ()
+ghr-download-latest ()
 {
-    # Pre-parse extract, verify, and asset-name flags (not handled by github-curl-parse-args)
-    local extract_flag=""
     local extract_dir=""
     local extract_name=""
     local asset_name_flag=""
-    local verify_flag=""
     local -a rest=()
     while (( $# > 0 )); do
         case $1 in
-            --extract)
-                extract_flag=1
-                shift
-                ;;
-            --extract-dir)
-                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
-                extract_dir=$2
-                shift 2
-                ;;
-            --extract-name)
-                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
-                extract_name=$2
-                shift 2
-                ;;
-            --asset-name)
-                (( $# >= 2 )) || { printf -- '%s specified but no value provided.\n' "$1" >&2; return 1; }
-                asset_name_flag=$2
-                shift 2
-                ;;
-            --verify)
-                verify_flag=1
-                shift
-                ;;
-            *)
-                rest+=("$1")
-                shift
-                ;;
+            --extract)        extract_dir="$2"; shift 2 ;;
+            --extract-dir)    extract_dir="$2"; shift 2 ;;
+            --extract-name)   extract_name="$2"; shift 2 ;;
+            --asset-name)     asset_name_flag="$2"; shift 2 ;;
+            --verify)         shift ;;  # no-op
+            *)                rest+=("$1"); shift ;;
         esac
     done
     set -- "${rest[@]}"
 
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 2 )) || { printf 'Usage: github-release-download-latest [flags] $org $repo [$name] [$downloadFolder]\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local name=""
-    local downloadFolder=""
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || {
+        printf 'Usage: github-release-download-latest [flags] <org> <repo> [<name>] [<downloadFolder>]\n' >&2
+        return 1
+    }
 
-    if [[ -n "$asset_name_flag" ]]; then
-        name=$asset_name_flag
-    elif (( $# >= 3 )) && [[ -n "$3" ]]; then
-        name=$3
-    fi
+    local name=${asset_name_flag:-${posargs[2]:-''}}
+    local outputSpec=${flagMap[output]:-${posargs[3]:-${flagMap[output-dir]:-''}}}
+    local version
+    version=$(ghr-latest-version-tag --token "${flagMap[token]}" "$org" "$repo") || return
 
-    if [[ -n "${argmap[output-dir]:-}" ]]; then
-        downloadFolder=${argmap[output-dir]%%/}
-    elif (( $# >= 4 )) && [[ -n "$4" ]]; then
-        downloadFolder=${4%%/}
-    fi
-
-    local -a flags
-    github-create-flags argmap flags token || return
-    local version; version=$(github-release-get-latest-tag "${flags[@]}" "$org" "$repo") || return
-    flags+=(--version "$version")
     local -a dl_flags=()
-    [[ -n "$name" ]] && dl_flags+=(--asset-name "$name")
-    [[ -n "$downloadFolder" ]] && dl_flags+=(--output-dir "$downloadFolder")
-    [[ -n "$extract_flag" ]] && dl_flags+=(--extract)
-    [[ -n "$extract_dir" ]] && dl_flags+=(--extract-dir "$extract_dir")
-    [[ -n "$extract_name" ]] && dl_flags+=(--extract-name "$extract_name")
-    [[ -n "$verify_flag" ]] && dl_flags+=(--verify)
-    github-release-download "${flags[@]}" "${dl_flags[@]}" "$org" "$repo" || return
+    [[ -v flagMap[token] ]]   && dl_flags+=(--token "${flagMap[token]}")
+    dl_flags+=(--version "$version")
+    [[ -n "$name" ]]          && dl_flags+=(--asset-name "$name")
+    [[ -n "$outputSpec" ]]    && dl_flags+=(--output "$outputSpec")
+
+    if [[ -n "$extract_name" && -n "$extract_dir" ]]; then
+        dl_flags+=(--extract "$extract_dir/$extract_name")
+    elif [[ -n "$extract_dir" ]]; then
+        dl_flags+=(--extract "$extract_dir")
+    fi
+
+    github-release-download "${dl_flags[@]}" "$org" "$repo"
 }
 
 
@@ -4958,23 +4792,20 @@ github-release-download-latest ()
 # Usage: github-release-get-asset-name [flags] $org $repo
 # Output: prints the best asset name, exits 1 if no assets found
 #
-github-release-get-asset-name ()
+ghr-get-asset-name ()
 {
-    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq" >&2; return 1; }
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-release-get-asset-name [flags] $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || {
+        printf 'Usage: github-release-get-asset-name [--token <tok>] [--version <ver>] <org> <repo>\n' >&2
+        return 1
+    }
 
-    local -a flags
-    github-create-flags argmap flags version token || return
     local assetName
-    assetName=$(github-release-get-data "${flags[@]}" "$org" "$repo" \
+    assetName=$(github-release-get-data "$org" "$repo" \
         | jq -r '
             [.assets[]
              | select(.name | test("\\.tar\\.gz$"))
@@ -4998,59 +4829,53 @@ github-release-get-asset-name ()
 #
 # Get release data from a GitHub repository
 #
-github-release-get-data ()
+ghr-get-data ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@"
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    { (( $# >= 2 )) } || { printf 'Usage: github-release-get-data [flags] $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    
-    local -a flags
-    github-create-flags argmap flags version || return
-    local urlPath; urlPath=$(github-release-create-url-path "${flags[@]}" "$org" "$repo") || return
-    # build argstring for github-curl
-    github-create-flags argmap flags token || return
-    github-curl "${flags[@]}" "$urlPath" || return
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@"
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || { printf 'Usage: github-release-get-data [--token <tok>] [--version <ver>] <org> <repo>\n' >&2; return 1; }
+
+    local -A _map=()
+    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
+    [[ -v flagMap[version] ]] && _map[per-page]="1"
+
+    local urlPath
+    if [[ -v flagMap[version] ]]; then
+        urlPath="/repos/$org/$repo/releases/tags/${flagMap[version]}"
+    else
+        urlPath="/repos/$org/$repo/releases"
+    fi
+
+    gh-api_ _map "$urlPath"
 }
 
 
 #-------------------------------------------------------------------------------
 #
-# github-release-get-latest-tag()
+# ghr-latest-version-tag()
 #
 # Get the latest release tag from a GitHub repo
 #
-github-release-get-latest-tag ()
+ghr-latest-version-tag ()
 {
-    command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq" >&2; return 1; }
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-release-get-latest-tag [flags] $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    
-    releasesUrlPath=$(github-release-create-url-path "$org" "$repo")
-    # build flags for github-curl
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    # local VER; VER=$(github-curl "${flags[@]}" "$releasesUrlPath" \
-                    #  | jq -r .tag_name)
-    local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.latest.tag.XXXXXX) || return
-    github-curl "${flags[@]}" "$releasesUrlPath" >"$tmpCurl" || return
-    local tmpJq; tmpJq=$(mktemp --tmpdir jq.latest.tag.XXXXXX) || return
-    jq -r '.tag_name' <"$tmpCurl" >"$tmpJq" || return
-    read -r tag < "$tmpJq" || return    
-    
-    printf '%s' "$tag"
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || {
+        printf 'Usage: ghr-latest-version-tag [--token <tok>] <org> <repo>\n' >&2
+        return 1
+    }
+
+    local -A _map=()
+    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
+    _map[per-page]="1"
+
+    gh-api_ _map "/repos/$org/$repo/releases" | jq -r '.[0].tag_name'
 }
 
 
@@ -5062,28 +4887,25 @@ github-release-get-latest-tag ()
 #
 github-release-get-package-data ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: github-release-get-package-data $org $repo $name\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local name=$3
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    local name=${posargs[2]}
+    [[ -n "$org" && -n "$repo" && -n "$name" ]] || {
+        printf 'Usage: github-release-get-package-data [--token <tok>] [--version <ver>] <org> <repo> <name>\n' >&2
+        return 1
+    }
 
-    local -a flags
-    github-create-flags argmap flags version token || return
-    local urlPath; urlPath=$(github-release-create-url-path "${flags[@]}" "$org" "$repo") || return
-    github-create-flags argmap flags token || return
-    local tmpCurl; tmpCurl=$(mktemp --tmpdir curl.release.XXXXXX) || return
-    github-curl "${flags[@]}" "$urlPath" >"$tmpCurl" || return
-    jq -r --arg name "$name" \
-       '.assets[]
-        | select(.name == $name)' \
-      <"$tmpCurl" \
-      || return 
+    local -A _map=()
+    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
+    if [[ -v flagMap[version] ]]; then
+        _map[per-page]="1"
+        gh-api_ _map "/repos/$org/$repo/releases/tags/${flagMap[version]}" | jq -r --arg name "$name" '.assets[] | select(.name == $name)' || return
+    else
+        gh-api_ _map "/repos/$org/$repo/releases" | jq -r --arg name "$name" '.assets[] | select(.name == $name)' || return
+    fi
 }
 
 
@@ -5095,24 +4917,20 @@ github-release-get-package-data ()
 #
 github-release-get-package-info ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: github-get-release-package-info infovar $org $repo $name\n' >&2; return 1; }
-    # shellcheck disable=SC2178
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
     [[ $1 != info ]] && { local -n info; info=$1; }
-    local org=$2
-    local repo=$3
-    local name=$4
+    local org=${posargs[1]}
+    local repo=${posargs[2]}
+    local name=${posargs[3]}
+    [[ -n "$org" && -n "$repo" && -n "$name" ]] || {
+        printf 'Usage: github-release-get-package-info <infovar> <org> <repo> <name>\n' >&2
+        return 1
+    }
 
-    # Call github-release-get-package-data and create/parse the necesary fields
-    local -a flags=()
-    github-create-flags argmap flags token version
     local -a fields=()
-    read -r -a fields < <(github-release-get-package-data "${flags[@]}" "$org" "$repo" "$name" \
+    read -r -a fields < <(github-release-get-package-data "$org" "$repo" "$name" \
     | jq -r '
         [.browser_download_url,
          .content_type,
@@ -5123,7 +4941,6 @@ github-release-get-package-info ()
          (.url | match("https://api.github.com/(.*)").captures[0].string)
         ] | @tsv' \
       || return)
-    # Package fields into the info assoc array
     info[browser_download_url]=${fields[0]}
     info[content_type]=${fields[1]}
     info[filename]=${fields[2]}
@@ -5134,30 +4951,37 @@ github-release-get-package-info ()
 }
 
 
+
 #-------------------------------------------------------------------------------
 #
 # github-release-install()
 #
 # Download and install a GitHub release asset
 #
-github-release-install ()
+ghr-install ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-install-latest-release $org $repo $releaseName $installFolder [$downloadFolder]\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local name=$3
-    local installFolder=$4
-	local downloadFolder=${5:-$(create-temp-folder)}
-	[[ -d "$downloadFolder" ]] || { echo "Non-existent folder: $downloadFolder" >&2; return 1; }
-    local -a flags=()
-    github-create-flags argmap flags token version
-    local releasePath; releasePath=$(github-release-download "${flags[@]}" --asset-name "$name" --output-dir "$downloadFolder" "$org" "$repo") || return
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    local name=${posargs[2]}
+    local installFolder=${posargs[3]}
+    [[ -n "$org" && -n "$repo" && -n "$name" && -n "$installFolder" ]] || {
+        printf 'Usage: github-release-install [--token <tok>] [--version <ver>] <org> <repo> <name> <installFolder> [<downloadFolder>]\n' >&2
+        return 1
+    }
+    local downloadFolder=${posargs[4]:-$(create-temp-folder)}
+    [[ -d "$downloadFolder" ]] || { echo "Non-existent folder: $downloadFolder" >&2; return 1; }
+
+    local -a dl_flags=()
+    [[ -v flagMap[token] ]]   && dl_flags+=(--token "${flagMap[token]}")
+    [[ -v flagMap[version] ]] && dl_flags+=(--version "${flagMap[version]}")
+    dl_flags+=(--asset-name "$name" --output "$downloadFolder/")
+
+    local releasePath
+    releasePath=$(github-release-download "${dl_flags[@]}" "$org" "$repo") || return
+
     case "$releasePath" in
         *.tgz|*.tar.gz)
             tar --strip-components=1 -C "$installFolder" -xzf "$releasePath";;
@@ -5165,7 +4989,7 @@ github-release-install ()
             printf "Unsupported file type - can't install (%s)\n" "$releasePath" >&2
             return 1;;
     esac
-	printf '%s' "$installFolder"
+    printf '%s' "$installFolder"
 }
 
 
@@ -5177,26 +5001,30 @@ github-release-install ()
 #
 # @note - github-release-install will install the latest by default, if you don't specify a version
 #
-github-release-install-latest ()
+ghr-install-latest ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# >= 4 && $# <= 5 )) || { printf 'Usage: github-release-install-latest $org $repo $releaseName $installFolder [$downloadFolder]\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local name=$3
-    local installFolder=$4
-	local downloadFolder=${5:-''}
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    local name=${posargs[2]}
+    local installFolder=${posargs[3]}
+    [[ -n "$org" && -n "$repo" && -n "$name" && -n "$installFolder" ]] || {
+        printf 'Usage: github-release-install-latest [--token <tok>] <org> <repo> <name> <installFolder> [<downloadFolder>]\n' >&2
+        return 1
+    }
+    local downloadFolder=${posargs[4]:-''}
 
-    local -a flags
-    github-create-flags argmap flags token
-    local version; version=$(github-release-get-latest-tag "${flags[@]}" "$org" "$repo") || return    
-    flags+=(--version "$version")
-    github-release-install "${flags[@]}" "$org" "$repo" "$releaseName" "$installFolder" "$downloadFolder"
+    local version
+    version=$(ghr-latest-version-tag --token "${flagMap[token]}" "$org" "$repo") || return
+
+    local -a dl_flags=()
+    [[ -v flagMap[token] ]] && dl_flags+=(--token "${flagMap[token]}")
+    dl_flags+=(--version "$version")
+    [[ -n "$downloadFolder" ]] && dl_flags+=(--output "$downloadFolder/")
+
+    ghr-install "${dl_flags[@]}" "$org" "$repo" "$name" "$installFolder"
 }
 
 
@@ -5205,26 +5033,17 @@ github-release-install-latest ()
 # github-release-list()
 #
 # List releases for a GitHub repository
-#
-github-release-list ()
+ghr-list-assets ()
 {
-	# parse github args
-	local -A argmap=()
-	local nargs=0
-	github-curl-parse-args argmap nargs "$@"
-	shift "$nargs"
-	# shellcheck disable=SC2016
-	(( $# == 2 )) || { printf 'Usage: github-release-list [flags] $org $repo\n' >&2; return 1; }
-	local org=$1
-	local repo=$2
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@"
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || { printf 'Usage: github-release-list [flags] <org> <repo>
+' >&2; return 1; }
 
-	# get release name list, using token if provided
-    local -a flags=()
-	[[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-	github-release-get-data "${flags[@]}" "$org" "$repo" \
-	| jq -r '[.assets[].name] | sort | @tsv' \
-	|| return
-
+    ghr-get-data "$org" "$repo"     | jq -r '[.assets[].name] | sort | @tsv'     || return
 }
 
 
@@ -5233,27 +5052,23 @@ github-release-list ()
 # github-release-list-platforms()
 #
 # List available platforms for a release
-#
 github-release-list-platforms ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-	# shellcheck disable=SC2016
-	(( $# = 2 )) || { printf 'Usage: github-release-list-platforms [flags] $org $repo\n' >&2; return 1; }
-	local org=$1
-	local repo=$2
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || { printf 'Usage: github-release-list-platforms [flags] <org> <repo>
+' >&2; return 1; }
 
-	# get release name list, using token if provided
-    readarray -t -d $'\t' releases < <(github-release-list "$@")
+    readarray -t -d $'\t' releases < <(github-release-list "$org" "$repo")
     local platform
     for release in "${releases[@]}"; do
         if [[ ! "$release" =~ checksums.txt ]]; then
             platform="${release##"${repo}"_}"
             platform="${platform%%.*}"
-        	printf '%s\n' "$platform"
+            printf '%s\n' "$platform"
         fi
     done
 }
@@ -5264,24 +5079,19 @@ github-release-list-platforms ()
 # github-release-select()
 #
 # Select a release from a list of choices
-#
 github-release-select ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-	# shellcheck disable=SC2016
-	(( $# == 3 )) || { printf 'Usage: github-release-select [flags] name $org $repo\n' >&2; return 1; }
-	[[ $1 != 'name' ]] && local -n name=$1
-	local org=$2
-	local repo=$3
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    [[ $1 != 'name' ]] && local -n name=$1
+    local org=${posargs[1]}
+    local repo=${posargs[2]}
+    [[ -n "$org" && -n "$repo" ]] || { printf 'Usage: github-release-select [--token <tok>] <name> <org> <repo>
+' >&2; return 1; }
 
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-	IFS=$'\t' read -r -a names < <(github-release-list "${flags[@]}" "$org" "$repo") || return
-	select name in "${names[@]}"; do break; done
+    IFS=$'\t' read -r -a names < <(github-release-list "$org" "$repo") || return
+    select name in "${names[@]}"; do break; done
 }
 
 
@@ -5290,19 +5100,19 @@ github-release-select ()
 # github-release-select-platform()
 #
 # Select a platform for a release download
-#
 github-release-select-platform ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-	# shellcheck disable=SC2016
-	(( $# = 2 )) || { printf 'Usage: github-release-select-platform [flags] $org $repo' >&2; return 1; }
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || { printf 'Usage: github-release-select-platform [--token <tok>] <org> <repo>
+' >&2; return 1; }
+
     local platforms
-    readarray -t -d $'\n' platforms < <(github-release-list-platforms "$@")
-	select platform in "${platforms[@]}"; do
+    readarray -t -d $'\n' platforms < <(github-release-list-platforms "$org" "$repo")
+    select platform in "${platforms[@]}"; do
         printf '%s' "$platform" || return
         break
     done
@@ -5320,21 +5130,17 @@ github-release-select-platform ()
 # The checksum file is downloaded alongside the asset and left in place
 # after verification (pass or fail).
 #
-github-release-verify-checksum ()
+ghr-verify-checksum ()
 {
     command -v "jq" >/dev/null || { printf '%s is required, but was not found.\n' "jq" >&2; return 1; }
     command -v "sha256sum" >/dev/null || { printf '%s is required, but was not found.\n' "sha256sum" >&2; return 1; }
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: github-release-verify-checksum [flags] $org $repo $assetName $downloadFolder\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local assetName=$3
-    local downloadFolder=$4
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    local assetName=${posargs[2]}
+    local downloadFolder=${posargs[3]}
 
     local -a flags
     github-create-flags argmap flags token version || return
@@ -5394,6 +5200,16 @@ github-release-verify-checksum ()
 
 #-------------------------------------------------------------------------------
 #
+# Backward-compat wrappers for renamed ghr-* functions
+github-release-get-data () { ghr-get-data "$@"; }
+github-release-get-asset-name () { ghr-get-asset-name "$@"; }
+github-release-verify-checksum () { ghr-verify-checksum "$@"; }
+github-release-download-latest () { ghr-download-latest "$@"; }
+github-release-install () { ghr-install "$@"; }
+github-release-install-latest () { ghr-install-latest "$@"; }
+github-release-list () { ghr-list-assets "$@"; }
+github-release-download () { ghr-download "$@"; }
+
 # github-shr-clean()
 #
 # Remove a self-hosted runner: stop/uninstall svc, deregister from GitHub,
@@ -5457,40 +5273,25 @@ github-shr-download-tarball ()
 {
     (( $# >= 1 )) || { printf 'Usage: github-shr-download-tarball $targetFolder' >&2; return 1; }
     local downloadFolder=$1
-    local urlLatestRelease="https://api.github.com/repos/actions/runner/releases/latest"
-    local platform;  platform=$(detect-runner-platform) || return
-    local fileExt="tar.gz"
+    local platform; platform=$(detect-runner-platform) || return
 
-    if [[ $platform == win-* ]]; then
-        fileExt="zip"
-    fi
-
-    local namePattern="^actions-runner-$platform-.*\\.$fileExt\$"
-    local tarballFileName tarballUrl
-    local args
-    read -r -a args < <(curl --silent "$urlLatestRelease" \
-        | jq -r --arg pat "$namePattern" '.assets[]? | select(.name | test($pat)) | [.name, .browser_download_url] | @tsv') \
-        || return
-
-    if [[ ${#args[@]} -eq 0 ]]; then
+    local tarballPath
+    tarballPath=$(ghr-download --platform "$platform" --output "$downloadFolder/" actions/runner) || {
         printf 'No runner asset found for platform: %s\n' "$platform" >&2
         return 1
-    fi
+    }
 
-    tarballFileName=${args[0]}
-    tarballUrl=${args[1]}
-    local tarballPath; tarballPath="$(create-temp-file "XXX.$tarballFileName")" || return
-    curl --location --silent --output "$tarballPath" "$tarballUrl"
-
-    if [[ "$fileExt" == "zip" ]]; then
-        unzip -t "$tarballPath" >/dev/null || return
-        unzip -o -d "$downloadFolder" "$tarballPath" >/dev/null || return
-    else
-        tar --list --gunzip --file "$tarballPath" >/dev/null
-        tar --directory "$downloadFolder" --extract --gunzip --file "$tarballPath" || return
-    fi
-
-    printf '%s' "$downloadFolder" 
+    case "$tarballPath" in
+        *.zip)
+            unzip -t "$tarballPath" >/dev/null || return
+            unzip -o -d "$downloadFolder" "$tarballPath" >/dev/null || return
+            ;;
+        *.tar.gz|*.tgz)
+            tar --list --gunzip --file "$tarballPath" >/dev/null
+            tar --directory "$downloadFolder" --extract --gunzip --file "$tarballPath" || return
+            ;;
+    esac
+    printf '%s' "$downloadFolder"
 }
 
 
@@ -5680,37 +5481,25 @@ github-shr-start ()
 #
 github-shr-swap-tokens ()
 {
-    # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: github-shr-swap-tokens $org $repo\n' >&2; return 1; }
     local org=$1 repo=$2
-
-    local shrFolder; shrFolder=$(github-shr-folder-name "$org" "$repo") || return
     local uat; uat=$(github-shr-load-uat "$org" "$repo") || return
 
-    local apiUrl="https://api.github.com/repos/$org/$repo/actions/runners/registration-token"
-    local tmpCurl; tmpCurl=$(create-temp-file curl.get.shr.token.json) || return
-    curl --fail-with-body --location --silent --request POST \
-        --header "Authorization: Bearer $uat" \
-        --header "Accept: application/json" \
-        --output "$tmpCurl" \
-        "$apiUrl" || {
-        local httpCode
-        httpCode=$(jq -r '.status // "unknown"' <"$tmpCurl")
-        local msg
-        msg=$(jq -r '.message // "unknown"' <"$tmpCurl")
-        printf 'github-shr-swap-tokens: %s — %s\n' "$httpCode" "$msg" >&2
-        if [[ "$httpCode" == "403" ]]; then
-            printf 'The GitHub App may not be installed on %s/%s.\n' "$org" "$repo" >&2
-            printf 'Run: github-is-gha-installed %s <app-slug>\n' "$org" >&2
-            printf 'Install at: https://github.com/apps/<app-slug>/installations/new\n' >&2
-        fi
+    local -A _map=()
+    _map[token]="$uat"
+    _map[accept]="application/json"
+    _map[data]=""
+
+    local response
+    response=$(gh-api_ _map "/repos/$org/$repo/actions/runners/registration-token") || {
+        printf 'github-shr-swap-tokens: API call failed\n' >&2
         return 1
     }
-    local shrToken
-    shrToken=$(jq -r '.token' <"$tmpCurl")
+
+    local shrToken; shrToken=$(jq -r '.token' <<< "$response") || return
     if [[ -z "$shrToken" || "$shrToken" == "null" ]]; then
         printf 'github-shr-swap-tokens: response did not contain a token\n' >&2
-        jq . <"$tmpCurl" >&2
+        printf '%s\n' "$response" >&2
         return 1
     fi
     printf '%s' "$shrToken"
@@ -5726,7 +5515,6 @@ github-shr-swap-tokens ()
 #
 github-shr-test ()
 {
-    # shellcheck disable=SC2016
     (( $# == 2 )) || { printf 'Usage: github-shr-test $org $repo' >&2; return 1; }
     local org=$1 repo=$2
 
@@ -5738,14 +5526,13 @@ github-shr-test ()
     local workflowName="test-shr"
 
     # Check if workflow exists via GitHub API
-    local exists
-    exists=$(curl --silent --request GET \
-        --header "Authorization: Bearer $uat" \
-        --header "Accept: application/vnd.github+json" \
-        "https://api.github.com/repos/$org/$repo/contents/$workflowPath" \
-        --write-out '%{http_code}' --output /dev/null)
+    local -A _map=()
+    _map[token]="$uat"
+    _map[accept]="application/vnd.github+json"
 
-    if [[ "$exists" != "200" ]]; then
+    if gh-api_ _map "/repos/$org/$repo/contents/$workflowPath" > /dev/null 2>&1; then
+        : # workflow exists
+    else
         printf 'Workflow %s does not exist in %s/%s.\n' "$workflowPath" "$org" "$repo" >&2
         printf 'Create it? (Y/n): ' >&2
         local response; read -r response
@@ -5758,12 +5545,9 @@ github-shr-test ()
             local payload
             payload=$(printf '{"message":"%s","content":"%s"}' "$commitMsg" "$encoded")
 
-            curl --silent --request PUT \
-                --header "Authorization: Bearer $uat" \
-                --header "Accept: application/vnd.github+json" \
-                --header "Content-Type: application/json" \
-                --data "$payload" \
-                "https://api.github.com/repos/$org/$repo/contents/$workflowPath" >/dev/null || {
+            _map[request]="PUT"
+            _map[data]="$payload"
+            gh-api_ _map "/repos/$org/$repo/contents/$workflowPath" > /dev/null || {
                 printf 'Failed to create workflow file.\n' >&2
                 return 1
             }
@@ -5775,12 +5559,9 @@ github-shr-test ()
 
     # Trigger the workflow
     printf 'Triggering workflow %s...\n' "$workflowName" >&2
-    curl --silent --request POST \
-        --header "Authorization: Bearer $uat" \
-        --header "Accept: application/vnd.github+json" \
-        --header "Content-Type: application/json" \
-        --data '{"ref":"main"}' \
-        "https://api.github.com/repos/$org/$repo/actions/workflows/$workflowName/dispatches" || {
+    _map[request]="POST"
+    _map[data]='{"ref":"main"}'
+    gh-api_ _map "/repos/$org/$repo/actions/workflows/$workflowName/dispatches" > /dev/null || {
         printf 'Failed to trigger workflow.\n' >&2
         return 1
     }
@@ -5828,21 +5609,18 @@ github-shr-uat-path ()
 # The Github API returns 404s for all of the above, so the error status doesn't tell us anything
 github-test-repo ()
 {
-    # parse github args
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 2 )) || { printf 'Usage: github-test-repo $org $repo\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || { printf 'Usage: github-test-repo [--token <tok>] <org> <repo>
+' >&2; return 1; }
 
-    local urlPath="/repos/$org/$repo"
-    local -a flags=()
-    [[ -v argmap[token] ]] && flags+=(--token "${argmap[token]}")
-    # We don't care about the info, just if we can successfully call the endpoint
-    github-curl "${flags[@]}" --output /dev/null "$urlPath" || return
+    local -A _map=()
+    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
+
+    gh-api_ _map "/repos/$org/$repo" > /dev/null || return
 }
 
 
@@ -5860,15 +5638,18 @@ github-test-repo ()
 # The Github API returns 404s for all of the above, so the error status doesn't tell us anything
 github-test-repo-with-auth ()
 {
-    # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: github-test-repo-with-auth $org $repo $token\n' >&2; return 1; }
-    local org=$1
-    local repo=$2
-    local token=$3
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local org=${posargs[0]}
+    local repo=${posargs[1]}
+    [[ -n "$org" && -n "$repo" ]] || { printf 'Usage: github-test-repo-with-auth [--token <tok>] <org> <repo>
+' >&2; return 1; }
 
-    local urlPath="/repos/$org/$repo"
-    # We don't care about the info, just if we can successfully call the endpoint
-    github-curl --output /dev/null --token "$token" "$urlPath" || return
+    local -A _map=()
+    [[ -v flagMap[token] ]] && _map[token]="${flagMap[token]}"
+
+    gh-api_ _map "/repos/$org/$repo" > /dev/null || return
 }
 
 
@@ -7030,11 +6811,11 @@ install-dylt ()
     [[ -d "$dstFolder" ]] || { echo "Non-existent folder: $dstFolder" >&2; return 1; }
 
     local tmpFolder; tmpFolder=$(mktemp --directory --tmpdir dylt-XXXXXX) || return
-    if [[ -n "$platform" ]]; then
-        download-dylt "$tmpFolder" "$platform" || return
-    else
-        download-dylt "$tmpFolder" || return
-    fi
+	if [[ -n "$platform" ]]; then
+		dylt-download --platform "$platform" "$tmpFolder" || return
+	else
+		dylt-download "$tmpFolder" || return
+	fi
 
     local tarball
     tarball=$(find "$tmpFolder" -name 'dylt_*.tar.gz' -type f | head -1) || return
@@ -7153,7 +6934,7 @@ install-mssql-tools ()
 install-pubbo ()
 {
     [[ -d "/opt/bin/" ]] || { echo "Non-existent folder: /opt/bin/" >&2; return 1; }
-    github-release-install dylt-dev pubbo linux_amd64 /opt/bin/
+    ghr-install dylt-dev pubbo linux_amd64 /opt/bin/
 }
 
 
@@ -8867,20 +8648,18 @@ sys-start ()
 #
 trigger-nightly-release ()
 {
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: trigger-nightly-release [--workflow <name>] [--token <pat>] [--label <label>] $owner/$repo\n' >&2; return 1; }
-    local repo=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local repo=${posargs[0]}
+    [[ -n "$repo" ]] || { printf 'Usage: trigger-nightly-release [--workflow <name>] [--token <pat>] [--label <label>] $owner/$repo\n' >&2; return 1; }
 
-    local workflow=${argmap[workflow]:-nightly-release}
-    local label=${argmap[label]:-''}
+    local workflow=${flagMap[workflow]:-nightly-release}
+    local label=${flagMap[label]:-''}
 
     local token
-    if [[ -v argmap[token] ]]; then
-        token=${argmap[token]}
+    if [[ -v flagMap[token] ]]; then
+        token=${flagMap[token]}
     elif [[ -n "${GITHUB_TOKEN-}" ]]; then
         token=$GITHUB_TOKEN
     elif [[ -n "${GH_TOKEN-}" ]]; then
@@ -8905,39 +8684,39 @@ trigger-nightly-release ()
 #
 trigger-nightly-release-batch ()
 {
-    local -A argmap=()
-    local nargs=0
-    github-curl-parse-args argmap nargs "$@" || return
-    shift "$nargs"
-    # shellcheck disable=SC2016
-    (( $# == 1 )) || { printf 'Usage: trigger-nightly-release-batch --workflow <name> [--token <pat>] [--label <label>] $owner/$repo\n' >&2; return 1; }
-    local repo=$1
+    local -A flagMap=()
+    local -a posargs=()
+    gh-api-parse-args flagMap posargs "$@" || return
+    local repo=${posargs[0]}
+    [[ -n "$repo" ]] || { printf 'Usage: trigger-nightly-release-batch --workflow <name> [--token <pat>] [--label <label>] $owner/$repo\n' >&2; return 1; }
 
-    local workflow=${argmap[workflow]}
+    local workflow=${flagMap[workflow]}
     [[ -n "$workflow" ]] || { printf 'error: --workflow is required\n' >&2; return 1; }
 
-    local token=${argmap[token]:-${GITHUB_TOKEN:?error: --token not given and GITHUB_TOKEN not set}}
+    local token=${flagMap[token]:-${GITHUB_TOKEN:?error: --token not given and GITHUB_TOKEN not set}}
 
     local wf_name=${workflow%.yml}
     wf_name=${wf_name%.yaml}
-    if ! curl -sf -o /dev/null \
-        "https://api.github.com/repos/$repo/actions/workflows/${wf_name}.yml"; then
+
+    local -A _map=()
+    [[ -n "$token" ]] && _map[token]="$token"
+
+    if ! gh-api_ _map "/repos/$repo/actions/workflows/${wf_name}.yml" > /dev/null 2>&1; then
         printf 'error: workflow "%s" not found in %s\n' "$workflow" "$repo" >&2
         return 1
     fi
 
-    local -a flags=(--token "$token")
     local data
-    if [[ -n "${argmap[label]}" ]]; then
+    if [[ -n "${flagMap[label]}" ]]; then
         local label
-        label=$(sanitize-label "${argmap[label]}") || return
+        label=$(sanitize-label "${flagMap[label]}") || return
         data=$(printf '{"ref":"main","inputs":{"label":"%s"}}' "$label")
     else
         data='{"ref":"main"}'
     fi
-    flags+=(--data "$data")
 
-    github-curl "${flags[@]}" "/repos/$repo/actions/workflows/${wf_name}.yml/dispatches" || return
+    _map[data]="$data"
+    gh-api_ _map "/repos/$repo/actions/workflows/${wf_name}.yml/dispatches" || return
 }
 
 
@@ -9276,7 +9055,7 @@ main ()
             download-daylight)                                download-daylight "$@";;
             download-daylight-batch)                          download-daylight-batch "$@";;
             download-dist)                                    download-dist "$@";;
-            download-dylt)                                    download-dylt "$@";;
+            dylt-download)                                    dylt-download "$@";;
             download-flask-app)                               download-flask-app "$@";;
             download-flask-service)                           download-flask-service "$@";;
             download-public-key)                              download-public-key "$@";;
@@ -9340,10 +9119,18 @@ main ()
               gh-api_)                                           gh-api_ "$@";;
               gh-curl-qwenmax)                                   gh-curl-qwenmax "$@";;
               gh-curl-qwenmax_)                                  gh-curl-qwenmax_ "$@";;
-              ghr-download)                                      ghr-download "$@";;
-              ghr-list)                                          ghr-list "$@";;
-              ghr-path)                                          ghr-path "$@";;
-              ghr-version-path)                                  ghr-version-path "$@";;
+               ghr-download)                                      ghr-download "$@";;
+               ghr-download-latest)                               ghr-download-latest "$@";;
+               ghr-get-asset-name)                                ghr-get-asset-name "$@";;
+               ghr-get-data)                                      ghr-get-data "$@";;
+               ghr-install)                                       ghr-install "$@";;
+               ghr-install-latest)                                ghr-install-latest "$@";;
+               ghr-list)                                          ghr-list "$@";;
+               ghr-list-assets)                                   ghr-list-assets "$@";;
+               ghr-path)                                          ghr-path "$@";;
+               ghr-version-path)                                  ghr-version-path "$@";;
+               ghr-verify-checksum)                               ghr-verify-checksum "$@";;
+               ghr-latest-version-tag)                            ghr-latest-version-tag "$@";;
             github-app-get-client-id)                         github-app-get-client-id "$@";;
             github-app-get-data)                              github-app-get-data "$@";;
             github-app-get-id)                                github-app-get-id "$@";;
@@ -9366,7 +9153,6 @@ main ()
             github-release-download-latest)                   github-release-download-latest "$@";;
             github-release-get-asset-name)                    github-release-get-asset-name "$@";;
             github-release-get-data)                          github-release-get-data "$@";;
-            github-release-get-latest-tag)                    github-release-get-latest-tag "$@";;
             github-release-get-package-data)                  github-release-get-package-data "$@";;
             github-release-get-package-info)                  github-release-get-package-info "$@";;
             github-release-install)                           github-release-install "$@";;
