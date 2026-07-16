@@ -33,6 +33,7 @@ The official one-liner for Debian/Ubuntu is:
 - `mkdir -p -m 755` only applies the mode on creation, not if the folder already exists
 - Mixes `mode change` syntax (`go+r`) with numeric (`755`) — inconsistent
 - All-on-one-line subshell chain is hard to read and debug
+- Uses short form flags (`-o`, `-y`, `-p`) when long form (`--output`, `--yes`, `--parents`) is clearer in scripts
 
 ## My preferred version
 
@@ -40,12 +41,13 @@ Step-by-step, each line independently verifiable:
 
 ```bash
 # Create the keyrings directory if it doesn't exist
-sudo mkdir -p /etc/apt/keyrings
+sudo mkdir --parents /etc/apt/keyrings
 # Ensure permissions allow traversal (world r-x) regardless of prior state
 sudo chmod 755 /etc/apt/keyrings
 
 # Download the GPG keyring directly to its destination
-sudo curl -fsSL -o /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+sudo curl --fail --silent --show-error --location \
+  --output /etc/apt/keyrings/githubcli-archive-keyring.gpg \
   https://cli.github.com/packages/githubcli-archive-keyring.gpg
 # Owner can write, world can read
 sudo chmod 644 /etc/apt/keyrings/githubcli-archive-keyring.gpg
@@ -55,5 +57,5 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
   | sudo dd of=/etc/apt/sources.list.d/github-cli.list
 
 # Update and install
-sudo apt update && sudo apt install gh -y
+sudo apt update && sudo apt install gh --yes
 ```
