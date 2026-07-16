@@ -72,3 +72,27 @@ sudo apt update
 # Install
 sudo apt install gh --yes
 ```
+
+### Bonus - how to update a apt repo GPG
+While working on this I got an expired signature warning while doing an `apt update`
+
+```
+🔆 sudo apt update 2>&1 | grep -i zabbly
+
+Get:5 https://pkgs.zabbly.com/incus/stable noble InRelease [8951 B]
+Err:5 https://pkgs.zabbly.com/incus/stable noble InRelease
+  The following signatures were invalid: EXPKEYSIG 82CC8797C838DCFD Zabbly Kernel Builds <info@zabbly.com>
+W: An error occurred during the signature verification. The repository is not updated and the previous index files will be used. GPG error: https://pkgs.zabbly.com/incus/stable noble InRelease: The following signatures were invalid: EXPKEYSIG 82CC8797C838DCFD Zabbly Kernel Builds <info@zabbly.com>
+W: Failed to fetch https://pkgs.zabbly.com/incus/stable/dists/noble/InRelease  The following signatures were invalid: EXPKEYSIG 82CC8797C838DCFD Zabbly Kernel Builds <info@zabbly.com>
+```
+
+Here's how do update the key
+```
+🔆 sudo curl \
+	--fail \
+	--location \
+	--show-error \
+	--silent \
+	--output /etc/apt/keyrings/zabbly.asc \
+	https://pkgs.zabbly.com/key.asc
+```
