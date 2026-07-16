@@ -34,12 +34,19 @@ The official one-liner for Debian/Ubuntu is:
 - Mixes `mode change` syntax (`go+r`) with numeric (`755`) — inconsistent
 - All-on-one-line subshell chain is hard to read and debug
 - Uses short form flags (`-o`, `-y`, `-p`) when long form (`--output`, `--yes`, `--parents`) is clearer in scripts
+- Chains `apt update` and `apt install` on one line with `&&` — if `apt update` fails, `apt install` is skipped, which is fine, but they're logically separate steps
 
 ## My preferred version
 
 Step-by-step, each line independently verifiable:
 
 ```bash
+# Variables
+keyName=githubcli-archive-keyring.gpg
+keyPath=/etc/apt/keyrings/$keyName
+keyUrl=https://cli.github.com/packages/$keyName
+arch=$(dpkg --print-architecture)
+
 # Create the keyrings directory if it doesn't exist
 sudo mkdir --parents /etc/apt/keyrings
 # Ensure permissions allow traversal (world r-x) regardless of prior state
@@ -47,15 +54,21 @@ sudo chmod 755 /etc/apt/keyrings
 
 # Download the GPG keyring directly to its destination
 sudo curl --fail --silent --show-error --location \
-  --output /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-  https://cli.github.com/packages/githubcli-archive-keyring.gpg
+  --output "$keyPath" "$keyUrl"
 # Owner can write, world can read
-sudo chmod 644 /etc/apt/keyrings/githubcli-archive-keyring.gpg
+sudo chmod 644 "$keyPath"
+
+# Create the sources directory if it doesn't exist (same reasoning as keyrings)
+sudo mkdir --parents /etc/apt/sources.list.d
+sudo chmod 755 /etc/apt/sources.list.d
 
 # Add the apt source list entry
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+echo "deb [arch=$arch signed-by=$keyPath] https://cli.github.com/packages stable main" \
   | sudo dd of=/etc/apt/sources.list.d/github-cli.list
 
-# Update and install
-sudo apt update && sudo apt install gh --yes
+# Update package lists
+sudo apt update
+
+# Install
+sudo apt install gh --yes
 ```
