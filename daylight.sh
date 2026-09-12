@@ -540,6 +540,40 @@ create-lxd-user-data ()
 
 #-------------------------------------------------------------------------------
 #
+# create-netplan-bridge-file ()
+#
+# Create a netplan file to create a Linux bridge on startup for a subnet+mask
+# use the next available netplan file number, if not specified
+#
+create-netplan-bridge-file ()
+{
+    # shellcheck disable=SC2016
+	(( $# >= 2 )) && (( $# <= 3 )) || { printf 'Usage: create-netplan-bridge-file $name $subnetAndMask [$netplanNum]\n' >&2; return 1; }
+	local name=$1
+	local subnetAndMask=$2
+	local netplanNum
+	if (( $# == 3 )); then
+		netplanNum=$3
+	else
+		netplanNum=$(next-netplan-num) || return
+	fi
+
+	local netplanPath="/etc/netplan/$netplanNum-bridge-name.yaml"
+    cat >"$netplanPath" <<-EOT
+# $netplanPath
+network:
+  version: 2
+  bridges:
+    br_container:
+      addresses: [$subnetAndMask]
+      dhcp4: no
+
+EOT
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # create-pubbo-service()
 #
 # Create a service to expose a file over a Unix socket via pubbo
@@ -7524,6 +7558,26 @@ lxd-share-folder ()
 
 #-------------------------------------------------------------------------------
 #
+# next-netplan-num()
+#
+# Get the file number for the next netplan file. Eg if /etc/netplan contains 
+# 099-foo.yaml, return 100
+#
+next-netplan-num ()
+{
+    local max=0 n
+    for f in /etc/netplan/[0-9]*.yaml; do
+        [[ -e $f ]] || continue
+        n=${f##*/}          # strip directory: /etc/netplan/100-container-bridge.yaml -> 100-container-bridge.yaml
+        n=${n%%-*}           # strip from first '-' onward: -> 100
+        (( 10#$n > max )) && max=10#$n
+    done
+    printf '%03d\n' $((max + 1))
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # nginx-gen-default-index()
 #
 # Generate the default nginx index page with the daylight sun emoji
@@ -9120,6 +9174,7 @@ main ()
             create-home-filesystem)                           create-home-filesystem "$@";;
             create-loopback)                                  create-loopback "$@";;
             create-lxd-user-data)                             create-lxd-user-data "$@";;
+            create-netplan-bridge-file)                       create-netplan-bridge-file "$@";;
             create-pubbo-service)                             create-pubbo-service "$@";;
             create-publish-image-service)                     create-publish-image-service "$@";;
             create-service-from-dist-script)                  create-service-from-dist-script "$@";;
@@ -9323,6 +9378,7 @@ main ()
             lxd-set-id-map)                                   lxd-set-id-map "$@";;
             lxd-share-folder)                                 lxd-share-folder "$@";;
             nginx-gen-default-index)                          nginx-gen-default-index "$@";;
+            next-netplan-num)                                 next-netplan-num "$@";;
             nginx-init)                                       nginx-init "$@";;
             nginx-install-index)                              nginx-install-index "$@";;
             pgql-add-repo)                                    pgql-add-repo "$@";;
@@ -9383,8 +9439,7 @@ main ()
             zabbly-init)                                      zabbly-init "$@";;
             zabbly-save-key)                                  zabbly-save-key "$@";;
             zabbly-validate-fingerprint)                      zabbly-validate-fingerprint "$@";;
-            *) printf 'Unknown command: %s 
-' "$cmd" >&2; return 1;;
+            *) printf 'Unknown command: %s' "$cmd" >&2; return 1;;
         esac
     fi
 }
