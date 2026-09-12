@@ -540,6 +540,40 @@ create-lxd-user-data ()
 
 #-------------------------------------------------------------------------------
 #
+# create-netplan-bridge-file ()
+#
+# Create a netplan file to create a Linux bridge on startup for a subnet+mask
+# use the next available netplan file number, if not specified
+#
+create-netplan-bridge-file ()
+{
+    # shellcheck disable=SC2016
+	(( $# >= 2 )) && (( $# <= 3 )) || { printf 'Usage: create-netplan-bridge-file $name $subnetAndMask [$netplanNum]\n' >&2; return 1; }
+	local name=$1
+	local subnetAndMask=$2
+	local netplanNum
+	if (( $# == 3 )); then
+		netplanNum=$3
+	else
+		netplanNum=$(next-netplan-num) || return
+	fi
+
+	local netplanPath="/etc/netplan/$netplanNum-bridge-name.yaml"
+    cat >"$netplanPath" <<-EOT
+# $netplanPath
+network:
+  version: 2
+  bridges:
+    br_container:
+      addresses: [$subnetAndMask]
+      dhcp4: no
+
+EOT
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # create-pubbo-service()
 #
 # Create a service to expose a file over a Unix socket via pubbo
@@ -7706,6 +7740,26 @@ lxd-share-folder ()
 
 #-------------------------------------------------------------------------------
 #
+# next-netplan-num()
+#
+# Get the file number for the next netplan file. Eg if /etc/netplan contains 
+# 099-foo.yaml, return 100
+#
+next-netplan-num ()
+{
+    local max=0 n
+    for f in /etc/netplan/[0-9]*.yaml; do
+        [[ -e $f ]] || continue
+        n=${f##*/}          # strip directory: /etc/netplan/100-container-bridge.yaml -> 100-container-bridge.yaml
+        n=${n%%-*}           # strip from first '-' onward: -> 100
+        (( 10#$n > max )) && max=10#$n
+    done
+    printf '%03d\n' $((max + 1))
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # nginx-gen-default-index()
 #
 # Generate the default nginx index page with the daylight sun emoji
@@ -9117,16 +9171,26 @@ yesno ()
 #
 zabbly-add-package-repo ()
 {
-	sh -c 'cat <<EOT >/etc/apt/sources.list.d/zabbly-incus-lts-6.0.sources
+	 # shellcheck disable=SC2016
+	 (( $# == 1 )) || { printf 'Usage: zabbly-add-package-repo $version (https://github.com/zabbly/incus)\n' >&2; return 1; }
+	local version=$1
+
+#	local sourcesListName="zabbly-incus-$version.sources
+	local uri="https://pkgs.zabbly.com/incus/$version"
+	local codeName; codeName=$(. /etc/os-release && echo "$VERSION_CODENAME") || return
+	local arch; arch=$(dpkg --print-architecture) || return
+
+#	cat <<EOT >/etc/apt/sources.list.d/$sourcesListName
+	cat <<EOT
 Enabled: yes
 Types: deb
-URIs: https://pkgs.zabbly.com/incus/lts-6.0
-Suites: $(. /etc/os-release && echo ${VERSION_CODENAME})
+URIs: $uri
+Suites: $codeName
 Components: main
-Architectures: $(dpkg --print-architecture)
+Architectures: $arch
 Signed-By: /etc/apt/keyrings/zabbly.asc
 
-EOT'
+EOT
 }
 
 
@@ -9166,6 +9230,31 @@ zabbly-get-fingerprint ()
 
 #-------------------------------------------------------------------------------
 #
+# zabbly-get-sources-list-path()
+#
+# Initialize the zabbly Incus package repository
+#
+zabbly-get-sources-list-path ()
+{
+	# shellcheck disable=SC2016
+	(( $# == 1 )) || { printf 'Usage: zabbly-get-sources-list-path $version (https://github.com/zabbly/incus)\n' >&2; return 1; }
+	local version=$1
+
+	local sourcesListName="zabbly-incus-$version.sources"
+	local sourcesListPath="/etc/apt/sources.list.d/$sourcesListName"
+	printf '%s' "$sourcesListPath"
+	if [[ -t 1 ]]; then
+		printf '\n'
+	fi
+}
+
+
+
+
+
+
+#-------------------------------------------------------------------------------
+#
 # zabbly-init()
 #
 # Initialize the zabbly Incus package repository
@@ -9173,7 +9262,8 @@ zabbly-get-fingerprint ()
 zabbly-init ()
 {
     # shellcheck disable=SC2016
-    (( $# == 0 )) || { printf 'Usage: zabbly-init\n' >&2; return 1; }
+    (( $# == 1 )) || { printf 'Usage: zabbly-init $version\n' >&2; return 1; }
+	local version=$1
 
     # validate the zabbly key fingerprint
     if ! zabbly-validate-fingerprint; then
@@ -9187,8 +9277,15 @@ zabbly-init ()
         return 1
     fi
 
-    # Add the zabbly packge repository
-    if ! zabbly-add-package-repo; then
+	# get the path for the sources.list.d/ file
+	local sourcesListPath
+	if ! sourcesListPath=$(zabbly-get-sources-list-path "$version"); then
+		printf 'Error creating sources.list.d/ path\n' >&2
+		return 1
+	fi
+
+	# Add the zabbly packge repository
+    if ! zabbly-add-package-repo "$version" > "$sourcesListPath"; then
         printf 'Error adding zabbly package repo\n' >&2
         return 1
     fi
@@ -9261,6 +9358,7 @@ main ()
             create-home-filesystem)                           create-home-filesystem "$@";;
             create-loopback)                                  create-loopback "$@";;
             create-lxd-user-data)                             create-lxd-user-data "$@";;
+            create-netplan-bridge-file)                       create-netplan-bridge-file "$@";;
             create-pubbo-service)                             create-pubbo-service "$@";;
             create-publish-image-service)                     create-publish-image-service "$@";;
             create-service-from-dist-script)                  create-service-from-dist-script "$@";;
@@ -9457,6 +9555,7 @@ main ()
             lxd-set-id-map)                                   lxd-set-id-map "$@";;
             lxd-share-folder)                                 lxd-share-folder "$@";;
             nginx-gen-default-index)                          nginx-gen-default-index "$@";;
+            next-netplan-num)                                 next-netplan-num "$@";;
             nginx-init)                                       nginx-init "$@";;
             nginx-install-index)                              nginx-install-index "$@";;
             pgql-add-repo)                                    pgql-add-repo "$@";;
@@ -9513,11 +9612,11 @@ main ()
             yesno)                                            yesno "$@";;
             zabbly-add-package-repo)                          zabbly-add-package-repo "$@";;
             zabbly-get-fingerprint)                           zabbly-get-fingerprint "$@";;
+			zabbly-get-sources-list-path)                     zabbly-get-sources-list-path "$@";;
             zabbly-init)                                      zabbly-init "$@";;
             zabbly-save-key)                                  zabbly-save-key "$@";;
             zabbly-validate-fingerprint)                      zabbly-validate-fingerprint "$@";;
-            *) printf 'Unknown command: %s 
-' "$cmd" >&2; return 1;;
+            *) printf 'Unknown command: %s' "$cmd" >&2; return 1;;
         esac
     fi
 }
