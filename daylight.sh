@@ -369,6 +369,48 @@ cat-conf-script ()
 
 #-------------------------------------------------------------------------------
 #
+# create-dnsmasq-bridge-service()
+#
+# Run an dnsmasq process that will dynamically assign IPs to interfaces joining
+# a Linux bridge
+#
+create-dnsmasq-bridge-service ()
+{
+    (( $# == 4 )) || { printf 'Usage: create-dnsmasq-bridge-service $bridgeName $ipStart $ipEnd $ttl\n' >&2; return 1; }
+	local bridgeName=$1
+	local ipStart=$2
+	local ipEnd=$3
+	local ttl=$4
+
+	local svcName="dnsmasq_$bridgeName"
+	local svcPath="/opt/svc/$svcName"
+
+	mkdir -p "$svcPath" || return
+	cat > "$svcPath/$svcName.service" <<-EOT
+[Unit]
+Description=dnsmasq DHCP for $bridgeName
+After=sys-subsystem-net-devices-$bridgeName.device network-online.target
+BindsTo=sys-subsystem-net-devices-$bridgeName.device
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/sbin/dnsmasq \\
+        --keep-in-foreground \\
+        --interface $bridgeName \\
+        --dhcp-range=$ipStart,$ipEnd,$ttl \\
+        --bind-interfaces \\
+        --port=0
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+
+EOT
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # create-flask-app()
 #
 # Create an nginx site, cert, and directory for a Flask application
@@ -558,17 +600,19 @@ create-netplan-bridge-file ()
 		netplanNum=$(next-netplan-num) || return
 	fi
 
-	local netplanPath="/etc/netplan/$netplanNum-bridge-name.yaml"
+	local netplanPath="/etc/netplan/$netplanNum-bridge-$name.yaml"
     cat >"$netplanPath" <<-EOT
 # $netplanPath
 network:
   version: 2
   bridges:
-    br_container:
+    $name:
       addresses: [$subnetAndMask]
       dhcp4: no
 
 EOT
+
+	chmod 400 "$netplanPath"
 }
 
 
@@ -9353,6 +9397,7 @@ main ()
             add-user-to-idmap)                                add-user-to-idmap "$@";;
             add-user-to-shadow-ids)                           add-user-to-shadow-ids "$@";;
             cat-conf-script)                                  cat-conf-script "$@";;
+			create-dnsmasq-bridge-service)                    create-dnsmasq-bridge-service "$@";;
             create-flask-app)                                 create-flask-app "$@";;
             create-github-user-access-token)                  create-github-user-access-token "$@";;
             create-home-filesystem)                           create-home-filesystem "$@";;
@@ -9616,7 +9661,7 @@ main ()
             zabbly-init)                                      zabbly-init "$@";;
             zabbly-save-key)                                  zabbly-save-key "$@";;
             zabbly-validate-fingerprint)                      zabbly-validate-fingerprint "$@";;
-            *) printf 'Unknown command: %s' "$cmd" >&2; return 1;;
+            *) printf 'Unknown command: %s' "$cmd\n" >&2; return 1;;
         esac
     fi
 }
