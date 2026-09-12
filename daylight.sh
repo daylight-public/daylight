@@ -8933,16 +8933,26 @@ yesno ()
 #
 zabbly-add-package-repo ()
 {
-	sh -c 'cat <<EOT >/etc/apt/sources.list.d/zabbly-incus-lts-6.0.sources
+	 # shellcheck disable=SC2016
+	 (( $# == 1 )) || { printf 'Usage: zabbly-add-package-repo $version (https://github.com/zabbly/incus)\n' >&2; return 1; }
+	local version=$1
+
+#	local sourcesListName="zabbly-incus-$version.sources
+	local uri="https://pkgs.zabbly.com/incus/$version"
+	local codeName; codeName=$(. /etc/os-release && echo "$VERSION_CODENAME") || return
+	local arch; arch=$(dpkg --print-architecture) || return
+
+#	cat <<EOT >/etc/apt/sources.list.d/$sourcesListName
+	cat <<EOT
 Enabled: yes
 Types: deb
-URIs: https://pkgs.zabbly.com/incus/lts-6.0
-Suites: $(. /etc/os-release && echo ${VERSION_CODENAME})
+URIs: $uri
+Suites: $codeName
 Components: main
-Architectures: $(dpkg --print-architecture)
+Architectures: $arch
 Signed-By: /etc/apt/keyrings/zabbly.asc
 
-EOT'
+EOT
 }
 
 
@@ -8982,6 +8992,31 @@ zabbly-get-fingerprint ()
 
 #-------------------------------------------------------------------------------
 #
+# zabbly-get-sources-list-path()
+#
+# Initialize the zabbly Incus package repository
+#
+zabbly-get-sources-list-path ()
+{
+	# shellcheck disable=SC2016
+	(( $# == 1 )) || { printf 'Usage: zabbly-get-sources-list-path $version (https://github.com/zabbly/incus)\n' >&2; return 1; }
+	local version=$1
+
+	local sourcesListName="zabbly-incus-$version.sources"
+	local sourcesListPath="/etc/apt/sources.list.d/$sourcesListName"
+	printf '%s' "$sourcesListPath"
+	if [[ -t 1 ]]; then
+		printf '\n'
+	fi
+}
+
+
+
+
+
+
+#-------------------------------------------------------------------------------
+#
 # zabbly-init()
 #
 # Initialize the zabbly Incus package repository
@@ -8989,7 +9024,8 @@ zabbly-get-fingerprint ()
 zabbly-init ()
 {
     # shellcheck disable=SC2016
-    (( $# == 0 )) || { printf 'Usage: zabbly-init\n' >&2; return 1; }
+    (( $# == 1 )) || { printf 'Usage: zabbly-init $version\n' >&2; return 1; }
+	local version=$1
 
     # validate the zabbly key fingerprint
     if ! zabbly-validate-fingerprint; then
@@ -9003,8 +9039,15 @@ zabbly-init ()
         return 1
     fi
 
-    # Add the zabbly packge repository
-    if ! zabbly-add-package-repo; then
+	# get the path for the sources.list.d/ file
+	local sourcesListPath
+	if ! sourcesListPath=$(zabbly-get-sources-list-path "$version"); then
+		printf 'Error creating sources.list.d/ path\n' >&2
+		return 1
+	fi
+
+	# Add the zabbly packge repository
+    if ! zabbly-add-package-repo "$version" > "$sourcesListPath"; then
         printf 'Error adding zabbly package repo\n' >&2
         return 1
     fi
@@ -9336,6 +9379,7 @@ main ()
             yesno)                                            yesno "$@";;
             zabbly-add-package-repo)                          zabbly-add-package-repo "$@";;
             zabbly-get-fingerprint)                           zabbly-get-fingerprint "$@";;
+			zabbly-get-sources-list-path)                     zabbly-get-sources-list-path "$@";;
             zabbly-init)                                      zabbly-init "$@";;
             zabbly-save-key)                                  zabbly-save-key "$@";;
             zabbly-validate-fingerprint)                      zabbly-validate-fingerprint "$@";;
