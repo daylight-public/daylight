@@ -7357,6 +7357,691 @@ is-debian ()
 
 #-------------------------------------------------------------------------------
 #
+# k8s-cluster-create()
+#
+# Create a Kubernetes cluster for a variant (kind, k3s, or rke2)
+#
+# kind creates a throwaway cluster in Docker. k3s and rke2 write a config file,
+# install the systemd service, and start it on this host. Safe to re-run: an
+# existing cluster is left alone.
+#
+# Flags: --variant <v> --name <n> --role <server|agent> --config <file>
+#        --server <url> --token-file <file> --datastore-endpoint <urls>
+#        --tls-san <name> --timeout <secs>
+#
+k8s-cluster-create ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local variant; variant=$(k8s-resolve-variant "${flagMap[variant]:-}") || return
+    local name=${flagMap[name]:-daylight}
+    local role=${flagMap[role]:-server}
+    local timeout=${flagMap[timeout]:-120}
+
+    if k8s-cluster-exists --variant "$variant" --name "$name"; then
+        printf 'Cluster already exists (%s): %s\n' "$variant" "$name" >&2
+        return 0
+    fi
+
+    case $variant in
+        kind)
+            command -v kind >/dev/null 2>&1 || { printf 'kind is not installed. Try: daylight.sh k8s-install --variant kind\n' >&2; return 1; }
+            local -a kindArgs=(create cluster --name "$name" --wait "${timeout}s")
+            [[ -n ${flagMap[config]:-} ]] && kindArgs+=(--config "${flagMap[config]}")
+            # Write the kubeconfig to a throwaway file so ~/.kube/config and its
+            # current context are left alone. k8s-kubectl asks kind for it later.
+            local scratch; scratch=$(mktemp --tmpdir "kind-$name.XXXXXX") || return
+            kindArgs+=(--kubeconfig "$scratch")
+            kind "${kindArgs[@]}"
+            local rc=$?
+            rm -f "$scratch"
+            (( rc == 0 )) || return "$rc"
+            ;;
+        k3s|rke2)
+            [[ -x /usr/local/bin/$variant ]] || { printf '%s is not installed. Try: daylight.sh k8s-install --variant %s\n' "$variant" "$variant" >&2; return 1; }
+            local configDir="/etc/rancher/$variant"
+            mkdir -p "$configDir" || return
+            local -a cfgArgs=(--variant "$variant" --role "$role")
+            local f
+            for f in server token-file datastore-endpoint tls-san; do
+                [[ -n ${flagMap[$f]:-} ]] && cfgArgs+=("--$f" "${flagMap[$f]}")
+            done
+            k8s-gen-config "${cfgArgs[@]}" >"$configDir/config.yaml" || return
+            chmod 600 "$configDir/config.yaml" || return
+            k8s-install-service --variant "$variant" --role "$role" || return
+            systemctl start "$(k8s-get-service-name "$variant" "$role")" || return
+            ;;
+    esac
+    # kind already waited; an agent has no API server to ask
+    [[ $variant == kind || $role == agent ]] || k8s-wait-ready --variant "$variant" --name "$name" --timeout "$timeout"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-cluster-delete()
+#
+# Delete a Kubernetes cluster for a variant
+#
+# kind deletes the cluster. k3s and rke2 stop and disable the service; with
+# --purge they also remove the data folder, after a confirmation prompt.
+#
+# Flags: --variant <v> --name <n> --role <server|agent> --purge
+#
+k8s-cluster-delete ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local variant; variant=$(k8s-resolve-variant "${flagMap[variant]:-}") || return
+    local name=${flagMap[name]:-daylight}
+    local role=${flagMap[role]:-server}
+
+    case $variant in
+        kind)
+            command -v kind >/dev/null 2>&1 || { printf 'kind is not installed\n' >&2; return 1; }
+            local scratch; scratch=$(mktemp --tmpdir "kind-$name.XXXXXX") || return
+            kind delete cluster --name "$name" --kubeconfig "$scratch"
+            local rc=$?
+            rm -f "$scratch"
+            return "$rc"
+            ;;
+        k3s|rke2)
+            local svc; svc=$(k8s-get-service-name "$variant" "$role")
+            systemctl disable --now "$svc" || return
+            if [[ -v flagMap[purge] ]]; then
+                read -r -p "Are you sure you want to delete /var/lib/rancher/$variant? (Ctrl-C to cancel)"
+                rm -rf "/var/lib/rancher/$variant" || return
+            fi
+            ;;
+    esac
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-cluster-exists()
+#
+# Check if a Kubernetes cluster exists for a variant
+#
+# Flags: --variant <v> --name <n> --role <server|agent>
+#
+k8s-cluster-exists ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local variant; variant=$(k8s-resolve-variant "${flagMap[variant]:-}") || return
+    local name=${flagMap[name]:-daylight}
+    local role=${flagMap[role]:-server}
+
+    case $variant in
+        kind)
+            command -v kind >/dev/null 2>&1 || return 1
+            kind get clusters 2>/dev/null | grep --quiet --line-regexp --fixed-strings "$name"
+            ;;
+        k3s|rke2)
+            systemctl is-active --quiet "$(k8s-get-service-name "$variant" "$role")"
+            ;;
+    esac
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-create-download-url()
+#
+# Print the download URL for a variant's release binary or tarball
+#
+# Flags: --variant <v> --version <tag> --platform <os-arch>
+# The version defaults to the latest release; the platform to this host.
+#
+k8s-create-download-url ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local variant; variant=$(k8s-resolve-variant "${flagMap[variant]:-}") || return
+    local version=${flagMap[version]:-}
+    [[ -n $version ]] || version=$(k8s-get-latest-version --variant "$variant") || return
+    local platform=${flagMap[platform]:-}
+    [[ -n $platform ]] || platform=$(detect-platform) || return
+
+    local asset; asset=$(k8s-create-release-name --variant "$variant" --platform "$platform") || return
+    local repo; repo=$(k8s-get-release-repo "$variant")
+    printf 'https://github.com/%s/releases/download/%s/%s' "$repo" "$version" "$asset"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-create-release-name()
+#
+# Print the release asset name for a variant and platform
+#
+# Flags: --variant <v> --platform <os-arch>
+#
+k8s-create-release-name ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local variant; variant=$(k8s-resolve-variant "${flagMap[variant]:-}") || return
+    local platform=${flagMap[platform]:-}
+    [[ -n $platform ]] || platform=$(detect-platform) || return
+    local os=${platform%%-*}
+    local arch=${platform#*-}
+
+    case $variant in
+        kind)
+            printf 'kind-%s-%s' "$os" "$arch"
+            ;;
+        k3s)
+            [[ $os == linux ]] || { printf 'k3s supports linux only, not %s\n' "$os" >&2; return 1; }
+            case $arch in
+                amd64) printf 'k3s' ;;
+                arm64) printf 'k3s-arm64' ;;
+                arm)   printf 'k3s-armhf' ;;
+                *) printf 'Unsupported architecture for k3s: %s\n' "$arch" >&2; return 1 ;;
+            esac
+            ;;
+        rke2)
+            [[ $os == linux ]] || { printf 'rke2 supports linux only, not %s\n' "$os" >&2; return 1; }
+            case $arch in
+                amd64|arm64) printf 'rke2.linux-%s.tar.gz' "$arch" ;;
+                *) printf 'Unsupported architecture for rke2: %s\n' "$arch" >&2; return 1 ;;
+            esac
+            ;;
+    esac
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-gen-config()
+#
+# Generate a k3s or rke2 config.yaml
+#
+# Both read /etc/rancher/<variant>/config.yaml. Writing flags there keeps them
+# out of the process list. The token is referenced by file (token-file), never
+# printed. Print to stdout; k8s-cluster-create writes it with mode 600.
+#
+# Flags: --variant <k3s|rke2> --role <server|agent> --server <url>
+#        --token-file <file> --datastore-endpoint <urls> --tls-san <name>
+#        --flannel-backend <backend>   (k3s only)
+#        --disable <component>         (e.g. traefik)
+#
+k8s-gen-config ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local variant; variant=$(k8s-resolve-variant "${flagMap[variant]:-}") || return
+    [[ $variant == k3s || $variant == rke2 ]] || { printf 'k8s-gen-config supports k3s and rke2, not %s\n' "$variant" >&2; return 1; }
+    local role=${flagMap[role]:-server}
+    [[ $role == server || $role == agent ]] || { printf 'Invalid role: %s (server or agent)\n' "$role" >&2; return 1; }
+
+    if [[ $role == agent && -z ${flagMap[server]:-} ]]; then
+        printf 'An agent needs --server <url>\n' >&2
+        return 1
+    fi
+    if [[ -n ${flagMap[datastore-endpoint]:-} ]]; then
+        [[ $variant == k3s ]] || { printf 'datastore-endpoint is k3s only\n' >&2; return 1; }
+        [[ $role == server ]] || { printf 'datastore-endpoint is for servers\n' >&2; return 1; }
+    fi
+
+    printf '# generated by daylight.sh k8s-gen-config\n'
+    [[ -n ${flagMap[server]:-} ]] && printf 'server: "%s"\n' "${flagMap[server]}"
+    [[ -n ${flagMap[token-file]:-} ]] && printf 'token-file: "%s"\n' "${flagMap[token-file]}"
+    if [[ $role == server ]]; then
+        [[ -n ${flagMap[datastore-endpoint]:-} ]] && printf 'datastore-endpoint: "%s"\n' "${flagMap[datastore-endpoint]}"
+        [[ -n ${flagMap[tls-san]:-} ]] && printf 'tls-san:\n  - "%s"\n' "${flagMap[tls-san]}"
+        [[ -n ${flagMap[flannel-backend]:-} && $variant == k3s ]] && printf 'flannel-backend: "%s"\n' "${flagMap[flannel-backend]}"
+        [[ -n ${flagMap[disable]:-} ]] && printf 'disable:\n  - "%s"\n' "${flagMap[disable]}"
+    fi
+    printf 'write-kubeconfig-mode: "0600"\n'
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-gen-unit-file()
+#
+# Generate a systemd unit file for k3s
+#
+# rke2 ships its own units in its tarball, so only k3s needs one. The
+# ExecStart reads /etc/rancher/k3s/config.yaml.
+#
+# Flags: --role <server|agent>
+#
+k8s-gen-unit-file ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local role=${flagMap[role]:-server}
+    [[ $role == server || $role == agent ]] || { printf 'Invalid role: %s (server or agent)\n' "$role" >&2; return 1; }
+
+    cat <<- EOT
+	[Unit]
+	Description=Lightweight Kubernetes ($role)
+	Documentation=https://k3s.io
+	Wants=network-online.target
+	After=network-online.target
+
+	[Service]
+	Type=notify
+	ExecStart=/usr/local/bin/k3s $role
+	KillMode=process
+	Delegate=yes
+	LimitNOFILE=1048576
+	LimitNPROC=infinity
+	LimitCORE=infinity
+	TasksMax=infinity
+	Restart=always
+	RestartSec=5s
+
+	[Install]
+	WantedBy=multi-user.target
+	EOT
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-get-kubeconfig-path()
+#
+# Print the path of a cluster's kubeconfig
+#
+# k3s and rke2 write theirs at a fixed path. kind has none until asked, so this
+# writes one to a temp file. Callers should always pass the result to
+# kubectl --kubeconfig and never rely on ~/.kube/config.
+#
+# Flags: --variant <v> --name <n>
+#
+k8s-get-kubeconfig-path ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local variant; variant=$(k8s-resolve-variant "${flagMap[variant]:-}") || return
+    local name=${flagMap[name]:-daylight}
+
+    case $variant in
+        kind)
+            local path; path=$(mktemp --tmpdir "kubeconfig-$name.XXXXXX") || return
+            kind get kubeconfig --name "$name" >"$path" || { rm -f "$path"; return 1; }
+            chmod 600 "$path"
+            printf '%s' "$path"
+            ;;
+        k3s)  printf '/etc/rancher/k3s/k3s.yaml' ;;
+        rke2) printf '/etc/rancher/rke2/rke2.yaml' ;;
+    esac
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-get-latest-version()
+#
+# Print the latest release tag for a variant
+#
+# Flags: --variant <v>
+#
+k8s-get-latest-version ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local variant; variant=$(k8s-resolve-variant "${flagMap[variant]:-}") || return
+    local repo; repo=$(k8s-get-release-repo "$variant") || return
+    # Follow the /releases/latest redirect instead of calling the API: no token,
+    # no rate limit, and no paging through every release.
+    local url; url=$(curl --silent --show-error --location --fail --head --output /dev/null \
+        --write-out '%{url_effective}' "https://github.com/$repo/releases/latest") || return
+    local tag=${url##*/tag/}
+    [[ $url == */tag/* && -n $tag ]] || { printf 'Could not determine the latest %s release\n' "$variant" >&2; return 1; }
+    printf '%s' "$tag"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-get-release-repo()
+#
+# Print the GitHub org/repo that publishes a variant's releases
+#
+k8s-get-release-repo ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 1 )) || { printf 'Usage: k8s-get-release-repo $variant\n' >&2; return 1; }
+    case $1 in
+        kind) printf 'kubernetes-sigs/kind' ;;
+        k3s)  printf 'k3s-io/k3s' ;;
+        rke2) printf 'rancher/rke2' ;;
+        *) printf 'Unknown variant: %s\n' "$1" >&2; return 1 ;;
+    esac
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-get-service-name()
+#
+# Print the systemd service name for a variant and role
+#
+k8s-get-service-name ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: k8s-get-service-name $variant $role\n' >&2; return 1; }
+    case $1 in
+        k3s)
+            if [[ $2 == agent ]]; then printf 'k3s-agent'; else printf 'k3s'; fi
+            ;;
+        rke2) printf 'rke2-%s' "$2" ;;
+        *) printf 'Variant has no service: %s\n' "$1" >&2; return 1 ;;
+    esac
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-get-variants()
+#
+# List the supported Kubernetes variants
+#
+k8s-get-variants ()
+{
+    printf '%s\n' k3s kind rke2
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-install()
+#
+# Install a Kubernetes variant's binary and verify its checksum
+#
+# kind and k3s are single binaries installed to /usr/local/bin. rke2 is a
+# tarball extracted into /usr/local. The download is checked against the
+# checksum file the project publishes with each release.
+#
+# Flags: --variant <v> --version <tag> --platform <os-arch>
+#
+k8s-install ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local variant; variant=$(k8s-resolve-variant "${flagMap[variant]:-}") || return
+    local version=${flagMap[version]:-}
+    [[ -n $version ]] || version=$(k8s-get-latest-version --variant "$variant") || return
+    local platform=${flagMap[platform]:-}
+    [[ -n $platform ]] || platform=$(detect-platform) || return
+
+    local asset; asset=$(k8s-create-release-name --variant "$variant" --platform "$platform") || return
+    local url; url=$(k8s-create-download-url --variant "$variant" --version "$version" --platform "$platform") || return
+    local tmpDir; tmpDir=$(mktemp --directory --tmpdir "k8s-install.XXXXXX") || return
+
+    curl --silent --show-error --location --fail --output "$tmpDir/$asset" "$url" || { rm -rf "$tmpDir"; return 1; }
+
+    local sumUrl sumFile
+    case $variant in
+        kind)
+            sumUrl="$url.sha256sum"
+            ;;
+        k3s|rke2)
+            local arch=${platform#*-}
+            sumUrl="${url%/*}/sha256sum-$arch.txt"
+            ;;
+    esac
+    sumFile="$tmpDir/checksum.txt"
+    curl --silent --show-error --location --fail --output "$sumFile" "$sumUrl" || { rm -rf "$tmpDir"; return 1; }
+    k8s-verify-checksum "$tmpDir/$asset" "$sumFile" || { rm -rf "$tmpDir"; return 1; }
+
+    case $variant in
+        kind|k3s)
+            install --mode 0755 "$tmpDir/$asset" "/usr/local/bin/$variant" || { rm -rf "$tmpDir"; return 1; }
+            ;;
+        rke2)
+            tar --gunzip --extract --file "$tmpDir/$asset" --directory /usr/local || { rm -rf "$tmpDir"; return 1; }
+            ;;
+    esac
+    rm -rf "$tmpDir"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-install-service()
+#
+# Install a k3s or rke2 systemd service
+#
+# k3s gets a unit file generated here. rke2 ships its own units in its tarball
+# (installed under /usr/local/lib/systemd/system); this enables them.
+# The service is enabled but not started; k8s-cluster-create starts it.
+#
+# Flags: --variant <k3s|rke2> --role <server|agent>
+#
+k8s-install-service ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local variant; variant=$(k8s-resolve-variant "${flagMap[variant]:-}") || return
+    local role=${flagMap[role]:-server}
+    [[ $role == server || $role == agent ]] || { printf 'Invalid role: %s (server or agent)\n' "$role" >&2; return 1; }
+
+    case $variant in
+        k3s)
+            local svc; svc=$(k8s-get-service-name k3s "$role")
+            mkdir -p /opt/svc/k3s || return
+            k8s-gen-unit-file --role "$role" >"/opt/svc/k3s/$svc.service" || return
+            systemctl enable "/opt/svc/k3s/$svc.service" || return
+            ;;
+        rke2)
+            systemctl enable "$(k8s-get-service-name rke2 "$role").service" || return
+            ;;
+        *)
+            printf 'Variant has no service: %s\n' "$variant" >&2
+            return 1
+            ;;
+    esac
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-kubectl()
+#
+# Run kubectl against one cluster, always with an explicit kubeconfig
+#
+# Never uses the current context, so it cannot reach a different cluster by
+# accident. kind clusters are addressed by their kind-<name> context. Falls
+# back to "k3s kubectl" or "rke2 kubectl" when kubectl is not installed.
+#
+# Usage: k8s-kubectl [--variant <v>] [--name <n>] -- <kubectl args>
+#
+k8s-kubectl ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local variant; variant=$(k8s-resolve-variant "${flagMap[variant]:-}") || return
+    local name=${flagMap[name]:-daylight}
+    (( ${#posargs[@]} > 0 )) || { printf 'Usage: k8s-kubectl [--variant <v>] [--name <n>] -- <kubectl args>\n' >&2; return 1; }
+
+    local kubeconfig; kubeconfig=$(k8s-get-kubeconfig-path --variant "$variant" --name "$name") || return
+    local -a kc=()
+    if command -v kubectl >/dev/null 2>&1; then
+        kc=(kubectl)
+    elif [[ $variant == k3s || $variant == rke2 ]]; then
+        kc=("/usr/local/bin/$variant" kubectl)
+    else
+        printf 'kubectl is not installed\n' >&2
+        return 1
+    fi
+    local -a ctx=()
+    [[ $variant == kind ]] && ctx=(--context "kind-$name")
+
+    local rc=0
+    "${kc[@]}" --kubeconfig "$kubeconfig" "${ctx[@]}" "${posargs[@]}" || rc=$?
+    [[ $variant == kind ]] && rm -f "$kubeconfig"
+    return $rc
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-list-nodes()
+#
+# List the nodes of a cluster
+#
+# Flags: --variant <v> --name <n>
+#
+k8s-list-nodes ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local variant; variant=$(k8s-resolve-variant "${flagMap[variant]:-}") || return
+    local name=${flagMap[name]:-daylight}
+    k8s-kubectl --variant "$variant" --name "$name" -- get nodes --output wide
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-parse-args()
+#
+# Parse the flags shared by the k8s-* functions
+#
+# Flags with a value are stored by name in the flag map; --purge is a switch.
+# Everything after -- is a positional arg, so k8s-kubectl can pass flags
+# through to kubectl.
+#
+k8s-parse-args ()
+{
+    local -n _flagMap=$1
+    local -n _posargs=$2
+    shift 2
+    _flagMap=()
+    _posargs=()
+
+    while (( $# > 0 )); do
+        case $1 in
+            --config|\
+            --datastore-endpoint|\
+            --disable|\
+            --flannel-backend|\
+            --name|\
+            --platform|\
+            --role|\
+            --server|\
+            --timeout|\
+            --tls-san|\
+            --token-file|\
+            --variant|\
+            --version)
+                (( $# >= 2 )) || { printf '%s specified but no value provided.\n' "$1" >&2; return 1; }
+                _flagMap["${1##--}"]=$2
+                shift 2
+                ;;
+            --purge)
+                _flagMap[purge]=1
+                shift
+                ;;
+            --)
+                shift
+                _posargs+=("$@")
+                break
+                ;;
+            --*)
+                printf 'Unknown flag: %s\n' "$1" >&2
+                return 1
+                ;;
+            *)
+                _posargs+=("$1")
+                shift
+                ;;
+        esac
+    done
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-resolve-variant()
+#
+# Print the Kubernetes variant to use, validating it
+#
+# The variant comes from the argument, else $DAYLIGHT_K8S_VARIANT, else k3s.
+#
+k8s-resolve-variant ()
+{
+    local variant=${1:-${DAYLIGHT_K8S_VARIANT:-k3s}}
+    case $variant in
+        k3s|kind|rke2) printf '%s' "$variant" ;;
+        *) printf 'Unknown variant: %s (one of: k3s kind rke2)\n' "$variant" >&2; return 1 ;;
+    esac
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-verify-checksum()
+#
+# Verify a file against a sha256 checksum file
+#
+# The checksum file is either "<hash>  <name>" lines (k3s, rke2) or a single
+# hash line (kind). A file with no entry fails; it is never skipped.
+#
+k8s-verify-checksum ()
+{
+    # shellcheck disable=SC2016
+    (( $# == 2 )) || { printf 'Usage: k8s-verify-checksum $file $checksumFile\n' >&2; return 1; }
+    local file=$1
+    local sumFile=$2
+    [[ -f $file ]] || { printf 'Non-existent path: %s\n' "$file" >&2; return 1; }
+    [[ -f $sumFile ]] || { printf 'Non-existent path: %s\n' "$sumFile" >&2; return 1; }
+
+    local base; base=$(basename "$file")
+    local expected
+    expected=$(awk -v name="$base" 'NF == 1 { print $1; exit } $2 == name || $2 == "*" name { print $1; exit }' "$sumFile")
+    [[ -n $expected ]] || { printf 'No checksum for %s in %s\n' "$base" "$sumFile" >&2; return 1; }
+
+    local actual; actual=$(sha256sum "$file" | awk '{ print $1 }') || return
+    [[ $actual == "$expected" ]] || { printf 'Checksum mismatch for %s\n' "$base" >&2; return 1; }
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# k8s-wait-ready()
+#
+# Wait until every node in a cluster is Ready
+#
+# Gives up after --timeout seconds (default 120). Never waits forever.
+#
+# Flags: --variant <v> --name <n> --timeout <secs>
+#
+k8s-wait-ready ()
+{
+    local -A flagMap=()
+    local -a posargs=()
+    k8s-parse-args flagMap posargs "$@" || return
+    local variant; variant=$(k8s-resolve-variant "${flagMap[variant]:-}") || return
+    local name=${flagMap[name]:-daylight}
+    local timeout=${flagMap[timeout]:-120}
+    [[ $timeout =~ ^[0-9]+$ ]] || { printf 'Invalid timeout: %s\n' "$timeout" >&2; return 1; }
+
+    k8s-kubectl --variant "$variant" --name "$name" -- wait --for=condition=Ready nodes --all "--timeout=${timeout}s"
+}
+
+
+#-------------------------------------------------------------------------------
+#
 # list-apps()
 #
 # List application tarballs in the S3 dist bucket
@@ -9409,6 +10094,26 @@ main ()
             install-venv)                                     install-venv "$@";;
             install-vm)                                       install-vm "$@";;
             is-debian)                                        is-debian "$@";;
+            k8s-cluster-create)                               k8s-cluster-create "$@";;
+            k8s-cluster-delete)                               k8s-cluster-delete "$@";;
+            k8s-cluster-exists)                               k8s-cluster-exists "$@";;
+            k8s-create-download-url)                          k8s-create-download-url "$@";;
+            k8s-create-release-name)                          k8s-create-release-name "$@";;
+            k8s-gen-config)                                   k8s-gen-config "$@";;
+            k8s-gen-unit-file)                                k8s-gen-unit-file "$@";;
+            k8s-get-kubeconfig-path)                          k8s-get-kubeconfig-path "$@";;
+            k8s-get-latest-version)                           k8s-get-latest-version "$@";;
+            k8s-get-release-repo)                             k8s-get-release-repo "$@";;
+            k8s-get-service-name)                             k8s-get-service-name "$@";;
+            k8s-get-variants)                                 k8s-get-variants "$@";;
+            k8s-install)                                      k8s-install "$@";;
+            k8s-install-service)                              k8s-install-service "$@";;
+            k8s-kubectl)                                      k8s-kubectl "$@";;
+            k8s-list-nodes)                                   k8s-list-nodes "$@";;
+            k8s-parse-args)                                   k8s-parse-args "$@";;
+            k8s-resolve-variant)                              k8s-resolve-variant "$@";;
+            k8s-verify-checksum)                              k8s-verify-checksum "$@";;
+            k8s-wait-ready)                                   k8s-wait-ready "$@";;
             list-apps)                                        list-apps "$@";;
             list-bash-funcs)                                  list-bash-funcs "$@";;
             list-conf-scripts)                                list-conf-scripts "$@";;
