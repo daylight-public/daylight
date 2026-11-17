@@ -1551,33 +1551,48 @@ etcd-download-latest ()
 #
 # Generate an etcd script to join an existing cluster
 #
-# template.
+# With --tls-dir the script serves https and requires client certificates; see
+# etcd-gen-tls-flags. Without it the output is plain http, as before.
+#
+# Usage: etcd-gen-join-script [--tls-dir <dir>] [--no-client-cert-auth] $etcd_disc_svr $etcd_ip $etcd_name
 etcd-gen-join-script ()
 {
+    local -A flagMap=()
+    local -a posargs=()
+    etcd-parse-tls-args flagMap posargs "$@" || return
     # shellcheck disable=SC2016
-    (( $# == 3 )) || { printf 'Usage: etcd-gen-join-script $etcd_disc_svr $etcd_ip $etcd_name\n' >&2; return 1; }
-    local etcdDiscSvr=$1
-    local etcdIp=$2
-    local etcdName=$3
+    (( ${#posargs[@]} == 3 )) || { printf 'Usage: etcd-gen-join-script [--tls-dir <dir>] [--no-client-cert-auth] $etcd_disc_svr $etcd_ip $etcd_name\n' >&2; return 1; }
+    local etcdDiscSvr=${posargs[0]}
+    local etcdIp=${posargs[1]}
+    local etcdName=${posargs[2]}
+    local scheme=http
+    local tlsBlock=''
+    if [[ -n ${flagMap[tls-dir]:-} ]]; then
+        scheme=https
+        tlsBlock=$(etcd-gen-tls-flags "${flagMap[tls-dir]}" '' "${flagMap[client-cert-auth]:-1}") || return
+        tlsBlock+=$'\n'
+    fi
     local joinEtcdScriptTmplPath; joinEtcdScriptTmplPath=$(mktemp --tmpdir=/tmp/ join-etcd.sh.tmpl.XXXXXX) || return
     cat >"$joinEtcdScriptTmplPath" <<- 'EOT'
 	#! /usr/bin/env bash
 	/opt/etcd/etcd \
 		--name "$etcd_name" \
 		--discovery-srv "$etcd_disc_svr" \
-		--initial-advertise-peer-urls http://$etcd_ip:2380 \
+		--initial-advertise-peer-urls $etcd_scheme://$etcd_ip:2380 \
 		--initial-cluster-token hello \
 		--initial-cluster-state existing \
-		--advertise-client-urls http://$etcd_ip:2379 \
-		--listen-client-urls http://$etcd_ip:2379,http://127.0.0.1:2379 \
-		--listen-peer-urls http://$etcd_ip:2380 \
-		--data-dir /var/lib/etcd/
+		--advertise-client-urls $etcd_scheme://$etcd_ip:2379 \
+		--listen-client-urls $etcd_scheme://$etcd_ip:2379,$etcd_scheme://127.0.0.1:2379 \
+		--listen-peer-urls $etcd_scheme://$etcd_ip:2380 \
 	EOT
     # Note the line continuations - this is all one command
 	etcd_disc_svr=$etcdDiscSvr \
 	etcd_ip=$etcdIp \
 	etcd_name=$etcdName \
+	etcd_scheme=$scheme \
 	envsubst <"$joinEtcdScriptTmplPath"
+    printf '%s' "$tlsBlock"
+    printf '%s\n' '--data-dir /var/lib/etcd/'
 }
 
 
@@ -1587,57 +1602,175 @@ etcd-gen-join-script ()
 #
 # Generate an etcd script to start a new cluster
 #
-# template.
+# With --tls-dir the script serves https and requires client certificates; see
+# etcd-gen-tls-flags. Without it the output is plain http, as before.
+#
+# Usage: etcd-gen-run-script [--tls-dir <dir>] [--no-client-cert-auth] $etcd_disc_svr $etcd_name $etcd_ip $initialState $dataDir
 etcd-gen-run-script ()
 {
+    local -A flagMap=()
+    local -a posargs=()
+    etcd-parse-tls-args flagMap posargs "$@" || return
     # shellcheck disable=SC2016
-    (( $# == 5 )) || { printf 'Usage: etcd-gen-run-script $etcd_disc_svr $etcd_name $etcd_ip $initialState $dataDir\n' >&2; return 1; }
-    local discSvr=$1
-    local name=$2
-    local ip=$3
-    local initialState=$4
-    local dataDir=$5
+    (( ${#posargs[@]} == 5 )) || { printf 'Usage: etcd-gen-run-script [--tls-dir <dir>] [--no-client-cert-auth] $etcd_disc_svr $etcd_name $etcd_ip $initialState $dataDir\n' >&2; return 1; }
+    local discSvr=${posargs[0]}
+    local name=${posargs[1]}
+    local ip=${posargs[2]}
+    local initialState=${posargs[3]}
+    local dataDir=${posargs[4]}
     [[ -d "$dataDir" ]] || { echo "Non-existent folder: $dataDir" >&2; return 1; }
+    local scheme=http
+    local tlsBlock=''
+    if [[ -n ${flagMap[tls-dir]:-} ]]; then
+        scheme=https
+        tlsBlock=$(etcd-gen-tls-flags "${flagMap[tls-dir]}" '    ' "${flagMap[client-cert-auth]:-1}") || return
+        tlsBlock+=$'\n'
+    fi
 
     cat <<- EOT
 	#! /usr/bin/env bash
 	/opt/etcd/etcd \\
 	    --name "$name" \\
 	    --discovery-srv "$discSvr" \\
-	    --initial-advertise-peer-urls http://$ip:2380 \\
+	    --initial-advertise-peer-urls $scheme://$ip:2380 \\
 	    --initial-cluster-token hello \\
 	    --initial-cluster-state $initialState \\
-	    --advertise-client-urls http://$ip:2379 \\
-	    --listen-client-urls http://$ip:2379,http://127.0.0.1:2379 \\
-	    --listen-peer-urls http://$ip:2380 \\
-	    --data-dir "$dataDir"
+	    --advertise-client-urls $scheme://$ip:2379 \\
+	    --listen-client-urls $scheme://$ip:2379,$scheme://127.0.0.1:2379 \\
+	    --listen-peer-urls $scheme://$ip:2380 \\
 	EOT
+    printf '%s' "$tlsBlock"
+    printf '    --data-dir "%s"\n' "$dataDir"
 }
 
-    # (( $# == 4 )) || { printf 'Usage: etcd-gen-run-script $etcd_disc_svr $etcd_ip $etcd_name $initialState\n' >&2; return 1; }
-    # local etcdDiscSvr=$1
-    # local etcdIp=$2
-    # local etcdName=$3
-    # local initialState=$4
-    # local runEtcdScriptTmplPath; runEtcdScriptTmplPath=$(mktemp --tmpdir=/tmp/ run-etcd.sh.tmpl.XXXXXX) || return
-    # cat >"$runEtcdScriptTmplPath" <<- 'EOT'
-	# #! /usr/bin/env bash
-	# /opt/etcd/etcd \
-	# 	--name "$etcd_name" \
-	# 	--discovery-srv "$etcd_disc_svr" \
-	# 	--initial-advertise-peer-urls http://$etcd_ip:2380 \
-	# 	--initial-cluster-token hello \
-	# 	--initial-cluster-state $initial_state \
-	# 	--advertise-client-urls http://$etcd_ip:2379 \
-	# 	--listen-client-urls http://$etcd_ip:2379,http://127.0.0.1:2379 \
-	# 	--listen-peer-urls http://$etcd_ip:2380 \
-	# 	--data-dir /var/lib/etcd/
-	# 	EOT
-    # etcd_disc_svr=$etcdDiscSvr \
-    # etcd_ip=$etcdIp \
-    # etcd_name=$etcdName \
-    # initial_state=$initialState \
-    # envsubst <"$runEtcdScriptTmplPath"
+
+#-------------------------------------------------------------------------------
+#
+# etcd-gen-tls-certs()
+#
+# Generate a CA, a server certificate and a client certificate for etcd
+#
+# Writes ca.crt, ca.key, server.crt, server.key, client.crt and client.key to
+# --dir. The server certificate works for clients and for peers, and is valid
+# for every --ip and --dns given, plus 127.0.0.1 and localhost. The client
+# certificate is for k3s (--datastore-certfile) or etcdctl. Keys are mode 600.
+# Everything is built in a temp folder and moved into place only if all of it
+# succeeds. Refuses to overwrite an existing file. Move ca.key off the server
+# afterward.
+#
+# Flags: --dir <dir> --ip <ip[,ip...]> [--dns <name[,name...]>] [--days <n>]
+#
+etcd-gen-tls-certs ()
+{
+    local dir='' ips='' dnsNames='' days=3650
+    while (( $# > 0 )); do
+        case $1 in
+            --dir|--ip|--dns|--days)
+                (( $# >= 2 )) || { printf '%s specified but no value provided.\n' "$1" >&2; return 1; }
+                case $1 in
+                    --dir) dir=$2 ;;
+                    --ip) ips=$2 ;;
+                    --dns) dnsNames=$2 ;;
+                    --days) days=$2 ;;
+                esac
+                shift 2
+                ;;
+            *) printf 'Unknown flag: %s\n' "$1" >&2; return 1 ;;
+        esac
+    done
+    # shellcheck disable=SC2016
+    [[ -n $dir && -n $ips ]] || { printf 'Usage: etcd-gen-tls-certs --dir <dir> --ip <ip[,ip...]> [--dns <name[,name...]>] [--days <n>]\n' >&2; return 1; }
+    [[ $days =~ ^[0-9]+$ ]] || { printf 'Invalid --days: %s\n' "$days" >&2; return 1; }
+    command -v openssl >/dev/null 2>&1 || { printf 'openssl is required but was not found.\n' >&2; return 1; }
+
+    mkdir -p "$dir" || return
+    local f
+    local -a names=(ca.crt ca.key server.crt server.key client.crt client.key)
+    for f in "${names[@]}"; do
+        [[ ! -e "$dir/$f" ]] || { printf 'Refusing to overwrite %s/%s\n' "$dir" "$f" >&2; return 1; }
+    done
+
+    local san='DNS:localhost,IP:127.0.0.1'
+    local item
+    local -a items=()
+    IFS=, read -r -a items <<<"$ips"
+    for item in "${items[@]}"; do san+=",IP:$item"; done
+    if [[ -n $dnsNames ]]; then
+        IFS=, read -r -a items <<<"$dnsNames"
+        for item in "${items[@]}"; do san+=",DNS:$item"; done
+    fi
+
+    local tmp; tmp=$(mktemp --directory --tmpdir etcd-tls.XXXXXX) || return
+    (
+        set -e
+        umask 077
+        cd "$tmp"
+        openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out ca.key 2>/dev/null
+        openssl req -x509 -new -key ca.key -sha256 -days "$days" -subj '/CN=daylight etcd CA' \
+            -addext 'basicConstraints=critical,CA:TRUE' -addext 'keyUsage=critical,keyCertSign,cRLSign' \
+            -out ca.crt
+        printf 'subjectAltName=%s\nextendedKeyUsage=serverAuth,clientAuth\nkeyUsage=critical,digitalSignature\n' "$san" >server.ext
+        openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out server.key 2>/dev/null
+        openssl req -new -key server.key -subj '/CN=etcd' -out server.csr
+        openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -sha256 -days "$days" \
+            -extfile server.ext -out server.crt 2>/dev/null
+        printf 'extendedKeyUsage=clientAuth\nkeyUsage=critical,digitalSignature\n' >client.ext
+        openssl genpkey -algorithm EC -pkeyopt ec_paramgen_curve:P-256 -out client.key 2>/dev/null
+        openssl req -new -key client.key -subj '/CN=etcd-client' -out client.csr
+        openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -sha256 -days "$days" \
+            -extfile client.ext -out client.crt 2>/dev/null
+    )
+    local rc=$?
+    if (( rc == 0 )); then
+        for f in "${names[@]}"; do
+            mv "$tmp/$f" "$dir/$f" || { rc=1; break; }
+        done
+    fi
+    [[ -n $tmp && $tmp == /* ]] && rm -rf "$tmp"
+    (( rc == 0 )) || { printf 'Failed to generate certificates in %s\n' "$dir" >&2; return 1; }
+    chmod 600 "$dir/ca.key" "$dir/server.key" "$dir/client.key"
+    chmod 644 "$dir/ca.crt" "$dir/server.crt" "$dir/client.crt"
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# etcd-gen-tls-flags()
+#
+# Print the etcd flags that turn on TLS for clients and peers
+#
+# Expects ca.crt, server.crt and server.key in the folder (see
+# etcd-gen-tls-certs). One flag per line, each ending in a line continuation,
+# with no newline after the last. Client certificates are required unless the
+# third argument is 0.
+#
+# Usage: etcd-gen-tls-flags $tlsDir [$indent] [$clientCertAuth]
+#
+etcd-gen-tls-flags ()
+{
+    # shellcheck disable=SC2016
+    { (( $# >= 1 )) && (( $# <= 3 )); } || { printf 'Usage: etcd-gen-tls-flags $tlsDir [$indent] [$clientCertAuth]\n' >&2; return 1; }
+    local tlsDir=$1
+    local indent=${2:-}
+    local auth=${3:-1}
+    local -a lines=(
+        "--cert-file \"$tlsDir/server.crt\""
+        "--key-file \"$tlsDir/server.key\""
+        "--trusted-ca-file \"$tlsDir/ca.crt\""
+        "--peer-cert-file \"$tlsDir/server.crt\""
+        "--peer-key-file \"$tlsDir/server.key\""
+        "--peer-trusted-ca-file \"$tlsDir/ca.crt\""
+    )
+    if [[ $auth != 0 ]]; then
+        lines+=("--client-cert-auth" "--peer-client-cert-auth")
+    fi
+    local i
+    for i in "${!lines[@]}"; do
+        printf '%s%s \\' "$indent" "${lines[$i]}"
+        (( i == ${#lines[@]} - 1 )) || printf '\n'
+    done
+}
+
 
 #-------------------------------------------------------------------------------
 #
@@ -1744,25 +1877,92 @@ etcd-install-release ()
 #
 # Install etcd as a systemd service
 #
-# @Note this logic is elsewhere in this script. Maybe it can be extracted 
+# With --tls-dir the service serves https and requires client certificates.
+# The folder must already hold ca.crt, server.crt and server.key.
+#
+# @Note this logic is elsewhere in this script. Maybe it can be extracted
 # to build this function
 etcd-install-service ()
 {
+    local -A flagMap=()
+    local -a posargs=()
+    etcd-parse-tls-args flagMap posargs "$@" || return
     # shellcheck disable=SC2016
-    (( $# == 4 )) || { printf 'Usage: etcd-install-service $discSvr $name $ip $dataDir\n' >&2; return 1; }
-    local discSvr=$1
-    local name=$2
-    local ip=$3
-    local dataDir=$4
+    (( ${#posargs[@]} == 4 )) || { printf 'Usage: etcd-install-service [--tls-dir <dir>] [--no-client-cert-auth] $discSvr $name $ip $dataDir\n' >&2; return 1; }
+    local discSvr=${posargs[0]}
+    local name=${posargs[1]}
+    local ip=${posargs[2]}
+    local dataDir=${posargs[3]}
     [[ -d "$dataDir" ]] || { echo "Non-existent folder: $dataDir" >&2; return 1; }
-    
+    local -a tlsArgs=()
+    local tlsDir=''
+    if [[ -n ${flagMap[tls-dir]:-} ]]; then
+        tlsDir=${flagMap[tls-dir]}
+        local f
+        for f in ca.crt server.crt server.key; do
+            [[ -f "$tlsDir/$f" ]] || { printf 'Non-existent path: %s/%s (see etcd-gen-tls-certs)\n' "$tlsDir" "$f" >&2; return 1; }
+        done
+        tlsArgs=(--tls-dir "$tlsDir")
+        [[ ${flagMap[client-cert-auth]:-1} == 0 ]] && tlsArgs+=(--no-client-cert-auth)
+    fi
+
     mkdir -p /opt/svc/etcd/ || return
     etcd-gen-unit-file >/opt/svc/etcd/etcd.service || return
-    etcd-gen-run-script "$discSvr" "$name" "$ip" "existing" "$dataDir" >/opt/svc/etcd/run.sh || return
+    etcd-gen-run-script "${tlsArgs[@]}" "$discSvr" "$name" "$ip" "existing" "$dataDir" >/opt/svc/etcd/run.sh || return
     chmod 755 /opt/svc/etcd/run.sh || return
+    if [[ -n $tlsDir ]]; then
+        # the service runs as rayray; it needs the server key but not the CA key
+        chown rayray:rayray "$tlsDir/ca.crt" "$tlsDir/server.crt" "$tlsDir/server.key" || return
+        chmod 600 "$tlsDir/server.key" || return
+    fi
     systemctl enable /opt/svc/etcd/etcd.service || return
     systemctl start etcd || return
     chown -R rayray:rayray /opt/svc/etcd/ || return
+}
+
+
+#-------------------------------------------------------------------------------
+#
+# etcd-parse-tls-args()
+#
+# Parse the TLS flags shared by the etcd script generators
+#
+# --tls-dir <dir> turns TLS on. --no-client-cert-auth keeps TLS but stops
+# requiring client certificates. Everything else is a positional arg.
+#
+etcd-parse-tls-args ()
+{
+    local -n _flagMap=$1
+    local -n _posargs=$2
+    shift 2
+    _flagMap=()
+    _posargs=()
+
+    while (( $# > 0 )); do
+        case $1 in
+            --tls-dir)
+                (( $# >= 2 )) || { printf '%s specified but no value provided.\n' "$1" >&2; return 1; }
+                _flagMap[tls-dir]=$2
+                shift 2
+                ;;
+            --no-client-cert-auth)
+                _flagMap[client-cert-auth]=0
+                shift
+                ;;
+            --*)
+                printf 'Unknown flag: %s\n' "$1" >&2
+                return 1
+                ;;
+            *)
+                _posargs+=("$1")
+                shift
+                ;;
+        esac
+    done
+    if [[ -v _flagMap[client-cert-auth] && ! -v _flagMap[tls-dir] ]]; then
+        printf '%s\n' '--no-client-cert-auth needs --tls-dir' >&2
+        return 1
+    fi
 }
 
 
@@ -7367,6 +7567,8 @@ is-debian ()
 #
 # Flags: --variant <v> --name <n> --role <server|agent> --config <file>
 #        --server <url> --token-file <file> --datastore-endpoint <urls>
+#        --datastore-cafile <file> --datastore-certfile <file>
+#        --datastore-keyfile <file> --insecure-datastore
 #        --tls-san <name> --timeout <secs>
 #
 k8s-cluster-create ()
@@ -7404,9 +7606,10 @@ k8s-cluster-create ()
             mkdir -p "$configDir" || return
             local -a cfgArgs=(--variant "$variant" --role "$role")
             local f
-            for f in server token-file datastore-endpoint tls-san; do
+            for f in server token-file datastore-endpoint datastore-cafile datastore-certfile datastore-keyfile tls-san; do
                 [[ -n ${flagMap[$f]:-} ]] && cfgArgs+=("--$f" "${flagMap[$f]}")
             done
+            [[ -v flagMap[insecure-datastore] ]] && cfgArgs+=(--insecure-datastore)
             k8s-gen-config "${cfgArgs[@]}" >"$configDir/config.yaml" || return
             chmod 600 "$configDir/config.yaml" || return
             k8s-install-service --variant "$variant" --role "$role" || return
@@ -7567,8 +7770,15 @@ k8s-create-release-name ()
 # out of the process list. The token is referenced by file (token-file), never
 # printed. Print to stdout; k8s-cluster-create writes it with mode 600.
 #
+# An external etcd must use https, with --datastore-cafile and a client
+# --datastore-certfile/--datastore-keyfile (see etcd-gen-tls-certs). Plain
+# http is refused unless --insecure-datastore is given: Kubernetes Secrets are
+# stored there.
+#
 # Flags: --variant <k3s|rke2> --role <server|agent> --server <url>
 #        --token-file <file> --datastore-endpoint <urls> --tls-san <name>
+#        --datastore-cafile <file> --datastore-certfile <file>
+#        --datastore-keyfile <file> --insecure-datastore
 #        --flannel-backend <backend>   (k3s only)
 #        --disable <component>         (e.g. traefik)
 #
@@ -7589,6 +7799,16 @@ k8s-gen-config ()
     if [[ -n ${flagMap[datastore-endpoint]:-} ]]; then
         [[ $variant == k3s ]] || { printf 'datastore-endpoint is k3s only\n' >&2; return 1; }
         [[ $role == server ]] || { printf 'datastore-endpoint is for servers\n' >&2; return 1; }
+        if [[ ${flagMap[datastore-endpoint]} == *http://* && ! -v flagMap[insecure-datastore] ]]; then
+            printf 'Refusing a plain http datastore: Kubernetes Secrets would be stored unencrypted in transit. Use https (see etcd-gen-tls-certs) or pass --insecure-datastore.\n' >&2
+            return 1
+        fi
+        if [[ ${flagMap[datastore-endpoint]} == *https://* ]]; then
+            [[ -n ${flagMap[datastore-cafile]:-} ]] || { printf 'An https datastore needs --datastore-cafile\n' >&2; return 1; }
+            if [[ -n ${flagMap[datastore-certfile]:-} || -n ${flagMap[datastore-keyfile]:-} ]]; then
+                [[ -n ${flagMap[datastore-certfile]:-} && -n ${flagMap[datastore-keyfile]:-} ]] || { printf '%s\n' '--datastore-certfile and --datastore-keyfile go together' >&2; return 1; }
+            fi
+        fi
     fi
 
     printf '# generated by daylight.sh k8s-gen-config\n'
@@ -7596,6 +7816,10 @@ k8s-gen-config ()
     [[ -n ${flagMap[token-file]:-} ]] && printf 'token-file: "%s"\n' "${flagMap[token-file]}"
     if [[ $role == server ]]; then
         [[ -n ${flagMap[datastore-endpoint]:-} ]] && printf 'datastore-endpoint: "%s"\n' "${flagMap[datastore-endpoint]}"
+        local f
+        for f in datastore-cafile datastore-certfile datastore-keyfile; do
+            [[ -n ${flagMap[$f]:-} ]] && printf '%s: "%s"\n' "$f" "${flagMap[$f]}"
+        done
         [[ -n ${flagMap[tls-san]:-} ]] && printf 'tls-san:\n  - "%s"\n' "${flagMap[tls-san]}"
         [[ -n ${flagMap[flannel-backend]:-} && $variant == k3s ]] && printf 'flannel-backend: "%s"\n' "${flagMap[flannel-backend]}"
         [[ -n ${flagMap[disable]:-} ]] && printf 'disable:\n  - "%s"\n' "${flagMap[disable]}"
@@ -7932,7 +8156,10 @@ k8s-parse-args ()
     while (( $# > 0 )); do
         case $1 in
             --config|\
+            --datastore-cafile|\
+            --datastore-certfile|\
             --datastore-endpoint|\
+            --datastore-keyfile|\
             --disable|\
             --flannel-backend|\
             --name|\
@@ -7948,8 +8175,9 @@ k8s-parse-args ()
                 _flagMap["${1##--}"]=$2
                 shift 2
                 ;;
+            --insecure-datastore|\
             --purge)
-                _flagMap[purge]=1
+                _flagMap[${1##--}]=1
                 shift
                 ;;
             --)
@@ -9938,11 +10166,14 @@ main ()
             etcd-download-latest)                             etcd-download-latest "$@";;
             etcd-gen-join-script)                             etcd-gen-join-script "$@";;
             etcd-gen-run-script)                              etcd-gen-run-script "$@";;
+            etcd-gen-tls-certs)                               etcd-gen-tls-certs "$@";;
+            etcd-gen-tls-flags)                               etcd-gen-tls-flags "$@";;
             etcd-gen-unit-file)                               etcd-gen-unit-file "$@";;
             etcd-get-latest-version)                          etcd-get-latest-version "$@";;
             etcd-install-latest)                              etcd-install-latest "$@";;
             etcd-install-release)                             etcd-install-release "$@";;
             etcd-install-service)                             etcd-install-service "$@";;
+            etcd-parse-tls-args)                              etcd-parse-tls-args "$@";;
             etcd-setup-data-dir)                              etcd-setup-data-dir "$@";;
             fresh-daylight-gen-run-script)                    fresh-daylight-gen-run-script "$@";;
             fresh-daylight-gen-service-file)                  fresh-daylight-gen-service-file "$@";;
