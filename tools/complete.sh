@@ -46,12 +46,15 @@ _daylight-sh ()
 		etcd-download-release \
 		etcd-gen-join-script \
 		etcd-gen-run-script \
+		etcd-gen-tls-certs \
+		etcd-gen-tls-flags \
 		etcd-gen-unit-file \
 		etcd-get-download-url \
 		etcd-get-latest-version \
 		etcd-install-latest \
 		etcd-install-release \
 		etcd-install-service \
+		etcd-parse-tls-args \
 		etcd-setup-data-dir \
 		events \
 		gen-nginx-flask \
@@ -122,6 +125,26 @@ _daylight-sh ()
 		install-svc \
 		install-venv \
 		install-vm \
+		k8s-cluster-create \
+		k8s-cluster-delete \
+		k8s-cluster-exists \
+		k8s-create-download-url \
+		k8s-create-release-name \
+		k8s-gen-config \
+		k8s-gen-unit-file \
+		k8s-get-kubeconfig-path \
+		k8s-get-latest-version \
+		k8s-get-release-repo \
+		k8s-get-service-name \
+		k8s-get-variants \
+		k8s-install \
+		k8s-install-service \
+		k8s-kubectl \
+		k8s-list-nodes \
+		k8s-parse-args \
+		k8s-resolve-variant \
+		k8s-verify-checksum \
+		k8s-wait-ready \
 		list-apps \
 		list-conf-scripts \
 		list-funcs \
